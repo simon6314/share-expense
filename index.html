@@ -289,7 +289,7 @@ tr:hover td { background: var(--bg); }
     <input class="search-input" id="searchBox" placeholder="搜尋項目或備註…" oninput="renderRecords()">
     <select class="filter-select" id="ownerFilter" onchange="renderRecords()">
       <option value="">全部</option>
-      <option value="精靈">🧝 精靈</option>
+      <option value="精靈">🧝‍♂️ 精靈</option>
       <option value="小狐狸">🦊 小狐狸</option>
     </select>
     <select class="filter-select" id="typeFilter" onchange="renderRecords()">
@@ -330,7 +330,7 @@ tr:hover td { background: var(--bg); }
     <table>
       <thead><tr><th>成員</th><th>年收入</th><th>計算方式</th><th>每月預期進帳</th></tr></thead>
       <tbody>
-        <tr><td><span class="owner-badge badge-elf">🧝 精靈</span></td><td style="font-family:'DM Mono',monospace">$1,250,000</td><td style="color:var(--text3);font-size:12px">15%÷14月</td><td class="amount-income">+$13,393</td></tr>
+        <tr><td><span class="owner-badge badge-elf">🧝‍♂️ 精靈</span></td><td style="font-family:'DM Mono',monospace">$1,250,000</td><td style="color:var(--text3);font-size:12px">15%÷14月</td><td class="amount-income">+$13,393</td></tr>
         <tr><td><span class="owner-badge badge-fox">🦊 小狐狸</span></td><td style="font-family:'DM Mono',monospace">$700,000</td><td style="color:var(--text3);font-size:12px">15%÷14月</td><td class="amount-income">+$7,500</td></tr>
       </tbody>
     </table>
@@ -608,8 +608,8 @@ function renderRecords() {
     const isSummary = isSummaryRow(r);
     const isTransfer = r.item.includes('支出部分轉回');
     const badge = r.owner && !isSummary
-      ? `<span class="owner-badge ${r.owner==='精靈'?'badge-elf':'badge-fox'}">${r.owner==='精靈'?'🧝':'🦊'} ${r.owner}</span>`
-      : (isTransfer ? `<span class="owner-badge ${r.item.includes('精靈')?'badge-elf':'badge-fox'}">${r.item.includes('精靈')?'🧝 精靈':'🦊 小狐狸'}</span>` : '<span style="color:var(--text3);font-size:12px">—</span>');
+      ? `<span class="owner-badge ${r.owner==='精靈'?'badge-elf':'badge-fox'}">${r.owner==='精靈'?'🧝‍♂️':'🦊'} ${r.owner}</span>`
+      : (isTransfer ? `<span class="owner-badge ${r.item.includes('精靈')?'badge-elf':'badge-fox'}">${r.item.includes('精靈')?'🧝‍♂️ 精靈':'🦊 小狐狸'}</span>` : '<span style="color:var(--text3);font-size:12px">—</span>');
 
     if (isTransfer) {
       return `<tr style="background:var(--surface2)">
@@ -655,7 +655,7 @@ function renderRecords() {
 
     const ownerWho = r.owner || (isTransfer ? (r.item.includes('精靈') ? '精靈' : '小狐狸') : '');
     const badgeHtml = ownerWho
-      ? `<span class="owner-badge ${ownerWho==='精靈'?'badge-elf':'badge-fox'}">${ownerWho==='精靈'?'🧝':'🦊'} ${ownerWho}</span>`
+      ? `<span class="owner-badge ${ownerWho==='精靈'?'badge-elf':'badge-fox'}">${ownerWho==='精靈'?'🧝‍♂️':'🦊'} ${ownerWho}</span>`
       : '';
 
     if (isTransfer) {
@@ -780,7 +780,7 @@ function renderCategoryDetail(category) {
                   border:1px solid var(--border)">
         <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <span class="owner-badge ${r.owner==='精靈'?'badge-elf':'badge-fox'}">${r.owner==='精靈'?'🧝':'🦊'} ${r.owner}</span>
+            <span class="owner-badge ${r.owner==='精靈'?'badge-elf':'badge-fox'}">${r.owner==='精靈'?'🧝‍♂️':'🦊'} ${r.owner}</span>
             <span style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.item}</span>
           </div>
           <div style="display:flex;gap:8px;align-items:center">
@@ -801,7 +801,7 @@ function renderMembers() {
     const expTotal = records.filter(r=>r.owner===p&&r.expense>0).reduce((s,r)=>s+r.expense,0);
     const count = records.filter(r=>r.owner===p&&r.expense>0).length;
     const prep = prepaid[p]||0;
-    const emoji = p==='精靈'?'🧝':'🦊';
+    const emoji = p==='精靈'?'🧝‍♂️':'🦊';
     return `<div class="member-card">
       <div class="member-name">${emoji} ${p}</div>
       <div class="member-stat"><span class="member-stat-label">每月進帳</span><span class="member-stat-value" style="color:var(--income)">+${fmt(monthlyContrib[p])}</span></div>
@@ -836,7 +836,7 @@ function openModal() {
         <div class="row2">
           <div class="field"><label>日期</label><input id="f-date" type="text" value="${mm}/${dd}" placeholder="MM/DD"></div>
           <div class="field"><label>擁有者</label><select id="f-owner">
-            <option value="精靈">🧝 精靈</option>
+            <option value="精靈">🧝‍♂️ 精靈</option>
             <option value="小狐狸">🦊 小狐狸</option>
           </select></div>
         </div>

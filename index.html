@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>精靈 & 小狐狸 💛 共同帳本</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f7f5f0;
+  --surface: #ffffff;
+  --surface2: #f0ede6;
+  --border: #e2ddd5;
+  --text: #1a1814;
+  --text2: #6b6560;
+  --text3: #9e9890;
+  --elf: #2d7a5f;
+  --elf-bg: #e8f5ef;
+  --fox: #c45a2a;
+  --fox-bg: #fdf0e8;
+  --income: #2d7a5f;
+  --expense: #c45a2a;
+  --accent: #1a1814;
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; }
+body {
+  font-family: 'Noto Sans TC', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* HEADER */
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 20px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.header-title { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+.header-sub { font-size: 11px; color: var(--text3); margin-top: 1px; font-family: 'DM Mono', monospace; }
+.header-right { display: flex; gap: 8px; align-items: center; }
+.month-select {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.btn-add {
+  background: var(--text);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 7px 14px;
+  font-size: 13px;
+  font-family: 'Noto Sans TC', sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: opacity 0.15s;
+}
+.btn-add:hover { opacity: 0.8; }
+.btn-add svg { width: 14px; height: 14px; }
+
+/* SUMMARY CARDS */
+.summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  padding: 16px 20px;
+}
+@media (max-width: 600px) {
+  .summary { grid-template-columns: repeat(2, 1fr); }
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.card-label {
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.card-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: 'DM Mono', monospace;
+  letter-spacing: -0.02em;
+}
+.card-value.income { color: var(--income); }
+.card-value.expense { color: var(--expense); }
+.card-value.balance { color: var(--accent); }
+
+/* TABS */
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.tab {
+  padding: 10px 16px;
+  font-size: 13px;
+  font-family: 'Noto Sans TC', sans-serif;
+  border: none;
+  background: none;
+  color: var(--text2);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+.tab.active { color: var(--text); border-bottom-color: var(--text); font-weight: 500; }
+
+/* CONTENT */
+.content { padding: 16px 20px; max-width: 900px; margin: 0 auto; }
+
+/* TOOLBAR */
+.toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.search-input {
+  flex: 1;
+  min-width: 160px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: 'Noto Sans TC', sans-serif;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+}
+.search-input:focus { outline: none; border-color: var(--text2); }
+.filter-select {
+  padding: 8px 10px;
+  font-size: 12px;
+  font-family: 'Noto Sans TC', sans-serif;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+/* TABLE */
+.table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; background: var(--surface); font-size: 13px; }
+th {
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 500;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--bg); }
+
+.owner-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.badge-elf { background: var(--elf-bg); color: var(--elf); }
+.badge-fox { background: var(--fox-bg); color: var(--fox); }
+.amount-income { color: var(--income); font-weight: 600; font-family: 'DM Mono', monospace; font-size: 13px; }
+.amount-expense { color: var(--expense); font-weight: 600; font-family: 'DM Mono', monospace; font-size: 13px; }
+.note-text { color: var(--text3); font-size: 12px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.delete-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: var(--text3);
+  font-size: 13px;
+  transition: all 0.15s;
+}
+.delete-btn:hover { border-color: var(--expense); color: var(--expense); }
+.empty-state {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--text3);
+  font-size: 14px;
+}
+
+/* LOADING */
+.loading-state {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--text3);
+  font-size: 14px;
+}
+.spinner {
+  width: 24px; height: 24px;
+  border: 2px solid var(--border);
+  border-top-color: var(--text);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  margin: 0 auto 12px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ANALYSIS */
+.section-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; letter-spacing: -0.01em; }
+.chart-wrap { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
+.chart-canvas-wrap { position: relative; height: 240px; }
+
+/* MEMBERS */
+.member-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+@media (max-width: 480px) { .member-grid { grid-template-columns: 1fr; } }
+.member-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.member-name { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+.member-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+.member-stat:last-child { border: none; }
+.member-stat-label { color: var(--text2); }
+.member-stat-value { font-family: 'DM Mono', monospace; font-weight: 500; font-size: 13px; }
+
+.income-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+
+/* MODAL */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  animation: fadeIn 0.15s ease;
+}
+@media (min-width: 600px) {
+  .overlay { align-items: center; padding: 20px; }
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.modal {
+  background: var(--surface);
+  width: 100%;
+  max-width: 480px;
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 24px 20px;
+  animation: slideUp 0.2s ease;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+@media (min-width: 600px) {
+  .modal { border-radius: var(--radius); }
+}
+@keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.modal-title { font-size: 16px; font-weight: 600; }
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: var(--text2);
+  padding: 0;
+  line-height: 1;
+}
+.field { margin-bottom: 14px; }
+.field label { display: block; font-size: 11px; color: var(--text2); margin-bottom: 5px; letter-spacing: 0.04em; text-transform: uppercase; }
+.field input, .field select, .field textarea {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: 'Noto Sans TC', sans-serif;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  transition: border-color 0.15s;
+}
+.field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--text); background: var(--surface); }
+.field textarea { resize: vertical; min-height: 64px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.amount-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.toggle-btn {
+  padding: 10px;
+  font-size: 13px;
+  font-family: 'Noto Sans TC', sans-serif;
+  border: none;
+  background: var(--bg);
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-weight: 500;
+}
+.toggle-btn.active-income { background: var(--elf-bg); color: var(--income); }
+.toggle-btn.active-expense { background: var(--fox-bg); color: var(--expense); }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+.btn-cancel {
+  padding: 10px 18px;
+  font-size: 13px;
+  font-family: 'Noto Sans TC', sans-serif;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text2);
+  cursor: pointer;
+}
+.btn-save {
+  padding: 10px 20px;
+  font-size: 13px;
+  font-family: 'Noto Sans TC', sans-serif;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--text);
+  color: #fff;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.btn-save:hover { opacity: 0.8; }
+.btn-save:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* TOAST */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text);
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 30px;
+  font-size: 13px;
+  z-index: 999;
+  animation: toastIn 0.2s ease;
+  white-space: nowrap;
+}
+@keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(8px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+/* SYNC STATUS */
+.sync-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text3);
+  padding: 6px 20px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+}
+.sync-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--text3);
+}
+.sync-dot.ok { background: var(--income); }
+.sync-dot.err { background: var(--expense); }
+.sync-dot.loading { background: #f0a500; animation: pulse 1s ease infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- HEADER -->
+  <div class="header">
+    <div>
+      <div class="header-title">精靈 &amp; 小狐狸 💛</div>
+      <div class="header-sub">共同帳本</div>
+    </div>
+    <div class="header-right">
+      <select class="month-select" id="monthSel" onchange="loadData()">
+        <option value="2026/5月支出">2026 年 5 月</option>
+        <option value="2026/6月支出">2026 年 6 月</option>
+        <option value="2026/7月支出">2026 年 7 月</option>
+        <option value="2026/4月支出">2026 年 4 月</option>
+      </select>
+      <button class="btn-add" onclick="openModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        新增
+      </button>
+    </div>
+  </div>
+
+  <!-- SYNC BAR -->
+  <div class="sync-bar">
+    <div class="sync-dot" id="syncDot"></div>
+    <span id="syncText">連接中…</span>
+  </div>
+
+  <!-- SUMMARY -->
+  <div class="summary" id="summaryCards">
+    <div class="card"><div class="card-label" id="s-income-label">本月收入</div><div class="card-value income" id="s-income">—</div></div>
+    <div class="card"><div class="card-label" id="s-expense-label">本月支出</div><div class="card-value expense" id="s-expense">—</div></div>
+    <div class="card"><div class="card-label">結餘</div><div class="card-value balance" id="s-balance">—</div></div>
+    <div class="card"><div class="card-label">筆數</div><div class="card-value" id="s-count">—</div></div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('records',this)">明細</button>
+    <button class="tab" onclick="switchTab('analysis',this)">分析</button>
+    <button class="tab" onclick="switchTab('members',this)">成員</button>
+  </div>
+
+  <!-- RECORDS TAB -->
+  <div id="tab-records" class="content">
+    <div class="toolbar">
+      <input class="search-input" id="searchBox" placeholder="搜尋項目或備註…" oninput="renderRecords()">
+      <select class="filter-select" id="ownerFilter" onchange="renderRecords()">
+        <option value="">全部成員</option>
+        <option value="精靈">精靈</option>
+        <option value="小狐狸">小狐狸</option>
+      </select>
+      <select class="filter-select" id="typeFilter" onchange="renderRecords()">
+        <option value="">收入＋支出</option>
+        <option value="income">僅收入</option>
+        <option value="expense">僅支出</option>
+      </select>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>日期</th>
+            <th>擁有者</th>
+            <th>項目</th>
+            <th>金額</th>
+            <th class="hide-mobile">備註</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="recordBody">
+          <tr><td colspan="6"><div class="loading-state"><div class="spinner"></div>載入中…</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ANALYSIS TAB -->
+  <div id="tab-analysis" class="content" style="display:none">
+    <p class="section-title">支出分類</p>
+    <div class="chart-wrap">
+      <div class="chart-canvas-wrap"><canvas id="catChart" role="img" aria-label="支出分類長條圖"></canvas></div>
+    </div>
+    <p class="section-title">每日累計支出</p>
+    <div class="chart-wrap">
+      <div class="chart-canvas-wrap"><canvas id="dailyChart" role="img" aria-label="每日累計支出折線圖"></canvas></div>
+    </div>
+  </div>
+
+  <!-- MEMBERS TAB -->
+  <div id="tab-members" class="content" style="display:none">
+    <p class="section-title">成員支出狀況</p>
+    <div class="member-grid" id="memberGrid"></div>
+    <p class="section-title">進帳比例設定</p>
+    <div class="income-table-wrap">
+      <table>
+        <thead><tr><th>成員</th><th>年收入</th><th>計算方式</th><th>每月預期進帳</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="owner-badge badge-elf">🧝 精靈</span></td>
+            <td style="font-family:'DM Mono',monospace">$1,250,000</td>
+            <td style="color:var(--text3);font-size:12px">15% ÷ 14個月</td>
+            <td class="amount-income">+$13,393</td>
+          </tr>
+          <tr>
+            <td><span class="owner-badge badge-fox">🦊 小狐狸</span></td>
+            <td style="font-family:'DM Mono',monospace">$700,000</td>
+            <td style="color:var(--text3);font-size:12px">15% ÷ 14個月</td>
+            <td class="amount-income">+$7,500</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div id="overlayContainer"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbzdnp_gvKGGELnzDA4ZNq25RQ3mPPOXqbuwINKUBXuobbBw_cLubt8Cn-oDrazLfgkk/exec';
+let records = [];
+let catChartInst = null, dailyChartInst = null;
+let amountType = 'expense';
+
+// ── API ─────────────────────────────────────────────────────
+async function apiCall(params) {
+  const qs = Object.entries(params)
+    .map(([k,v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v))
+    .join('&');
+  const res = await fetch(API + '?' + qs);
+  return res.json();
+}
+
+function setSyncStatus(state, text) {
+  const dot = document.getElementById('syncDot');
+  const txt = document.getElementById('syncText');
+  dot.className = 'sync-dot ' + state;
+  txt.textContent = text;
+}
+
+function currentSheet() {
+  return document.getElementById('monthSel').value;
+}
+
+async function loadData() {
+  setSyncStatus('loading', '同步中…');
+  document.getElementById('recordBody').innerHTML =
+    '<tr><td colspan="6"><div class="loading-state"><div class="spinner"></div>載入中…</div></td></tr>';
+  try {
+    const data = await apiCall({ action: 'getAll', sheet: currentSheet() });
+    records = data.records || [];
+    setSyncStatus('ok', '已同步 · ' + new Date().toLocaleTimeString('zh-TW'));
+    renderAll();
+  } catch(e) {
+    setSyncStatus('err', '連線失敗，請檢查網路');
+    document.getElementById('recordBody').innerHTML =
+      '<tr><td colspan="6"><div class="empty-state">⚠️ 無法連線到 Google 試算表</div></td></tr>';
+  }
+}
+
+async function addRecord(data) {
+  setSyncStatus('loading', '儲存中…');
+  try {
+    await apiCall({ action: 'add', sheet: currentSheet(), data: JSON.stringify(data) });
+    showToast('已新增 ✓');
+    await loadData();
+  } catch(e) {
+    setSyncStatus('err', '儲存失敗');
+    showToast('儲存失敗，請重試');
+  }
+}
+
+async function deleteRecord(row) {
+  if (!confirm('確定刪除這筆記錄？')) return;
+  setSyncStatus('loading', '刪除中…');
+  try {
+    await apiCall({ action: 'delete', sheet: currentSheet(), row });
+    showToast('已刪除');
+    await loadData();
+  } catch(e) {
+    setSyncStatus('err', '刪除失敗');
+  }
+}
+
+// ── RENDER ──────────────────────────────────────────────────
+function fmt(n) { return '$' + Math.round(n).toLocaleString(); }
+
+const DAY_NAMES = ['日','一','二','三','四','五','六'];
+function formatDate(raw) {
+  if (!raw) return '';
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return String(raw);
+  const year = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  const wd = DAY_NAMES[d.getDay()];
+  return year + '/' + mm + '/' + dd + ' (' + wd + ')';
+}
+
+function renderAll() {
+  // 排除「總收入/支出」和「帳戶餘額」和「支出部分轉回」等彙總列
+  const SUMMARY_ITEMS = ['總收入/支出', '帳戶餘額', '支出部分轉回'];
+  const isSummaryRow = r => SUMMARY_ITEMS.some(k => r.item.includes(k)) || r.owner === '帳戶餘額';
+  const realRecs = records.filter(r => !isSummaryRow(r));
+
+  // 只計算有擁有者的真實收支
+  const totalIncome = realRecs.filter(r => r.owner !== '').reduce((s,r) => s + r.income, 0);
+  const totalExpense = realRecs.reduce((s,r) => s + r.expense, 0);
+  const balance = totalIncome - totalExpense;
+
+  // 更新標籤顯示月份
+  const sel = document.getElementById('monthSel');
+  const monthLabel = sel.options[sel.selectedIndex].text;
+  document.getElementById('s-income-label').textContent = monthLabel + ' 收入';
+  document.getElementById('s-expense-label').textContent = monthLabel + ' 支出';
+
+  document.getElementById('s-income').textContent = fmt(totalIncome);
+  document.getElementById('s-expense').textContent = fmt(totalExpense);
+  document.getElementById('s-balance').textContent = fmt(balance);
+  document.getElementById('s-count').textContent = realRecs.length + ' 筆';
+
+  renderRecords();
+  if (document.getElementById('tab-analysis').style.display !== 'none') renderCharts();
+  if (document.getElementById('tab-members').style.display !== 'none') renderMembers();
+}
+
+function getFiltered() {
+  const q = (document.getElementById('searchBox')?.value || '').toLowerCase();
+  const o = document.getElementById('ownerFilter')?.value || '';
+  const t = document.getElementById('typeFilter')?.value || '';
+  return records.filter(r => {
+    if (q && !r.item.toLowerCase().includes(q) && !r.note.toLowerCase().includes(q)) return false;
+    if (o && r.owner !== o) return false;
+    if (t === 'income' && r.income === 0) return false;
+    if (t === 'expense' && r.expense === 0) return false;
+    return true;
+  });
+}
+
+function renderRecords() {
+  const rows = getFiltered();
+  const body = document.getElementById('recordBody');
+  if (!rows.length) {
+    body.innerHTML = '<tr><td colspan="6"><div class="empty-state">沒有符合的記錄</div></td></tr>';
+    return;
+  }
+  body.innerHTML = rows.map(r => {
+    const SUMMARY_ITEMS = ['總收入/支出', '帳戶餘額', '支出部分轉回'];
+    const isSummary = SUMMARY_ITEMS.some(k => r.item.includes(k)) || r.owner === '帳戶餘額';
+
+    const badge = r.owner && !isSummary
+      ? `<span class="owner-badge ${r.owner === '精靈' ? 'badge-elf' : 'badge-fox'}">${r.owner === '精靈' ? '🧝' : '🦊'} ${r.owner}</span>`
+      : '<span style="color:var(--text3);font-size:12px">—</span>';
+
+    // 彙總列：同時顯示收入和支出，以及結餘
+    if (isSummary) {
+      const incAmt = r.income > 0 ? `<span class="amount-income">+${fmt(r.income)}</span>` : '';
+      const expAmt = r.expense > 0 ? `<span class="amount-expense"> -${fmt(r.expense)}</span>` : '';
+      const netAmt = r.income > 0 && r.expense > 0
+        ? `<span style="color:var(--text2);font-size:11px;margin-left:4px">= ${fmt(r.income - r.expense)}</span>`
+        : '';
+      return `<tr style="background:var(--surface2)">
+        <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text2);white-space:nowrap">${formatDate(r.date)}</td>
+        <td><span style="font-size:11px;color:var(--text3);font-weight:500">彙總</span></td>
+        <td style="font-size:13px;font-weight:500">${r.item}</td>
+        <td>${incAmt}${expAmt}${netAmt}</td>
+        <td class="hide-mobile"><span class="note-text">${r.note || ''}</span></td>
+        <td></td>
+      </tr>`;
+    }
+
+    const amt = r.income > 0
+      ? `<span class="amount-income">+${fmt(r.income)}</span>`
+      : r.expense > 0
+      ? `<span class="amount-expense">-${fmt(r.expense)}</span>`
+      : '';
+    return `<tr>
+      <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text2);white-space:nowrap">${formatDate(r.date)}</td>
+      <td>${badge}</td>
+      <td style="font-size:13px">${r.item}</td>
+      <td>${amt}</td>
+      <td class="hide-mobile"><span class="note-text">${r.note || ''}</span></td>
+      <td><button class="delete-btn" onclick="deleteRecord(${r.row})" title="刪除">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function categorize(item) {
+  if (/全聯|超市|買菜/.test(item)) return '超市採購';
+  if (/7-11|便利|便利商店/.test(item)) return '便利商店';
+  if (/自強號|火車|高鐵|交通|客運/.test(item)) return '交通';
+  if (/珍煮丹|飲料|手搖|茶/.test(item)) return '飲料';
+  if (/房租/.test(item)) return '房租';
+  if (/每月的愛/.test(item)) return '固定轉帳';
+  if (/momo|蝦皮|網購/.test(item)) return '網購';
+  return '餐飲';
+}
+
+function renderCharts() {
+  const expRecs = records.filter(r => r.expense > 0 && r.owner !== '');
+  const catMap = {};
+  expRecs.forEach(r => { const c = categorize(r.item); catMap[c] = (catMap[c] || 0) + r.expense; });
+  const cats = Object.keys(catMap).sort((a,b) => catMap[b] - catMap[a]);
+  const palette = ['#2d7a5f','#c45a2a','#378ADD','#BA7517','#534AB7','#D4537E','#639922','#888780'];
+
+  if (catChartInst) catChartInst.destroy();
+  catChartInst = new Chart(document.getElementById('catChart'), {
+    type: 'bar',
+    data: { labels: cats, datasets: [{ data: cats.map(c => catMap[c]), backgroundColor: palette.slice(0, cats.length), borderRadius: 6 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { autoSkip: false, font: { family: 'Noto Sans TC', size: 11 } } },
+        y: { ticks: { callback: v => '$' + v.toLocaleString(), font: { family: 'DM Mono', size: 11 } } }
+      }
+    }
+  });
+
+  const dailyMap = {};
+  expRecs.forEach(r => { dailyMap[r.date] = (dailyMap[r.date] || 0) + r.expense; });
+  const days = Object.keys(dailyMap).sort();
+  let cum = 0;
+  const cumVals = days.map(d => { cum += dailyMap[d]; return cum; });
+
+  if (dailyChartInst) dailyChartInst.destroy();
+  dailyChartInst = new Chart(document.getElementById('dailyChart'), {
+    type: 'line',
+    data: { labels: days, datasets: [{ data: cumVals, borderColor: '#c45a2a', backgroundColor: 'rgba(196,90,42,0.08)', fill: true, tension: 0.35, pointRadius: 4, pointBackgroundColor: '#c45a2a' }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { font: { family: 'DM Mono', size: 11 } } },
+        y: { ticks: { callback: v => '$' + v.toLocaleString(), font: { family: 'DM Mono', size: 11 } } }
+      }
+    }
+  });
+}
+
+function renderMembers() {
+  const people = ['精靈', '小狐狸'];
+  const prepaid = { '小狐狸': -6300 };
+  const monthlyContrib = { '精靈': 13000, '小狐狸': 7500 };
+  document.getElementById('memberGrid').innerHTML = people.map(p => {
+    const expTotal = records.filter(r => r.owner === p && r.expense > 0).reduce((s,r) => s + r.expense, 0);
+    const count = records.filter(r => r.owner === p && r.expense > 0).length;
+    const prep = prepaid[p] || 0;
+    const emoji = p === '精靈' ? '🧝' : '🦊';
+    return `<div class="member-card">
+      <div class="member-name">${emoji} ${p}</div>
+      <div class="member-stat"><span class="member-stat-label">每月進帳</span><span class="member-stat-value" style="color:var(--income)">+${fmt(monthlyContrib[p])}</span></div>
+      ${prep < 0 ? `<div class="member-stat"><span class="member-stat-label">先付款項</span><span class="member-stat-value" style="color:var(--expense)">-${fmt(Math.abs(prep))}</span></div>` : ''}
+      <div class="member-stat"><span class="member-stat-label">支出筆數</span><span class="member-stat-value">${count} 筆</span></div>
+      <div class="member-stat"><span class="member-stat-label">支出合計</span><span class="member-stat-value" style="color:var(--expense)">-${fmt(expTotal)}</span></div>
+    </div>`;
+  }).join('');
+}
+
+// ── TABS ────────────────────────────────────────────────────
+function switchTab(name, el) {
+  ['records','analysis','members'].forEach(t => {
+    document.getElementById('tab-' + t).style.display = t === name ? '' : 'none';
+  });
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  if (name === 'analysis') setTimeout(renderCharts, 50);
+  if (name === 'members') renderMembers();
+}
+
+// ── MODAL ────────────────────────────────────────────────────
+function openModal() {
+  amountType = 'expense';
+  const today = new Date();
+  const mm = String(today.getMonth() + 1).padStart(2,'0');
+  const dd = String(today.getDate()).padStart(2,'0');
+  document.getElementById('overlayContainer').innerHTML = `
+    <div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal">
+        <div class="modal-header">
+          <span class="modal-title">新增記錄</span>
+          <button class="modal-close" onclick="closeModal()">×</button>
+        </div>
+        <div class="amount-toggle">
+          <button class="toggle-btn" id="toggleExpense" onclick="setType('expense')" style="background:var(--fox-bg);color:var(--expense)">支出 −</button>
+          <button class="toggle-btn" id="toggleIncome" onclick="setType('income')">收入 ＋</button>
+        </div>
+        <div class="row2">
+          <div class="field"><label>日期</label><input id="f-date" type="text" value="${mm}/${dd}" placeholder="MM/DD"></div>
+          <div class="field"><label>擁有者</label>
+            <select id="f-owner">
+              <option value="精靈">🧝 精靈</option>
+              <option value="小狐狸">🦊 小狐狸</option>
+            </select>
+          </div>
+        </div>
+        <div class="field"><label>項目</label><input id="f-item" type="text" placeholder="例：竹南 全聯"></div>
+        <div class="field"><label>金額</label><input id="f-amount" type="number" placeholder="0" min="0" inputmode="numeric"></div>
+        <div class="field"><label>備註</label><textarea id="f-note" placeholder="選填"></textarea></div>
+        <div class="modal-actions">
+          <button class="btn-cancel" onclick="closeModal()">取消</button>
+          <button class="btn-save" id="saveBtn" onclick="submitRecord()">儲存</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function setType(type) {
+  amountType = type;
+  document.getElementById('toggleExpense').style.cssText = type === 'expense' ? 'background:var(--fox-bg);color:var(--expense)' : '';
+  document.getElementById('toggleIncome').style.cssText = type === 'income' ? 'background:var(--elf-bg);color:var(--income)' : '';
+}
+
+function closeModal() { document.getElementById('overlayContainer').innerHTML = ''; }
+
+async function submitRecord() {
+  const date = document.getElementById('f-date').value.trim();
+  const owner = document.getElementById('f-owner').value;
+  const item = document.getElementById('f-item').value.trim();
+  const amount = parseFloat(document.getElementById('f-amount').value) || 0;
+  const note = document.getElementById('f-note').value.trim();
+  if (!date || !item || amount <= 0) { showToast('請填寫日期、項目和金額'); return; }
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = true;
+  btn.textContent = '儲存中…';
+  await addRecord({
+    date, owner, item,
+    income: amountType === 'income' ? amount : 0,
+    expense: amountType === 'expense' ? amount : 0,
+    note
+  });
+  closeModal();
+}
+
+// ── TOAST ────────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2200);
+}
+
+// ── INIT ─────────────────────────────────────────────────────
+loadData();
+</script>
+
+<style>
+@media (max-width: 600px) {
+  .hide-mobile { display: none; }
+}
+</style>
+</body>
+</html>

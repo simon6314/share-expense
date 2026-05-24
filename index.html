@@ -706,7 +706,7 @@ function renderRecords() {
 }
 
 function categorize(item) {
-  if (/住宿|旅遊|民宿|飯店|酒店|旅館/.test(item)) return '住宿旅遊';
+  if (/住宿|旅遊|民宿|飯店|酒店|旅館|商旅/.test(item)) return '住宿旅遊';
   if (/全聯|超市|買菜/.test(item)) return '超市採購';
   if (/7-11|便利/.test(item)) return '便利商店';
   if (/自強號|火車|高鐵|交通|客運|Uber/.test(item)) return '交通';
@@ -714,6 +714,8 @@ function categorize(item) {
   if (/房租/.test(item)) return '房租';
   if (/每月的愛/.test(item)) return '固定轉帳';
   if (/momo|蝦皮|網購/.test(item)) return '網購';
+  if (/隧道|打彈珠/.test(item)) return '景點';
+  if (/原攝/.test(item)) return '相片';
   return '餐飲';
 }
 

@@ -315,8 +315,10 @@ tr:hover td { background: var(--bg); }
 <div id="tab-analysis" class="content" style="display:none">
   <p class="section-title">支出分類</p>
   <div class="chart-wrap"><div class="chart-canvas-wrap"><canvas id="catChart"></canvas></div></div>
-  <p class="section-title">每日累計支出</p>
-  <div class="chart-wrap"><div class="chart-canvas-wrap"><canvas id="dailyChart"></canvas></div></div>
+  <p class="section-title" id="detail-title">分類明細</p>
+  <div id="category-detail" style="border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);min-height:100px">
+  <div class="empty-state" style="padding:30px 20px">👆 點選上方分類長條，查看每筆消費明細</div>
+  </div>
 </div>
 
 <!-- MEMBERS TAB -->
@@ -342,7 +344,7 @@ tr:hover td { background: var(--bg); }
 <script>
 const API = 'https://script.google.com/macros/s/AKfycbzdnp_gvKGGELnzDA4ZNq25RQ3mPPOXqbuwINKUBXuobbBw_cLubt8Cn-oDrazLfgkk/exec';
 let records = [];
-let catChartInst = null, dailyChartInst = null;
+let catChartInst = null;
 let amountType = 'expense';
 let manualSeason = null;
 
@@ -704,6 +706,7 @@ function renderRecords() {
 }
 
 function categorize(item) {
+  if (/住宿|旅遊|民宿|飯店|酒店|旅館/.test(item)) return '住宿旅遊';
   if (/全聯|超市|買菜/.test(item)) return '超市採購';
   if (/7-11|便利/.test(item)) return '便利商店';
   if (/自強號|火車|高鐵|交通|客運|Uber/.test(item)) return '交通';
@@ -714,29 +717,78 @@ function categorize(item) {
   return '餐飲';
 }
 
+const CAT_EMOJI = {
+  '住宿旅遊':'🏨', '超市採購':'🛒', '便利商店':'🏪', '交通':'🚆',
+  '飲料':'🧋', '房租':'🏠', '固定轉帳':'💸', '網購':'📦', '餐飲':'🍽️'
+};
+  
 function renderCharts() {
   const expRecs = records.filter(r => r.expense > 0 && r.owner !== '' && !isSummaryRow(r));
   const catMap = {};
   expRecs.forEach(r => { const c = categorize(r.item); catMap[c] = (catMap[c]||0) + r.expense; });
   const cats = Object.keys(catMap).sort((a,b) => catMap[b]-catMap[a]);
-  const palette = ['#2d7a5f','#c45a2a','#378ADD','#BA7517','#534AB7','#D4537E','#639922','#888780'];
+  const palette = ['#2d7a5f','#c45a2a','#378ADD','#BA7517','#534AB7','#D4537E','#639922','#888780','#E8A838'];
+
   if (catChartInst) catChartInst.destroy();
   catChartInst = new Chart(document.getElementById('catChart'), {
     type: 'bar',
     data: { labels: cats, datasets: [{ data: cats.map(c=>catMap[c]), backgroundColor: palette.slice(0,cats.length), borderRadius: 6 }] },
-    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{ticks:{autoSkip:false,font:{family:'Noto Sans TC',size:11}}}, y:{ticks:{callback:v=>'$'+v.toLocaleString(),font:{family:'DM Mono',size:11}}} } }
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { autoSkip: false, font: { family: 'Noto Sans TC', size: 11 } } },
+        y: { ticks: { callback: v => '$'+v.toLocaleString(), font: { family: 'DM Mono', size: 11 } } }
+      },
+      onClick: (evt, elements) => {
+        if (elements.length > 0) renderCategoryDetail(cats[elements[0].index]);
+      },
+      onHover: (evt, elements) => {
+        evt.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default';
+      }
+    }
   });
-  const dailyMap = {};
-  expRecs.forEach(r => { dailyMap[r.date]=(dailyMap[r.date]||0)+r.expense; });
-  const days = Object.keys(dailyMap).sort();
-  let cum = 0;
-  const cumVals = days.map(d => { cum += dailyMap[d]; return cum; });
-  if (dailyChartInst) dailyChartInst.destroy();
-  dailyChartInst = new Chart(document.getElementById('dailyChart'), {
-    type: 'line',
-    data: { labels: days, datasets: [{ data: cumVals, borderColor: '#c45a2a', backgroundColor: 'rgba(196,90,42,0.08)', fill:true, tension:0.35, pointRadius:4, pointBackgroundColor:'#c45a2a' }] },
-    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{ticks:{font:{family:'DM Mono',size:11}}}, y:{ticks:{callback:v=>'$'+v.toLocaleString(),font:{family:'DM Mono',size:11}}} } }
-  });
+
+  // 重設明細區
+  document.getElementById('detail-title').textContent = '分類明細';
+  document.getElementById('category-detail').innerHTML =
+    '<div class="empty-state" style="padding:30px 20px">👆 點選上方分類長條，查看每筆消費明細</div>';
+}
+
+function renderCategoryDetail(category) {
+  const recs = records
+    .filter(r => r.expense > 0 && r.owner !== '' && !isSummaryRow(r) && categorize(r.item) === category)
+    .sort((a,b) => new Date(a.date) - new Date(b.date));
+
+  const total = recs.reduce((s,r) => s + r.expense, 0);
+  const emoji = CAT_EMOJI[category] || '📋';
+  document.getElementById('detail-title').textContent =
+    `${emoji} ${category} · 共 ${fmt(total)}（${recs.length} 筆）`;
+
+  if (!recs.length) {
+    document.getElementById('category-detail').innerHTML = '<div class="empty-state">此分類沒有記錄</div>';
+    return;
+  }
+
+  document.getElementById('category-detail').innerHTML =
+    `<div style="padding:10px 12px;display:flex;flex-direction:column;gap:8px">` +
+    recs.map(r => `
+      <div style="display:flex;justify-content:space-between;align-items:center;
+                  padding:10px 12px;background:var(--bg);border-radius:var(--radius-sm);
+                  border:1px solid var(--border)">
+        <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <span class="owner-badge ${r.owner==='精靈'?'badge-elf':'badge-fox'}">${r.owner==='精靈'?'🧝':'🦊'} ${r.owner}</span>
+            <span style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.item}</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace">${formatDateShort(r.date)}</span>
+            ${r.note ? `<span style="font-size:11px;color:var(--text3)">· ${r.note}</span>` : ''}
+          </div>
+        </div>
+        <span class="amount-expense" style="margin-left:10px;flex-shrink:0">-${fmt(r.expense)}</span>
+      </div>`
+    ).join('') + `</div>`;
 }
 
 function renderMembers() {

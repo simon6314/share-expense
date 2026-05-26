@@ -388,18 +388,22 @@ function getAutoMonth() {
 function applyMonthTheme(m) {
   const t = MONTH_THEMES[m];
   if (!t) return;
+  
+  // 移除老舊季節屬性，防止其 CSS 優先權覆蓋新樣式
+  document.body.removeAttribute('data-season');
   document.body.setAttribute('data-theme', t.themeAttr);
   document.getElementById('seasonBadge').textContent = t.emoji + ' ' + t.name;
   
-  const root = document.documentElement;
-  root.style.setProperty('--bg', '#fbfaf8');
-  root.style.setProperty('--season-bg', t.bg);
-  root.style.setProperty('--elf', t.elf);
-  root.style.setProperty('--elf-bg', t.elfBg);
-  root.style.setProperty('--fox', t.fox);
-  root.style.setProperty('--fox-bg', t.foxBg);
-  root.style.setProperty('--income', t.elf);
-  root.style.setProperty('--expense', t.fox);
+  // 直接將 CSS 變數設定在 document.body.style 上 (最高權限的 Inline Style)
+  const target = document.body;
+  target.style.setProperty('--bg', '#fbfaf8');
+  target.style.setProperty('--season-bg', t.bg);
+  target.style.setProperty('--elf', t.elf);
+  target.style.setProperty('--elf-bg', t.elfBg);
+  target.style.setProperty('--fox', t.fox);
+  target.style.setProperty('--fox-bg', t.foxBg);
+  target.style.setProperty('--income', t.elf);
+  target.style.setProperty('--expense', t.fox);
   
   spawnParticles(t.particles);
 }

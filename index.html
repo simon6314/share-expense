@@ -591,8 +591,15 @@ function renderAll() {
   // 3. 本月實質支出 (排除先付/代墊)
   const totalExpense = realRecs.filter(r => !isPrepaid(r)).reduce((s,r) => s + r.expense, 0);
   
-  // 4. 目前帳戶期末總水位 = 期初餘額 + 新增收入 - 實質支出
-  const balance = startingBalance + totalIncome - totalExpense;
+  // 4. 目前帳戶期末總水位 (若已結算則以最後轉回餘額為準，避免因超支手動調整導致不一致)
+  const transferRecs = records.filter(r => r.item.includes('支出部分轉回'));
+  const isSettled = transferRecs.some(r => r.expense > 0);
+  
+  let balance = startingBalance + totalIncome - totalExpense;
+  if (isSettled && transferRecs.length > 0) {
+    const lastTransfer = transferRecs[transferRecs.length - 1];
+    balance = (lastTransfer.income || 0) - (lastTransfer.expense || 0);
+  }
   
   const sel = document.getElementById('monthSel');
   const monthLabel = sel.options[sel.selectedIndex]?.text || '';

@@ -542,6 +542,14 @@ async function updateTransfer(row, field, value) {
     await apiCall({ action: 'updateTransfer', sheet: currentSheet(), row, field, value: parseFloat(value) || 0 });
     setSyncStatus('ok', '已同步 · ' + new Date().toLocaleTimeString('zh-TW'));
     showToast('已更新 ✓');
+    
+    // ⚡ 實時更新：當手動調整轉回金額時，即時更新首頁四大卡片的金額
+    renderAll();
+    
+    // ⚡ 實時更新：若使用者目前在年度頁籤，即時重繪年度水位折線圖
+    if (document.getElementById('tab-annual').style.display !== 'none') {
+      renderAnnualChart();
+    }
   } catch(e) {
     setSyncStatus('err', '更新失敗');
     showToast('更新失敗，請重試');

@@ -546,13 +546,13 @@ function formatDateShort(raw) {
   return String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0') + ' (' + DAY_NAMES[d.getDay()] + ')';
 }
 
-const SUMMARY_ITEMS = ['總收入/支出','帳戶餘額','支出部分轉回'];
+const SUMMARY_ITEMS = ['總收入/支出','支出部分轉回'];
 const isSummaryRow = r => SUMMARY_ITEMS.some(k => r.item.includes(k)) || r.owner === '帳戶餘額';
 
 function renderAll() {
   const realRecs = records.filter(r => !isSummaryRow(r));
   const isPrepaid = r => r.note && r.note.includes('先付');
-  const totalIncome = realRecs.filter(r => r.owner !== '').reduce((s,r) => s + r.income, 0);
+  const totalIncome = realRecs.filter(r => r.owner !== '' || r.item === '帳戶餘額').reduce((s,r) => s + r.income, 0);
   const totalExpense = realRecs.filter(r => !isPrepaid(r)).reduce((s,r) => s + r.expense, 0);
   const balance = totalIncome - totalExpense;
   const sel = document.getElementById('monthSel');
@@ -564,7 +564,8 @@ function renderAll() {
   const balEl = document.getElementById('s-balance');
   balEl.textContent = fmt(balance);
   balEl.style.color = balance >= 0 ? 'var(--income)' : 'var(--expense)';
-  document.getElementById('s-count').textContent = realRecs.length + ' 筆';
+  const realCount = realRecs.filter(r => r.item !== '帳戶餘額').length;
+  document.getElementById('s-count').textContent = realCount + ' 筆';
   renderRecords();
   if (document.getElementById('tab-analysis').style.display !== 'none') renderCharts();
   if (document.getElementById('tab-members').style.display !== 'none') renderMembers();
@@ -650,13 +651,14 @@ function renderRecords() {
       : r.expense > 0
       ? `<span class="amount-expense">-${fmt(r.expense)}</span>${isPrepaid?'<span style="font-size:10px;color:var(--text3);margin-left:4px">先付</span>':''}`
       : '';
+    const delBtn = r.item === '帳戶餘額' ? '' : `<button class="delete-btn" onclick="deleteRecord(${r.row})">✕</button>`;
     return `<tr>
       <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text2);white-space:nowrap">${formatDate(r.date)}</td>
       <td>${badge}</td>
       <td style="font-size:13px">${r.item}</td>
       <td>${amt}</td>
       <td><span class="note-text">${r.note||''}</span></td>
-      <td><button class="delete-btn" onclick="deleteRecord(${r.row})">✕</button></td></tr>`;
+      <td>${delBtn}</td></tr>`;
   }).join('');
 
   // ── Mobile cards ──
@@ -700,6 +702,7 @@ function renderRecords() {
     const amtVal = r.income > 0 ? r.income : r.expense;
     const amtHtml = amtVal > 0 ? `<span style="color:${amtColor};font-weight:700;font-family:'DM Mono',monospace;font-size:16px">${amtSign}${fmt(amtVal)}</span>` : '';
 
+    const delBtn = r.item === '帳戶餘額' ? '' : `<button class="delete-btn" onclick="deleteRecord(${r.row})">✕</button>`;
     return `<div class="record-card">
       <div class="record-card-top">
         <span class="record-card-date">${formatDateShort(r.date)}</span>
@@ -711,7 +714,7 @@ function renderRecords() {
       </div>
       <div class="record-card-bottom">
         <span class="record-card-note">${r.note||''}${isPrepaid?' · <span style="color:var(--text3)">先付</span>':''}</span>
-        <button class="delete-btn" onclick="deleteRecord(${r.row})">✕</button>
+        ${delBtn}
       </div>
     </div>`;
   }).join('');
@@ -733,7 +736,8 @@ function categorize(item) {
 
 const CAT_EMOJI = {
   '住宿旅遊':'🏨', '超市採購':'🛒', '便利商店':'🏪', '交通':'🚆',
-  '飲料':'🧋', '房租':'🏠', '固定轉帳':'💸', '網購':'📦', '餐飲':'🍽️'
+  '飲料':'🧋', '房租':'🏠', '固定轉帳':'💸', '網購':'📦', '餐飲':'🍽️',
+  '景點':'🎢', '相片':'📸'
 };
   
 function renderCharts() {
@@ -832,37 +836,16 @@ async function renderAnnualChart() {
 
   document.getElementById('annual-title').textContent = `${year} 年度月份收支`;
   document.getElementById('annual-chart-wrap').innerHTML =
-    '<div class="loading-state"><div class="spinner"></div>載入各月資料中…</div>';
+    '<div class="loading-state"><div class="spinner"></div>載入年度數據中…</div>';
   document.getElementById('annual-summary').innerHTML = '';
 
   try {
-    const sheetsData = await apiCall({ action: 'getSheets' });
-    const sheets = sheetsData.sheets || [];
-
-    const months = Array.from({length: 12}, (_, i) => i + 1);
-
-    // 平行載入所有月份
-    const monthData = await Promise.all(months.map(async m => {
-      const sheet = sheets.find(s => new RegExp(`${year}/${m}月`).test(s));
-      if (!sheet) return { month: m, income: 0, expense: 0 };
-      try {
-        const res = await apiCall({ action: 'getAll', sheet });
-        const recs = (res.records || []).filter(r => !isSummaryRow(r));
-        const expense = recs
-          .filter(r => r.expense > 0 && r.owner !== '')
-          .reduce((s, r) => s + r.expense, 0);
-        const income = recs
-          .filter(r => r.income > 0 && r.owner !== '')
-          .reduce((s, r) => s + r.income, 0);
-        return { month: m, income, expense };
-      } catch(e) {
-        return { month: m, income: 0, expense: 0 };
-      }
-    }));
+    const res = await apiCall({ action: 'getAnnualSummary', year });
+    const monthData = res.summary || [];
 
     const expVals = monthData.map(d => d.expense);
     const incVals = monthData.map(d => d.income);
-    const labels = months.map(m => `${m}月`);
+    const labels = monthData.map(d => `${d.month}月`);
 
     document.getElementById('annual-chart-wrap').innerHTML = '<canvas id="annualChart"></canvas>';
 

@@ -40,7 +40,7 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Noto Sans TC', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; -webkit-font-smoothing: antialiased; transition: background 0.5s, color 0.3s; }
+body { font-family: 'Noto Sans TC', sans-serif; background: var(--bg); background-image: var(--season-bg); background-attachment: fixed; color: var(--text); min-height: 100vh; -webkit-font-smoothing: antialiased; transition: background 0.5s, background-image 0.5s, color 0.3s; }
 
 /* ── PARTICLES ── */
 .particles { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; overflow: hidden; }
@@ -271,10 +271,10 @@ tr:hover td { background: var(--bg); }
 </div>
 
 <div class="summary">
-  <div class="card"><div class="card-label" id="s-income-label">本月收入</div><div class="card-value income" id="s-income">—</div></div>
-  <div class="card"><div class="card-label" id="s-expense-label">本月支出</div><div class="card-value expense" id="s-expense">—</div></div>
-  <div class="card"><div class="card-label">結餘</div><div class="card-value" id="s-balance">—</div></div>
-  <div class="card"><div class="card-label">筆數</div><div class="card-value" id="s-count">—</div></div>
+  <div class="card"><div class="card-label">期初餘額 (上月結餘)</div><div class="card-value" id="s-starting-balance" style="color:var(--text2)">—</div></div>
+  <div class="card"><div class="card-label" id="s-income-label">本月新增收入</div><div class="card-value income" id="s-income">—</div></div>
+  <div class="card"><div class="card-label" id="s-expense-label">本月實質支出</div><div class="card-value expense" id="s-expense">—</div></div>
+  <div class="card"><div class="card-label">目前帳戶餘額 (期末)</div><div class="card-value" id="s-balance">—</div></div>
 </div>
 
 <div class="tabs">
@@ -360,27 +360,48 @@ let catChartInst = null;
 let amountType = 'expense';
 let manualSeason = null;
 
-// ── 季節 ──────────────────────────────────────────────────────
-const SEASONS = {
-  spring: { name: '春・櫻花季', emoji: '🌸', months: [3,4,5], particles: ['🌸','🌺','🌷'] },
-  summer: { name: '夏・晴空季', emoji: '☀️', months: [6,7,8], particles: ['🌊','🌻','⭐'] },
-  autumn: { name: '秋・楓葉季', emoji: '🍁', months: [9,10,11], particles: ['🍁','🍂','🌰'] },
-  winter: { name: '冬・雪季',   emoji: '❄️', months: [12,1,2], particles: ['❄️','⛄','✨'] }
+// ── 12個月粉嫩質感主題 ──────────────────────────────────────────
+const MONTH_THEMES = {
+  1: { name: '1月・元月新春', emoji: '🏮', particles: ['🏮','🧧','🍊','✨'], bg: 'linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%)', elf: '#b91c1c', elfBg: '#fde8e8', fox: '#c27803', foxBg: '#fef9c3', themeAttr: 'm1' },
+  2: { name: '2月・初雪元宵', emoji: '❄️', particles: ['❄️','⛄','🏮','🍡'], bg: 'linear-gradient(135deg, #f5f3ff 0%, #e0e7ff 100%)', elf: '#4f46e5', elfBg: '#e0e7ff', fox: '#7c3aed', foxBg: '#f3e8ff', themeAttr: 'm2' },
+  3: { name: '3月・春櫻綻放', emoji: '🌸', particles: ['🌸','💮','🦋','🍵'], bg: 'linear-gradient(135deg, #fff5f7 0%, #fbcfe8 100%)', elf: '#be185d', elfBg: '#fce4ec', fox: '#db2777', foxBg: '#fdf2f8', themeAttr: 'm3' },
+  4: { name: '4月・鬱金綠芽', emoji: '🌷', particles: ['🌷','🌱','🐝','🍀'], bg: 'linear-gradient(135deg, #f0fdf4 0%, #d1fae5 100%)', elf: '#047857', elfBg: '#d1fae5', fox: '#059669', foxBg: '#ecfdf5', themeAttr: 'm4' },
+  5: { name: '5月・紫陽雨季', emoji: '☔', particles: ['☔','🐌','💮','☁️'], bg: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)', elf: '#1d4ed8', elfBg: '#dbeafe', fox: '#2563eb', foxBg: '#eff6ff', themeAttr: 'm5' },
+  6: { name: '6月・夏至晴空', emoji: '☀️', particles: ['🌊','🌻','🍦','⛱️'], bg: 'linear-gradient(135deg, #ecfeff 0%, #cffafe 100%)', elf: '#0369a1', elfBg: '#e0f2fe', fox: '#0891b2', foxBg: '#ecfeff', themeAttr: 'm6' },
+  7: { name: '7月・向日葵夏', emoji: '🌻', particles: ['🌻','🍉','🍧','🎇'], bg: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)', elf: '#b45309', elfBg: '#fef3c7', fox: '#d97706', foxBg: '#fffbeb', themeAttr: 'm7' },
+  8: { name: '8月・盛夏祭典', emoji: '🎐', particles: ['🎐','🎇','👘','🐠'], bg: 'linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%)', elf: '#6d28d9', elfBg: '#f3e8ff', fox: '#701a75', foxBg: '#fae8ff', themeAttr: 'm8' },
+  9: { name: '9月・秋意微風', emoji: '🌾', particles: ['🌾','🌕','🐇','🍵'], bg: 'linear-gradient(135deg, #fffbeb 0%, #ccfbf1 100%)', elf: '#854d0e', elfBg: '#fef3c7', fox: '#0f766e', foxBg: '#ccfbf1', themeAttr: 'm9' },
+  10: { name: '10月・楓紅秋葉', emoji: '🍁', particles: ['🍁','🍂','🎃','🌰'], bg: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)', elf: '#c2410c', elfBg: '#ffedd5', fox: '#b91c1c', foxBg: '#fee2e2', themeAttr: 'm10' },
+  11: { name: '11月・銀杏微寒', emoji: '🍂', particles: ['🍂','🧣','🌰','☕'], bg: 'linear-gradient(135deg, #fffbeb 0%, #ffedd5 100%)', elf: '#a16207', elfBg: '#fef9c3', fox: '#78350f', foxBg: '#ffedd5', themeAttr: 'm11' },
+  12: { name: '12月・冬雪聖誕', emoji: '🎄', particles: ['🎄','❄️','🎁','🔔'], bg: 'linear-gradient(135deg, #f0fdf4 0%, #fee2e2 100%)', elf: '#15803d', elfBg: '#dcfce7', fox: '#b91c1c', foxBg: '#fee2e2', themeAttr: 'm12' }
 };
 
-function getAutoSeason() {
-  const m = new Date().getMonth() + 1;
-  for (const [key, s] of Object.entries(SEASONS)) {
-    if (s.months.includes(m)) return key;
+function getAutoMonth() {
+  const sel = document.getElementById('monthSel');
+  if (sel && sel.value) {
+    const mMatch = sel.value.match(/\/(\d{1,2})月/);
+    if (mMatch) return parseInt(mMatch[1]);
   }
-  return 'spring';
+  return new Date().getMonth() + 1;
 }
 
-function applySeason(key) {
-  document.body.setAttribute('data-season', key);
-  const s = SEASONS[key];
-  document.getElementById('seasonBadge').textContent = s.emoji + ' ' + s.name;
-  spawnParticles(s.particles);
+function applyMonthTheme(m) {
+  const t = MONTH_THEMES[m];
+  if (!t) return;
+  document.body.setAttribute('data-theme', t.themeAttr);
+  document.getElementById('seasonBadge').textContent = t.emoji + ' ' + t.name;
+  
+  const root = document.documentElement;
+  root.style.setProperty('--bg', '#fbfaf8');
+  root.style.setProperty('--season-bg', t.bg);
+  root.style.setProperty('--elf', t.elf);
+  root.style.setProperty('--elf-bg', t.elfBg);
+  root.style.setProperty('--fox', t.fox);
+  root.style.setProperty('--fox-bg', t.foxBg);
+  root.style.setProperty('--income', t.elf);
+  root.style.setProperty('--expense', t.fox);
+  
+  spawnParticles(t.particles);
 }
 
 function spawnParticles(emojis) {
@@ -400,20 +421,20 @@ function spawnParticles(emojis) {
 }
 
 function openSeasonModal() {
-  const cur = manualSeason || getAutoSeason();
+  const cur = manualSeason || getAutoMonth();
   const isAuto = !manualSeason;
   document.getElementById('seasonModalContainer').innerHTML = `
     <div class="season-modal" onclick="if(event.target===this)closeSeasonModal()">
-      <div class="season-panel">
-        <h3>🎨 選擇季節主題</h3>
-        <button class="season-auto ${isAuto ? 'active' : ''}" onclick="setAutoSeason()">✨ 自動（依當前月份）</button>
-        <div class="season-options">
-          ${Object.entries(SEASONS).map(([k,s]) => `
-            <div class="season-opt ${!isAuto && cur===k ? 'selected' : ''}" onclick="setManualSeason('${k}')">
-              <span class="s-emoji">${s.emoji}</span>${s.name}
+      <div class="season-panel" style="max-width: 380px;">
+        <h3>🎨 選擇月份主題</h3>
+        <button class="season-auto ${isAuto ? 'active' : ''}" onclick="setAutoSeason()" style="margin-bottom: 12px; width: 100%;">✨ 自動（依資料月份）</button>
+        <div class="season-options" style="grid-template-columns: repeat(3, 1fr); gap: 6px; max-height: 280px; overflow-y: auto;">
+          ${Object.entries(MONTH_THEMES).map(([k,t]) => `
+            <div class="season-opt ${!isAuto && cur==k ? 'selected' : ''}" onclick="setManualSeason(${k})" style="padding: 8px 4px; font-size: 11px;">
+              <span class="s-emoji" style="font-size: 18px; margin-bottom: 2px;">${t.emoji}</span>${t.name}
             </div>`).join('')}
         </div>
-        <button class="season-close" onclick="closeSeasonModal()">完成</button>
+        <button class="season-close" onclick="closeSeasonModal()" style="margin-top: 12px; width: 100%;">完成</button>
       </div>
     </div>`;
 }
@@ -422,14 +443,14 @@ function closeSeasonModal() { document.getElementById('seasonModalContainer').in
 
 function setAutoSeason() {
   manualSeason = null;
-  applySeason(getAutoSeason());
+  applyMonthTheme(getAutoMonth());
   document.querySelectorAll('.season-opt').forEach(e => e.classList.remove('selected'));
   document.querySelector('.season-auto').classList.add('active');
 }
 
-function setManualSeason(key) {
-  manualSeason = key;
-  applySeason(key);
+function setManualSeason(m) {
+  manualSeason = m;
+  applyMonthTheme(m);
   document.querySelectorAll('.season-opt').forEach(e => e.classList.remove('selected'));
   event.currentTarget.classList.add('selected');
   document.querySelector('.season-auto').classList.remove('active');
@@ -451,15 +472,22 @@ function setSyncStatus(state, text) {
 function currentSheet() { return document.getElementById('monthSel').value; }
 
 async function loadData() {
-  setSyncStatus('loading', '同步中…');
   const loadHTML = '<div class="loading-state"><div class="spinner"></div>載入中…</div>';
   document.getElementById('recordBody').innerHTML = '<tr><td colspan="6">' + loadHTML + '</td></tr>';
   document.getElementById('recordCards').innerHTML = loadHTML;
+  setSyncStatus('loading', '同步中…');
   try {
     const data = await apiCall({ action: 'getAll', sheet: currentSheet() });
     if (data.error) throw new Error(data.error);
     records = data.records || [];
     setSyncStatus('ok', '已同步 · ' + new Date().toLocaleTimeString('zh-TW'));
+    
+    // 自動更新為目前月份主題
+    const m = getAutoMonth();
+    if (!manualSeason) {
+      applyMonthTheme(m);
+    }
+    
     renderAll();
   } catch(e) {
     setSyncStatus('err', '連線失敗');
@@ -552,20 +580,36 @@ const isSummaryRow = r => SUMMARY_ITEMS.some(k => r.item.includes(k)) || r.owner
 function renderAll() {
   const realRecs = records.filter(r => !isSummaryRow(r));
   const isPrepaid = r => r.note && r.note.includes('先付');
-  const totalIncome = realRecs.filter(r => r.owner !== '' || r.item === '帳戶餘額').reduce((s,r) => s + r.income, 0);
+  
+  // 1. 期初餘額
+  const startingRec = records.find(r => r.item === '帳戶餘額' && r.owner === '');
+  const startingBalance = startingRec ? startingRec.income : 0;
+  
+  // 2. 本月新增實質收入 (排除期初餘額，不重疊計算)
+  const totalIncome = realRecs.filter(r => r.owner !== '' && r.item !== '帳戶餘額').reduce((s,r) => s + r.income, 0);
+  
+  // 3. 本月實質支出 (排除先付/代墊)
   const totalExpense = realRecs.filter(r => !isPrepaid(r)).reduce((s,r) => s + r.expense, 0);
-  const balance = totalIncome - totalExpense;
+  
+  // 4. 目前帳戶期末總水位 = 期初餘額 + 新增收入 - 實質支出
+  const balance = startingBalance + totalIncome - totalExpense;
+  
   const sel = document.getElementById('monthSel');
   const monthLabel = sel.options[sel.selectedIndex]?.text || '';
-  document.getElementById('s-income-label').textContent = monthLabel + ' 收入';
-  document.getElementById('s-expense-label').textContent = monthLabel + ' 支出';
+  
+  document.getElementById('s-starting-balance').textContent = fmt(startingBalance);
+  document.getElementById('s-income-label').textContent = monthLabel + ' 新增';
   document.getElementById('s-income').textContent = fmt(totalIncome);
+  document.getElementById('s-expense-label').textContent = monthLabel + ' 支出';
   document.getElementById('s-expense').textContent = fmt(totalExpense);
+  
   const balEl = document.getElementById('s-balance');
   balEl.textContent = fmt(balance);
   balEl.style.color = balance >= 0 ? 'var(--income)' : 'var(--expense)';
+  
+  // 計算總交易筆數 (不含帳戶餘額)
   const realCount = realRecs.filter(r => r.item !== '帳戶餘額').length;
-  document.getElementById('s-count').textContent = realCount + ' 筆';
+  // 更新明細表格與手機版
   renderRecords();
   if (document.getElementById('tab-analysis').style.display !== 'none') renderCharts();
   if (document.getElementById('tab-members').style.display !== 'none') renderMembers();
@@ -845,6 +889,7 @@ async function renderAnnualChart() {
 
     const expVals = monthData.map(d => d.expense);
     const incVals = monthData.map(d => d.income);
+    const balVals = monthData.map(d => d.endingBalance);
     const labels = monthData.map(d => `${d.month}月`);
 
     document.getElementById('annual-chart-wrap').innerHTML = '<canvas id="annualChart"></canvas>';
@@ -856,22 +901,32 @@ async function renderAnnualChart() {
         labels,
         datasets: [
           {
-            label: '支出',
+            label: '實質支出',
             data: expVals,
             borderColor: '#c45a2a',
-            backgroundColor: 'rgba(196,90,42,0.08)',
-            fill: true, tension: 0.35,
-            pointRadius: 5, pointBackgroundColor: '#c45a2a',
-            spanGaps: false
+            backgroundColor: 'rgba(196,90,42,0.06)',
+            fill: false, tension: 0.35,
+            pointRadius: 4, pointBackgroundColor: '#c45a2a',
+            borderWidth: 2
           },
           {
-            label: '收入',
+            label: '新增收入',
             data: incVals,
             borderColor: '#2d7a5f',
             backgroundColor: 'rgba(45,122,95,0.06)',
+            fill: false, tension: 0.35,
+            pointRadius: 4, pointBackgroundColor: '#2d7a5f',
+            borderWidth: 2
+          },
+          {
+            label: '帳戶總水位 (期末餘額)',
+            data: balVals,
+            borderColor: '#8b5cf6',
+            backgroundColor: 'rgba(139,92,246,0.04)',
             fill: true, tension: 0.35,
-            pointRadius: 5, pointBackgroundColor: '#2d7a5f',
-            spanGaps: false
+            pointRadius: 5, pointBackgroundColor: '#8b5cf6',
+            borderDash: [5, 5],
+            borderWidth: 2.5
           }
         ]
       },
@@ -1003,7 +1058,7 @@ async function initSheets() {
 }
 
 // ── INIT ─────────────────────────────────────────────────────
-applySeason(getAutoSeason());
+applyMonthTheme(getAutoMonth());
 initSheets();
 </script>
 </body>

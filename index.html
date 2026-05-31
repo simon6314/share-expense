@@ -795,9 +795,9 @@ function renderRecords() {
 
 function categorize(item) {
   if (/住宿|旅遊|民宿|飯店|酒店|旅館|商旅/.test(item)) return '住宿旅遊';
-  if (/全聯|超市|買菜/.test(item)) return '超市採購';
-  if (/7-11|便利/.test(item)) return '便利商店';
-  if (/自強號|火車|高鐵|交通|客運|Uber/.test(item)) return '交通';
+  if (/全聯|超市|買菜|市場/.test(item)) return '超市採購';
+  if (/7-11|便利|全家/.test(item)) return '便利商店';
+  if (/自強號|火車|高鐵|交通|客運|Uber|停車|台鐵/.test(item)) return '交通';
   if (/珍煮丹|飲料|手搖|茶/.test(item)) return '飲料';
   if (/房租/.test(item)) return '房租';
   if (/電費|電力|台電/.test(item)) return '電費';
@@ -805,7 +805,7 @@ function categorize(item) {
   if (/瓦斯|天然氣/.test(item)) return '瓦斯費';
   if (/網路費|寬頻|第四台|有線電視|MOD/.test(item)) return '網路與第四台';
   if (/管理費|社區管理/.test(item)) return '社區管理費';
-  if (/水電|修繕|水電工/.test(item)) return '水電雜支';
+  if (/修繕|水電工/.test(item)) return '水電雜支';
   if (/每月的愛/.test(item)) return '固定轉帳';
   if (/momo|蝦皮|網購/.test(item)) return '網購';
   if (/隧道|打彈珠/.test(item)) return '景點';

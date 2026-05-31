@@ -43,8 +43,8 @@
 body { font-family: 'Noto Sans TC', sans-serif; background: var(--bg); background-image: var(--season-bg); background-attachment: fixed; color: var(--text); min-height: 100vh; -webkit-font-smoothing: antialiased; transition: background 0.5s, background-image 0.5s, color 0.3s; }
 
 /* ── PARTICLES ── */
-.particles { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; overflow: hidden; }
-.particle { position: absolute; top: -40px; font-size: 13px; opacity: 0; animation: fall linear infinite; }
+.particles { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; overflow: hidden; }
+.particle { position: absolute; top: -40px; font-size: 13px; opacity: 0; animation: fall linear infinite; pointer-events: none; }
 @keyframes fall {
   0% { transform: translateY(0) rotate(0deg); opacity: 0; }
   10% { opacity: 0.35; }
@@ -739,6 +739,22 @@ function renderRecords() {
       : (r.owner
         ? `<span class="owner-badge ${r.owner==='精靈'?'badge-elf':'badge-fox'}">${r.owner==='精靈'?'🐎':'🦊'} ${r.owner}</span>`
         : '');
+
+    if (isTransfer) {
+      return `<div class="record-card summary-card">
+        <div class="record-card-top">
+          <span class="record-card-date">${formatDateShort(r.date)}</span>
+          <span style="font-size:11px;color:var(--text3)">轉帳結算</span>
+        </div>
+        <div class="record-card-mid">
+          ${badgeHtml}
+          <span class="record-card-item" style="font-weight:600">${r.item}</span>
+        </div>
+        <div style="margin-top:10px; padding-top:8px; border-top:1px dashed var(--border)">
+          ${buildTransferCells(r, true)}
+        </div>
+      </div>`;
+    }
 
     if (isSummary) {
       const incAmt = r.income > 0 ? `<span class="amount-income">+${fmt(r.income)}</span> ` : '';

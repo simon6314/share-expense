@@ -73,16 +73,16 @@ function openSeasonModal() {
   const isAuto = !manualSeason;
   document.getElementById('seasonModalContainer').innerHTML = `
     <div class="season-modal" onclick="if(event.target===this)closeSeasonModal()">
-      <div class="season-panel" style="max-width: 380px;">
+      <div class="season-panel">
         <h3>🎨 選擇月份主題</h3>
-        <button class="season-auto ${isAuto ? 'active' : ''}" onclick="setAutoSeason()" style="margin-bottom: 12px; width: 100%;">✨ 自動（依資料月份）</button>
-        <div class="season-options" style="grid-template-columns: repeat(3, 1fr); gap: 6px; max-height: 280px; overflow-y: auto;">
+        <button class="season-auto ${isAuto ? 'active' : ''}" onclick="setAutoSeason()">✨ 自動（依資料月份）</button>
+        <div class="season-options">
           ${Object.entries(MONTH_THEMES).map(([k,t]) => `
-            <div class="season-opt ${!isAuto && cur==k ? 'selected' : ''}" onclick="setManualSeason(${k})" style="padding: 8px 4px; font-size: 11px;">
-              <span class="s-emoji" style="font-size: 18px; margin-bottom: 2px;">${t.emoji}</span>${t.name}
+            <div class="season-opt ${!isAuto && cur==k ? 'selected' : ''}" onclick="setManualSeason(${k})">
+              <span class="s-emoji">${t.emoji}</span>${t.name}
             </div>`).join('')}
         </div>
-        <button class="season-close" onclick="closeSeasonModal()" style="margin-top: 12px; width: 100%;">完成</button>
+        <button class="season-close" onclick="closeSeasonModal()">完成</button>
       </div>
     </div>`;
 }

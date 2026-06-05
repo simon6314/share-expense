@@ -52,20 +52,51 @@ body { font-family: 'Noto Sans TC', sans-serif; font-size: 15px; background: var
   display: flex; align-items: center; justify-content: space-between;
   transition: background 0.5s, border-color 0.5s;
 }
-.header-left { display: flex; align-items: center; gap: 10px; }
+.header-left { display: flex; align-items: center; gap: 12px; }
 .season-badge {
-  font-size: 13px; color: var(--text3); padding: 4px 10px;
-  border: 1px solid var(--border); border-radius: 20px; cursor: pointer;
-  transition: all 0.2s; white-space: nowrap;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 5px 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+  transition: all 0.2s ease;
+  white-space: nowrap;
 }
-.season-badge:hover { border-color: var(--text2); color: var(--text2); }
+.season-badge:hover {
+  background: var(--border);
+  border-color: var(--text2);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+}
+.season-badge:active {
+  transform: translateY(0);
+}
 .header-title { font-size: 18px; font-weight: 700; }
 .header-sub { font-size: 12px; color: var(--text3); font-family: 'DM Mono', monospace; }
 .header-right { display: flex; gap: 8px; align-items: center; }
+
+/* ── SELECTS (Custom dropdown styling) ── */
+.month-select, .filter-select, .field select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b6560' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px !important;
+  cursor: pointer;
+}
+
 .month-select {
   font-family: 'Noto Sans TC', sans-serif; font-size: 14px;
   padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm);
-  background: var(--surface); color: var(--text); cursor: pointer;
+  background: var(--surface); color: var(--text);
   max-width: 130px;
 }
 .btn-add {
@@ -211,16 +242,18 @@ tr:hover td { background: var(--bg); }
 
 /* ── SEASON SELECTOR ── */
 .season-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 300; display: flex; align-items: center; justify-content: center; padding: 20px; }
-.season-panel { background: var(--surface); border-radius: var(--radius); padding: 22px; width: 100%; max-width: 340px; }
-.season-panel h3 { font-size: 17px; font-weight: 600; margin-bottom: 16px; }
-.season-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
-.season-opt { padding: 14px; border: 2px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; text-align: center; font-size: 14px; transition: all 0.15s; background: var(--bg); }
-.season-opt:hover { border-color: var(--text2); }
-.season-opt.selected { border-color: var(--text); background: var(--surface2); font-weight: 500; }
-.season-opt .s-emoji { font-size: 26px; display: block; margin-bottom: 6px; }
-.season-auto { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; font-family: 'Noto Sans TC', sans-serif; background: var(--bg); color: var(--text); cursor: pointer; margin-bottom: 10px; }
-.season-auto.active { background: var(--surface2); border-color: var(--text2); font-weight: 500; }
-.season-close { width: 100%; padding: 12px; border: none; border-radius: var(--radius-sm); font-size: 14px; font-family: 'Noto Sans TC', sans-serif; background: var(--text); color: #fff; cursor: pointer; }
+.season-panel { background: var(--surface); border-radius: var(--radius); padding: 22px; width: 100%; max-width: 350px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); }
+.season-panel h3 { font-size: 17px; font-weight: 600; margin-bottom: 16px; text-align: center; }
+.season-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; max-height: 280px; overflow-y: auto; padding: 2px; }
+.season-opt { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 4px; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; text-align: center; font-size: 12px; transition: all 0.2s ease; background: var(--bg); }
+.season-opt:hover { border-color: var(--text2); background: var(--surface2); }
+.season-opt.selected { border-color: var(--text); background: var(--surface2); font-weight: 600; box-shadow: inset 0 0 0 1px var(--text); }
+.season-opt .s-emoji { font-size: 22px; display: block; margin-bottom: 4px; }
+.season-auto { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; font-family: 'Noto Sans TC', sans-serif; background: var(--bg); color: var(--text); cursor: pointer; margin-bottom: 12px; font-weight: 500; transition: all 0.2s ease; }
+.season-auto:hover { border-color: var(--text2); }
+.season-auto.active { background: var(--surface2); border-color: var(--text); font-weight: 600; box-shadow: inset 0 0 0 1px var(--text); }
+.season-close { width: 100%; padding: 12px; border: none; border-radius: var(--radius-sm); font-size: 14px; font-family: 'Noto Sans TC', sans-serif; background: var(--text); color: #fff; cursor: pointer; font-weight: 600; margin-top: 12px; transition: opacity 0.15s ease; }
+.season-close:hover { opacity: 0.85; }
 
 /* ── TOAST ── */
 .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--text); color: #fff; padding: 12px 24px; border-radius: 30px; font-size: 14px; z-index: 999; animation: toastIn 0.2s ease; white-space: nowrap; }
@@ -233,4 +266,40 @@ tr:hover td { background: var(--bg); }
   .mobile-only { display: block; }
   .desktop-only { display: none; }
   .content { padding: 12px 14px; }
+  
+  /* 手機版 Header 排版優化 */
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 12px 14px;
+  }
+  .header-left {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+  }
+  .header-right {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    gap: 8px;
+  }
+  .month-select {
+    flex: 1;
+    max-width: none;
+    height: 40px;
+    line-height: 26px;
+  }
+  .btn-add {
+    flex-shrink: 0;
+    height: 40px;
+    padding: 0 16px;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
 }

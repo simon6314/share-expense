@@ -302,4 +302,13 @@ tr:hover td { background: var(--bg); }
     align-items: center;
     justify-content: center;
   }
+
+  /* 手機版表格內邊距與滾動優化 */
+  th, td {
+    padding: 10px 8px;
+  }
+  .income-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }

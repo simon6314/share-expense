@@ -452,7 +452,7 @@ function categorize(item) {
   if (/修繕|水電工/.test(item)) return '水電雜支';
   if (/每月的愛/.test(item)) return '固定轉帳';
   if (/momo|蝦皮|網購/.test(item)) return '網購';
-  if (/隧道|打彈珠/.test(item)) return '景點';
+  if (/隧道|打彈珠|門票/.test(item)) return '景點';
   if (/原攝/.test(item)) return '相片';
   return '餐飲';
 }

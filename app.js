@@ -441,7 +441,7 @@ function categorize(item) {
   if (/住宿|旅遊|民宿|飯店|酒店|旅館|商旅/.test(item)) return '住宿旅遊';
   if (/全聯|超市|買菜|市場/.test(item)) return '超市採購';
   if (/7-11|便利|全家/.test(item)) return '便利商店';
-  if (/自強號|火車|高鐵|交通|客運|Uber|停車|台鐵/.test(item)) return '交通';
+  if (/自強號|火車|高鐵|交通|客運|Uber|停車|台鐵|計程車/.test(item)) return '交通';
   if (/珍煮丹|飲料|手搖|茶/.test(item)) return '飲料';
   if (/房租/.test(item)) return '房租';
   if (/電費|電力|台電/.test(item)) return '電費';

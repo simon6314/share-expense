@@ -758,11 +758,133 @@ async function initSheets() {
 // ── INIT ─────────────────────────────────────────────────────
 applyMonthTheme(getAutoMonth());
 initSheets();
+preloadAssets(() => {
+  const islandTab = document.getElementById('tab-island');
+  if (islandTab && islandTab.style.display !== 'none') {
+    renderIsland();
+  }
+});
 
 // ── 視覺小島 (Visual Island) 繪圖引擎 ──────────────────────────
 let islandAnimationId = null;
 let windmillAngle = 0;
 let cloudOffset = 0;
+
+// 立體地標圖檔載入器與去背引擎
+const ASSET_FILES = {
+  island_base: 'assets/island_base.png',
+  castle: 'assets/castle.png',
+  cafe: 'assets/cafe.png',
+  farm: 'assets/farm.png',
+  resort: 'assets/resort.png',
+  station: 'assets/station.png',
+  apartment: 'assets/apartment.png',
+  windmill: 'assets/windmill.png',
+  warehouse: 'assets/warehouse.png',
+  balloon: 'assets/balloon.png'
+};
+
+const ASSETS = {};
+let assetsLoaded = false;
+
+// 自動對白底圖檔進行 flood-fill 去背 (Chroma keying)
+function makeBackgroundTransparent(imgEl, callback) {
+  try {
+    const canvas = document.createElement('canvas');
+    const w = imgEl.naturalWidth || imgEl.width;
+    const h = imgEl.naturalHeight || imgEl.height;
+    if (!w || !h) {
+      callback(imgEl);
+      return;
+    }
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(imgEl, 0, 0);
+    
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const data = imgData.data;
+    const visited = new Uint8Array(w * h);
+    const queue = [];
+    
+    const getIdx = (x, y) => (y * w + x) * 4;
+    const isLight = (x, y) => {
+      const idx = getIdx(x, y);
+      return data[idx] > 240 && data[idx+1] > 240 && data[idx+2] > 240;
+    };
+    
+    const pushPixel = (x, y) => {
+      if (x >= 0 && x < w && y >= 0 && y < h) {
+        const offset = y * w + x;
+        if (!visited[offset]) {
+          visited[offset] = 1;
+          if (isLight(x, y)) {
+            queue.push([x, y]);
+          }
+        }
+      }
+    };
+    
+    // 初始化邊界像素
+    for (let x = 0; x < w; x++) {
+      pushPixel(x, 0);
+      pushPixel(x, h - 1);
+    }
+    for (let y = 0; y < h; y++) {
+      pushPixel(0, y);
+      pushPixel(w - 1, y);
+    }
+    
+    while (queue.length > 0) {
+      const [cx, cy] = queue.shift();
+      const idx = getIdx(cx, cy);
+      data[idx+3] = 0; // alpha 透明度設為 0
+      
+      pushPixel(cx + 1, cy);
+      pushPixel(cx - 1, cy);
+      pushPixel(cx, cy + 1);
+      pushPixel(cx, cy - 1);
+    }
+    
+    ctx.putImageData(imgData, 0, 0);
+    const newImg = new Image();
+    newImg.src = canvas.toDataURL('image/png');
+    newImg.onload = () => callback(newImg);
+    newImg.onerror = () => callback(imgEl);
+  } catch (err) {
+    console.warn("Chroma keying bypassed (local file restriction):", err);
+    callback(imgEl);
+  }
+}
+
+function preloadAssets(callback) {
+  let loadedCount = 0;
+  const keys = Object.keys(ASSET_FILES);
+  const total = keys.length;
+  
+  keys.forEach(key => {
+    const img = new Image();
+    img.src = ASSET_FILES[key];
+    img.onload = () => {
+      makeBackgroundTransparent(img, (processedImg) => {
+        ASSETS[key] = processedImg;
+        loadedCount++;
+        if (loadedCount === total) {
+          assetsLoaded = true;
+          if (callback) callback();
+        }
+      });
+    };
+    img.onerror = () => {
+      console.warn("Failed to load asset: " + key);
+      loadedCount++;
+      if (loadedCount === total) {
+        assetsLoaded = true;
+        if (callback) callback();
+      }
+    };
+  });
+}
 
 // 獲取當前分類支出
 function getCategoryExpenses() {
@@ -911,10 +1033,16 @@ function drawCloud(ctx, x, y, r) {
   ctx.arc(x + r * 0.6, y + r * 0.2, r * 0.7, 0, Math.PI * 2);
   ctx.closePath();
   ctx.fill();
-}
-
-// 繪製島嶼基座 (草地及岩土層)
+}// 繪製島嶼基座 (草地及岩土層)
 function drawBaseIsland(ctx, cx, cy, tileW, tileH) {
+  if (assetsLoaded && ASSETS.island_base) {
+    const img = ASSETS.island_base;
+    const w = 360;
+    const h = w * (img.height / img.width);
+    ctx.drawImage(img, cx - w/2, cy - h/2 - 10, w, h);
+    return;
+  }
+  
   const w = tileW * 3.5;
   const h = tileH * 3.5;
   const w2 = w / 2;
@@ -980,7 +1108,6 @@ function drawBaseIsland(ctx, cx, cy, tileW, tileH) {
   ctx.closePath();
   ctx.fill();
 }
-
 // 繪製立體方塊 (Cube)
 function drawIsoBlock(ctx, cx, cy, w, h, colTop, colLeft, colRight) {
   const w2 = w / 2;
@@ -1190,8 +1317,48 @@ function drawIsoFlower(ctx, cx, cy, col) {
   ctx.fill();
 }
 
-// 繪製各分類對應等級的立體地標建築
 function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
+  if (assetsLoaded) {
+    const assetMap = {
+      castle: { img: ASSETS.castle, zeroColor: "#ef4444", th1: 5000, th2: 50000 },
+      dining: { img: ASSETS.cafe, zeroColor: "#fef08a", th1: 1500, th2: 6000 },
+      grocery: { img: ASSETS.farm, zeroColor: "#bbf7d0", th1: 1000, th2: 4000 },
+      travel: { img: ASSETS.resort, zeroColor: "#bfdbfe", th1: 2000, th2: 8000 },
+      transport: { img: ASSETS.station, zeroColor: "#fbcfe8", th1: 800, th2: 3000 },
+      rent: { img: ASSETS.apartment, zeroColor: "#ffedd5", th1: 5000, th2: 15000 },
+      utilities: { img: ASSETS.windmill, zeroColor: "#ddd6fe", th1: 1000, th2: 3000 },
+      shopping: { img: ASSETS.warehouse, zeroColor: "#e2e8f0", th1: 1500, th2: 5000 },
+      transfer: { img: ASSETS.balloon, zeroColor: "#fef08a", th1: 5000, th2: 15000 }
+    };
+    const info = assetMap[type];
+    if (info && info.img) {
+      if (value <= 0) {
+        drawIsoFlower(ctx, cx, cy, info.zeroColor);
+        return;
+      }
+      let size = 56;
+      if (value < info.th1) {
+        size = 35;
+      } else if (value < info.th2) {
+        size = 46;
+      } else {
+        size = 62;
+      }
+      const img = info.img;
+      const w = size;
+      const h = w * (img.height / img.width);
+      const yOffset = type === 'transfer' ? floatY : 0;
+      ctx.drawImage(img, cx - w/2, cy - h + 14 - yOffset, w, h);
+      if (type === 'dining' && value >= info.th2) {
+        const sy = (Date.now() / 25) % 15;
+        ctx.fillStyle = "rgba(100, 116, 139, 0.4)";
+        ctx.beginPath();
+        ctx.arc(cx - 8 + Math.sin(sy/2)*2, cy - h + 8 - sy, 2 + sy/8, 0, Math.PI*2);
+        ctx.fill();
+      }
+      return;
+    }
+  }
   const colors = {
     castle: { top: "#c7d2fe", left: "#6366f1", right: "#4f46e5" },
     dining: { top: "#fef08a", left: "#eab308", right: "#ca8a04" },
@@ -1203,6 +1370,7 @@ function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
     shopping: { top: "#e2e8f0", left: "#64748b", right: "#475569" },
     transfer: { balloon: "#d8b4fe", basket: "#b45309" }
   };
+
   
   if (type === 'castle') {
     if (value <= 0) {

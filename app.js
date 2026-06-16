@@ -276,6 +276,9 @@ function renderAll() {
   renderRecords();
   if (document.getElementById('tab-analysis').style.display !== 'none') renderCharts();
   if (document.getElementById('tab-members').style.display !== 'none') renderMembers();
+  if (document.getElementById('tab-annual').style.display !== 'none') renderAnnualChart();
+  const islandTab = document.getElementById('tab-island');
+  if (islandTab && islandTab.style.display !== 'none') renderIsland();
 }
 
 function getFiltered() {
@@ -649,14 +652,23 @@ async function renderAnnualChart() {
 }
 
 function switchTab(name, el) {
-  ['records','analysis','members','annual'].forEach(t => {
-    document.getElementById('tab-'+t).style.display = t===name ? '' : 'none';
+  ['records','analysis','members','annual','island'].forEach(t => {
+    const tabEl = document.getElementById('tab-'+t);
+    if (tabEl) tabEl.style.display = t===name ? '' : 'none';
   });
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
+  
+  // 切換出小島時，停止動畫循環以節省效能與電力
+  if (name !== 'island' && islandAnimationId) {
+    cancelAnimationFrame(islandAnimationId);
+    islandAnimationId = null;
+  }
+  
   if (name === 'analysis') setTimeout(renderCharts, 50);
   if (name === 'members') renderMembers();
   if (name === 'annual') renderAnnualChart();
+  if (name === 'island') setTimeout(renderIsland, 50);
 }
 
 function openModal() {
@@ -746,3 +758,762 @@ async function initSheets() {
 // ── INIT ─────────────────────────────────────────────────────
 applyMonthTheme(getAutoMonth());
 initSheets();
+
+// ── 視覺小島 (Visual Island) 繪圖引擎 ──────────────────────────
+let islandAnimationId = null;
+let windmillAngle = 0;
+let cloudOffset = 0;
+
+// 獲取當前分類支出
+function getCategoryExpenses() {
+  const catExpenses = {
+    dining: 0,
+    grocery: 0,
+    travel: 0,
+    transport: 0,
+    rent: 0,
+    utilities: 0,
+    shopping: 0,
+    transfer: 0
+  };
+  
+  const realRecs = records.filter(r => !isSummaryRow(r));
+  realRecs.forEach(r => {
+    if (r.expense <= 0) return;
+    const cat = categorize(r.item);
+    if (cat === '餐飲' || cat === '飲料') {
+      catExpenses.dining += r.expense;
+    } else if (cat === '超市採購' || cat === '便利商店') {
+      catExpenses.grocery += r.expense;
+    } else if (cat === '住宿旅遊' || cat === '景點') {
+      catExpenses.travel += r.expense;
+    } else if (cat === '交通') {
+      catExpenses.transport += r.expense;
+    } else if (cat === '房租') {
+      catExpenses.rent += r.expense;
+    } else if (['電費', '水費', '瓦斯費', '網路與第四台', '社區管理費', '水電雜支'].includes(cat)) {
+      catExpenses.utilities += r.expense;
+    } else if (cat === '網購') {
+      catExpenses.shopping += r.expense;
+    } else if (cat === '固定轉帳') {
+      catExpenses.transfer += r.expense;
+    }
+  });
+  
+  return catExpenses;
+}
+
+// 獲取當前帳戶餘額
+function getAccountBalance() {
+  const realRecs = records.filter(r => !isSummaryRow(r));
+  const startingRec = records.find(r => r.item === '帳戶餘額' && r.owner === '');
+  const startingBalance = startingRec ? startingRec.income : 0;
+  const totalIncome = realRecs.filter(r => r.owner !== '' && r.item !== '帳戶餘額').reduce((s,r) => s + r.income, 0);
+  const isPrepaid = r => r.note && r.note.includes('先付');
+  const totalExpense = realRecs.filter(r => !isPrepaid(r)).reduce((s,r) => s + r.expense, 0);
+  
+  const transferRecs = records.filter(r => r.item.includes('支出部分轉回'));
+  const isSettled = transferRecs.some(r => r.expense > 0);
+  
+  let balance = startingBalance + totalIncome - totalExpense;
+  if (isSettled && transferRecs.length > 0) {
+    const lastTransfer = transferRecs[transferRecs.length - 1];
+    balance = (lastTransfer.income || 0) - (lastTransfer.expense || 0);
+  }
+  return balance;
+}
+
+// 主小島繪製邏輯
+function renderIsland() {
+  const canvas = document.getElementById('islandCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  
+  const width = canvas.parentElement.clientWidth || 500;
+  const height = 320;
+  
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = width * dpr;
+  canvas.height = height * dpr;
+  canvas.style.width = width + 'px';
+  canvas.style.height = height + 'px';
+  ctx.scale(dpr, dpr);
+  
+  const catExpenses = getCategoryExpenses();
+  const balance = getAccountBalance();
+  
+  updateIslandLegend(catExpenses, balance);
+  
+  if (islandAnimationId) {
+    cancelAnimationFrame(islandAnimationId);
+  }
+  
+  const baseCx = width / 2;
+  const baseCy = height / 2 - 15; // 稍微上移以容納小島厚度
+  
+  const tileW = 76;
+  const tileH = 38;
+  
+  function animLoop() {
+    const islandTab = document.getElementById('tab-island');
+    if (!islandTab || islandTab.style.display === 'none') {
+      return;
+    }
+    
+    ctx.clearRect(0, 0, width, height);
+    
+    // 1. 繪製緩慢移動的雲朵
+    cloudOffset += 0.15;
+    if (cloudOffset > width + 60) cloudOffset = -60;
+    drawCloud(ctx, cloudOffset, 35, 18);
+    drawCloud(ctx, (cloudOffset + width / 2) % (width + 120) - 60, 65, 22);
+    
+    // 2. 繪製浮空島嶼基座
+    drawBaseIsland(ctx, baseCx, baseCy, tileW, tileH);
+    
+    // 3. 按照深度排序繪製地標 (row + col 越小在越後方，先繪製；越大在越前方，後繪製)
+    windmillAngle += 0.03;
+    const floatY = Math.sin(Date.now() / 450) * 4.5;
+    
+    const drawOrder = [
+      { r: 0, c: 0, type: 'castle', val: balance },
+      { r: 0, c: 1, type: 'dining', val: catExpenses.dining },
+      { r: 1, c: 0, type: 'travel', val: catExpenses.travel },
+      { r: 0, c: 2, type: 'grocery', val: catExpenses.grocery },
+      { r: 1, c: 1, type: 'utilities', val: catExpenses.utilities },
+      { r: 2, c: 0, type: 'transport', val: catExpenses.transport },
+      { r: 1, c: 2, type: 'rent', val: catExpenses.rent },
+      { r: 2, c: 1, type: 'shopping', val: catExpenses.shopping },
+      { r: 2, c: 2, type: 'transfer', val: catExpenses.transfer }
+    ];
+    
+    drawOrder.forEach(item => {
+      const dx = (item.r - 1) * (tileW * 0.82);
+      const dy = (item.c - 1) * (tileW * 0.82);
+      const cx = baseCx + (dx - dy);
+      const cy = baseCy + (dx + dy) / 2;
+      
+      drawIsoBuilding(ctx, cx, cy, item.type, item.val, windmillAngle, floatY);
+    });
+    
+    islandAnimationId = requestAnimationFrame(animLoop);
+  }
+  
+  animLoop();
+}
+
+// 繪製雲朵
+function drawCloud(ctx, x, y, r) {
+  ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.arc(x - r * 0.6, y + r * 0.2, r * 0.7, 0, Math.PI * 2);
+  ctx.arc(x + r * 0.6, y + r * 0.2, r * 0.7, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// 繪製島嶼基座 (草地及岩土層)
+function drawBaseIsland(ctx, cx, cy, tileW, tileH) {
+  const w = tileW * 3.5;
+  const h = tileH * 3.5;
+  const w2 = w / 2;
+  const h2 = h / 2;
+  const baseHeight = 65; // 下方浮空岩層厚度
+  
+  // 1. 繪製底部黃褐色泥土與灰色岩石基底 (錐形浮空島)
+  ctx.fillStyle = "#8a7560"; // 主泥土色
+  ctx.beginPath();
+  ctx.moveTo(cx - w2, cy);
+  ctx.lineTo(cx, cy + h2);
+  ctx.lineTo(cx + w2, cy);
+  ctx.lineTo(cx + 8, cy + h2 + baseHeight - 10);
+  ctx.lineTo(cx - 12, cy + h2 + baseHeight);
+  ctx.closePath();
+  ctx.fill();
+  
+  // 陰影側岩石
+  ctx.fillStyle = "#6d5947";
+  ctx.beginPath();
+  ctx.moveTo(cx, cy + h2);
+  ctx.lineTo(cx + w2, cy);
+  ctx.lineTo(cx + 8, cy + h2 + baseHeight - 10);
+  ctx.closePath();
+  ctx.fill();
+  
+  // 岩石裂紋點綴
+  ctx.fillStyle = "#4a3c30";
+  ctx.beginPath();
+  ctx.moveTo(cx - w2 / 2, cy + h2 / 2);
+  ctx.lineTo(cx - w2 / 2 + 15, cy + h2 / 2 + 10);
+  ctx.lineTo(cx - w2 / 2 + 8, cy + h2 / 2 + 20);
+  ctx.closePath();
+  ctx.fill();
+  
+  // 2. 繪製頂層綠色草地
+  const grassColor = getComputedStyle(document.body).getPropertyValue('--income').trim() || "#2d7a5f";
+  ctx.fillStyle = grassColor;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - h2);
+  ctx.lineTo(cx + w2, cy);
+  ctx.lineTo(cx, cy + h2);
+  ctx.lineTo(cx - w2, cy);
+  ctx.closePath();
+  ctx.fill();
+  
+  // 草地邊緣厚度
+  ctx.fillStyle = "rgba(0,0,0,0.12)";
+  ctx.beginPath();
+  ctx.moveTo(cx - w2, cy);
+  ctx.lineTo(cx, cy + h2);
+  ctx.lineTo(cx, cy + h2 + 4);
+  ctx.lineTo(cx - w2, cy + 4);
+  ctx.closePath();
+  ctx.fill();
+  
+  ctx.fillStyle = "rgba(0,0,0,0.18)";
+  ctx.beginPath();
+  ctx.moveTo(cx, cy + h2);
+  ctx.lineTo(cx + w2, cy);
+  ctx.lineTo(cx + w2, cy + 4);
+  ctx.lineTo(cx, cy + h2 + 4);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// 繪製立體方塊 (Cube)
+function drawIsoBlock(ctx, cx, cy, w, h, colTop, colLeft, colRight) {
+  const w2 = w / 2;
+  const h2 = w / 4;
+  const ty = cy - h; // 頂端的高度位移
+  
+  // 1. 左側面 (Left Face)
+  ctx.fillStyle = colLeft;
+  ctx.beginPath();
+  ctx.moveTo(cx - w2, cy);
+  ctx.lineTo(cx, cy + h2);
+  ctx.lineTo(cx, cy + h2 - h);
+  ctx.lineTo(cx - w2, cy - h);
+  ctx.closePath();
+  ctx.fill();
+  
+  // 2. 右側面 (Right Face)
+  ctx.fillStyle = colRight;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy + h2);
+  ctx.lineTo(cx + w2, cy);
+  ctx.lineTo(cx + w2, cy - h);
+  ctx.lineTo(cx, cy + h2 - h);
+  ctx.closePath();
+  ctx.fill();
+  
+  // 3. 頂面 (Top Face)
+  ctx.fillStyle = colTop;
+  ctx.beginPath();
+  ctx.moveTo(cx, ty - h2);
+  ctx.lineTo(cx + w2, ty);
+  ctx.lineTo(cx, ty + h2);
+  ctx.lineTo(cx - w2, ty);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// 繪製立體角錐 (Pyramid - 用於屋頂)
+function drawIsoPyramid(ctx, cx, cy, w, h, roofH, colLeft, colRight) {
+  const w2 = w / 2;
+  const h2 = w / 4;
+  const ty = cy - h;
+  const py = ty - roofH; // 角錐頂尖的高點
+  
+  // 1. 左側面
+  ctx.fillStyle = colLeft;
+  ctx.beginPath();
+  ctx.moveTo(cx - w2, ty);
+  ctx.lineTo(cx, ty + h2);
+  ctx.lineTo(cx, py);
+  ctx.closePath();
+  ctx.fill();
+  
+  // 2. 右側面
+  ctx.fillStyle = colRight;
+  ctx.beginPath();
+  ctx.moveTo(cx, ty + h2);
+  ctx.lineTo(cx + w2, ty);
+  ctx.lineTo(cx, py);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// 繪製立體圓柱 (Cylinder)
+function drawIsoCylinder(ctx, cx, cy, w, h, colTop, colSideStart, colSideEnd) {
+  const w2 = w / 2;
+  const h2 = w / 4;
+  
+  // 1. 柱體側面 (漸層著色)
+  const grad = ctx.createLinearGradient(cx - w2, 0, cx + w2, 0);
+  grad.addColorStop(0, colSideStart);
+  grad.addColorStop(1, colSideEnd);
+  ctx.fillStyle = grad;
+  
+  ctx.beginPath();
+  ctx.moveTo(cx - w2, cy - h);
+  ctx.lineTo(cx - w2, cy);
+  ctx.ellipse(cx, cy, w2, h2, 0, Math.PI, 0, true);
+  ctx.lineTo(cx + w2, cy - h);
+  ctx.ellipse(cx, cy - h, w2, h2, 0, 0, Math.PI, true);
+  ctx.closePath();
+  ctx.fill();
+  
+  // 2. 圓形頂蓋
+  ctx.fillStyle = colTop;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy - h, w2, h2, 0, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// 繪製小樹
+function drawIsoTree(ctx, cx, cy, trunkH, leafR, colTrunk, colLeaves) {
+  // 樹幹
+  ctx.fillStyle = colTrunk;
+  ctx.fillRect(cx - 2, cy - trunkH, 4, trunkH);
+  
+  // 樹葉 (三圓重疊蓬鬆質感)
+  ctx.fillStyle = colLeaves;
+  ctx.beginPath();
+  ctx.arc(cx, cy - trunkH - 2, leafR, 0, Math.PI * 2);
+  ctx.arc(cx - leafR * 0.5, cy - trunkH - leafR * 0.5, leafR * 0.8, 0, Math.PI * 2);
+  ctx.arc(cx + leafR * 0.5, cy - trunkH - leafR * 0.5, leafR * 0.8, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// 繪製旋轉風車
+function drawIsoWindmill(ctx, cx, cy, h, angle, colTower, colBlades) {
+  // 塔身 (梯形)
+  ctx.fillStyle = colTower;
+  ctx.beginPath();
+  ctx.moveTo(cx - 8, cy);
+  ctx.lineTo(cx - 4, cy - h);
+  ctx.lineTo(cx + 4, cy - h);
+  ctx.lineTo(cx + 8, cy);
+  ctx.closePath();
+  ctx.fill();
+  
+  // 扇葉轉軸
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.arc(cx, cy - h, 3, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // 四片旋轉扇葉
+  ctx.strokeStyle = colBlades;
+  ctx.lineWidth = 3;
+  ctx.lineCap = "round";
+  for (let i = 0; i < 4; i++) {
+    const a = angle + (i * Math.PI / 2);
+    const bx = cx + Math.cos(a) * 20;
+    const by = cy - h + Math.sin(a) * 20;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - h);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+  }
+}
+
+// 繪製熱氣球
+function drawIsoBalloon(ctx, cx, cy, floatY, colBalloon, colBasket) {
+  const by = cy - floatY;
+  
+  // 吊繩
+  ctx.strokeStyle = "rgba(0,0,0,0.35)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cx - 4, by - 10);
+  ctx.lineTo(cx - 3, by);
+  ctx.moveTo(cx + 4, by - 10);
+  ctx.lineTo(cx + 3, by);
+  ctx.stroke();
+  
+  // 籃子
+  ctx.fillStyle = colBasket;
+  ctx.fillRect(cx - 4, by, 8, 7);
+  
+  // 氣球球體 (主圓及下緣梯形)
+  ctx.fillStyle = colBalloon;
+  ctx.beginPath();
+  ctx.arc(cx, by - 22, 12, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.fill();
+  
+  ctx.beginPath();
+  ctx.moveTo(cx - 8, by - 17);
+  ctx.lineTo(cx + 8, by - 17);
+  ctx.lineTo(cx + 4, by - 10);
+  ctx.lineTo(cx - 4, by - 10);
+  ctx.closePath();
+  ctx.fill();
+  
+  // 條紋裝飾
+  ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+  ctx.beginPath();
+  ctx.ellipse(cx, by - 22, 4, 12, 0, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// 繪製花草 (0元消費展示)
+function drawIsoFlower(ctx, cx, cy, col) {
+  // 莖
+  ctx.strokeStyle = "#4d7c0f";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy + 1);
+  ctx.lineTo(cx, cy - 5);
+  ctx.stroke();
+  
+  // 花瓣
+  ctx.fillStyle = col;
+  ctx.beginPath();
+  ctx.arc(cx - 2, cy - 5, 2, 0, Math.PI * 2);
+  ctx.arc(cx + 2, cy - 5, 2, 0, Math.PI * 2);
+  ctx.arc(cx, cy - 7, 2, 0, Math.PI * 2);
+  ctx.arc(cx, cy - 3, 2, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.fill();
+  
+  // 花蕊
+  ctx.fillStyle = "#fef08a";
+  ctx.beginPath();
+  ctx.arc(cx, cy - 5, 1.2, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// 繪製各分類對應等級的立體地標建築
+function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
+  const colors = {
+    castle: { top: "#c7d2fe", left: "#6366f1", right: "#4f46e5" },
+    dining: { top: "#fef08a", left: "#eab308", right: "#ca8a04" },
+    grocery: { top: "#bbf7d0", left: "#22c55e", right: "#16a34a" },
+    travel: { top: "#bfdbfe", left: "#3b82f6", right: "#2563eb" },
+    transport: { top: "#fbcfe8", left: "#ec4899", right: "#db2777" },
+    rent: { top: "#ffedd5", left: "#f97316", right: "#ea580c" },
+    utilities: { tower: "#e2e8f0", blades: "#475569" },
+    shopping: { top: "#e2e8f0", left: "#64748b", right: "#475569" },
+    transfer: { balloon: "#d8b4fe", basket: "#b45309" }
+  };
+  
+  if (type === 'castle') {
+    if (value <= 0) {
+      drawIsoFlower(ctx, cx, cy, "#ef4444"); // 赤字荒地：紅花
+    } else if (value < 5000) {
+      // 營火
+      ctx.strokeStyle = "#78350f";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(cx - 5, cy); ctx.lineTo(cx + 5, cy - 3);
+      ctx.moveTo(cx + 5, cy); ctx.lineTo(cx - 5, cy - 3);
+      ctx.stroke();
+      ctx.fillStyle = "#f97316";
+      ctx.beginPath();
+      ctx.arc(cx, cy - 4 - Math.sin(Date.now() / 150) * 1.5, 4, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (value < 50000) {
+      // 莊園別墅
+      drawIsoBlock(ctx, cx, cy, 22, 14, colors.castle.top, colors.castle.left, colors.castle.right);
+      drawIsoPyramid(ctx, cx, cy, 22, 14, 8, "#f43f5e", "#e11d48"); // 紅頂小屋
+    } else {
+      // 城堡
+      drawIsoBlock(ctx, cx, cy, 28, 14, colors.castle.top, colors.castle.left, colors.castle.right);
+      drawIsoBlock(ctx, cx - 10, cy - 4, 10, 20, colors.castle.top, colors.castle.left, colors.castle.right);
+      drawIsoBlock(ctx, cx + 10, cy - 4, 10, 20, colors.castle.top, colors.castle.left, colors.castle.right);
+      // 拱門
+      ctx.fillStyle = "#1e293b";
+      ctx.beginPath();
+      ctx.ellipse(cx, cy - 1, 3.5, 5, 0, Math.PI, 0);
+      ctx.fill();
+      // 飄揚紅旗
+      ctx.strokeStyle = "#475569";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 24);
+      ctx.lineTo(cx, cy - 32);
+      ctx.stroke();
+      ctx.fillStyle = "#f43f5e";
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 32);
+      ctx.lineTo(cx + 6, cy - 29);
+      ctx.lineTo(cx, cy - 26);
+      ctx.closePath();
+      ctx.fill();
+    }
+  } else if (type === 'dining') {
+    if (value <= 0) {
+      drawIsoFlower(ctx, cx, cy, "#fef08a"); // 黃色花朵
+    } else if (value < 1500) {
+      // 街角咖啡攤
+      drawIsoBlock(ctx, cx, cy, 14, 8, colors.dining.top, colors.dining.left, colors.dining.right);
+      ctx.fillStyle = "#ef4444"; // 紅雨棚
+      ctx.fillRect(cx - 7, cy - 10, 14, 2);
+    } else if (value < 6000) {
+      // 溫馨咖啡廳
+      drawIsoBlock(ctx, cx, cy, 22, 14, colors.dining.top, colors.dining.left, colors.dining.right);
+      drawIsoPyramid(ctx, cx, cy, 22, 14, 8, "#b45309", "#78350f"); // 褐頂
+    } else {
+      // 豪華餐廳 (帶煙囪煙霧)
+      drawIsoBlock(ctx, cx, cy, 26, 16, colors.dining.top, colors.dining.left, colors.dining.right);
+      drawIsoBlock(ctx, cx, cy - 16, 18, 10, "#fef3c7", colors.dining.left, colors.dining.right);
+      drawIsoPyramid(ctx, cx, cy - 26, 18, 8, "#b91c1c", "#991b1b");
+      // 煙囪與動畫煙霧
+      ctx.fillStyle = "#475569";
+      ctx.fillRect(cx - 9, cy - 26, 3, 9);
+      const sy = (Date.now() / 25) % 15;
+      ctx.fillStyle = "rgba(100, 116, 139, 0.4)";
+      ctx.beginPath();
+      ctx.arc(cx - 8 + Math.sin(sy/2)*2, cy - 26 - sy, 2.5 + sy/6, 0, Math.PI*2);
+      ctx.fill();
+    }
+  } else if (type === 'grocery') {
+    if (value <= 0) {
+      drawIsoFlower(ctx, cx, cy, "#bbf7d0"); // 綠色花朵
+    } else if (value < 1000) {
+      // 迷你菜園
+      ctx.fillStyle = "#78350f";
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 2, 8, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#22c55e";
+      ctx.beginPath();
+      ctx.arc(cx - 3, cy + 1, 1.5, 0, Math.PI * 2);
+      ctx.arc(cx + 3, cy + 3, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (value < 4000) {
+      // 溫室
+      drawIsoBlock(ctx, cx, cy, 22, 14, colors.grocery.top, colors.grocery.left, colors.grocery.right);
+      drawIsoPyramid(ctx, cx, cy, 22, 14, 6, "#64748b", "#475569");
+    } else {
+      // 穀倉及筒倉
+      drawIsoBlock(ctx, cx - 4, cy + 2, 18, 14, "#4ade80", colors.grocery.left, colors.grocery.right);
+      drawIsoPyramid(ctx, cx - 4, cy + 2, 18, 14, 8, "#f59e0b", "#d97706");
+      drawIsoCylinder(ctx, cx + 10, cy - 2, 8, 18, "#cbd5e1", "#64748b", "#475569");
+    }
+  } else if (type === 'travel') {
+    if (value <= 0) {
+      drawIsoFlower(ctx, cx, cy, "#bfdbfe"); // 藍色花朵
+    } else if (value < 2000) {
+      // 帳篷
+      ctx.fillStyle = "#3b82f6";
+      ctx.beginPath();
+      ctx.moveTo(cx - 8, cy + 2);
+      ctx.lineTo(cx, cy - 8);
+      ctx.lineTo(cx + 8, cy + 2);
+      ctx.closePath();
+      ctx.fill();
+    } else if (value < 8000) {
+      // 渡假小屋
+      drawIsoBlock(ctx, cx, cy, 22, 14, colors.travel.top, colors.travel.left, colors.travel.right);
+      drawIsoPyramid(ctx, cx, cy, 22, 14, 8, "#e2e8f0", "#94a3b8");
+    } else {
+      // 泳池別墅
+      ctx.fillStyle = "#38bdf8"; // 泳池水面
+      ctx.beginPath();
+      ctx.moveTo(cx - 15, cy + 4);
+      ctx.lineTo(cx, cy + 11);
+      ctx.lineTo(cx + 15, cy + 4);
+      ctx.lineTo(cx, cy - 3);
+      ctx.closePath();
+      ctx.fill();
+      drawIsoBlock(ctx, cx + 4, cy - 2, 22, 16, colors.travel.top, colors.travel.left, colors.travel.right);
+      drawIsoBlock(ctx, cx + 4, cy - 18, 16, 12, "#cbd5e1", "#94a3b8", "#64748b");
+    }
+  } else if (type === 'transport') {
+    if (value <= 0) {
+      drawIsoFlower(ctx, cx, cy, "#fbcfe8"); // 粉色花朵
+    } else if (value < 800) {
+      // 軌道
+      ctx.strokeStyle = "#78350f";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(cx - 10, cy + 4); ctx.lineTo(cx + 10, cy - 6);
+      ctx.moveTo(cx - 6, cy + 6); ctx.lineTo(cx + 14, cy - 4);
+      ctx.stroke();
+    } else if (value < 3000) {
+      // 站台
+      drawIsoBlock(ctx, cx, cy, 22, 12, colors.transport.top, colors.transport.left, colors.transport.right);
+      drawIsoPyramid(ctx, cx, cy, 22, 12, 6, "#475569", "#334155");
+    } else {
+      // 蒸汽火車站
+      drawIsoBlock(ctx, cx - 4, cy + 2, 20, 14, colors.transport.top, colors.transport.left, colors.transport.right);
+      drawIsoPyramid(ctx, cx - 4, cy + 2, 20, 14, 8, "#475569", "#334155");
+      drawIsoBlock(ctx, cx + 10, cy - 2, 8, 6, "#0f172a", "#1e293b", "#0f172a");
+    }
+  } else if (type === 'rent') {
+    if (value <= 0) {
+      drawIsoFlower(ctx, cx, cy, "#ffedd5"); // 橘色花朵
+    } else if (value < 5000) {
+      // 迷你郵箱
+      ctx.fillStyle = "#ea580c";
+      ctx.fillRect(cx - 2, cy - 7, 4, 7);
+      ctx.fillStyle = "#f43f5e";
+      ctx.beginPath();
+      ctx.moveTo(cx - 4, cy - 7); ctx.lineTo(cx, cy - 11); ctx.lineTo(cx + 4, cy - 7);
+      ctx.closePath();
+      ctx.fill();
+    } else if (value < 15000) {
+      // 洋房
+      drawIsoBlock(ctx, cx, cy, 22, 14, colors.rent.top, colors.rent.left, colors.rent.right);
+      drawIsoPyramid(ctx, cx, cy, 22, 14, 8, "#78350f", "#451a03");
+    } else {
+      // 高階大樓
+      drawIsoBlock(ctx, cx, cy, 24, 14, 28, colors.rent.top, colors.rent.left, colors.rent.right);
+      drawIsoPyramid(ctx, cx, cy, 24, 14, 6, "#78350f", "#451a03");
+      // 亮燈窗戶
+      ctx.fillStyle = "#fef08a";
+      ctx.fillRect(cx - 5, cy - 22, 3, 4);
+      ctx.fillRect(cx + 2, cy - 22, 3, 4);
+      ctx.fillRect(cx - 5, cy - 13, 3, 4);
+      ctx.fillRect(cx + 2, cy - 13, 3, 4);
+    }
+  } else if (type === 'utilities') {
+    if (value <= 0) {
+      drawIsoFlower(ctx, cx, cy, "#ddd6fe"); // 紫色花朵
+    } else if (value < 1000) {
+      // 消防栓
+      ctx.fillStyle = "#ef4444";
+      ctx.fillRect(cx - 2.5, cy - 8, 5, 8);
+      ctx.fillStyle = "#cbd5e1";
+      ctx.beginPath();
+      ctx.arc(cx, cy - 8, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (value < 3000) {
+      // 風車
+      drawIsoWindmill(ctx, cx, cy, 24, angle, colors.utilities.tower, colors.utilities.blades);
+    } else {
+      // 雙風車發電廠
+      drawIsoBlock(ctx, cx - 6, cy + 3, 14, 10, "#cbd5e1", "#94a3b8", "#64748b");
+      drawIsoWindmill(ctx, cx + 4, cy - 3, 32, angle, colors.utilities.tower, colors.utilities.blades);
+    }
+  } else if (type === 'shopping') {
+    if (value <= 0) {
+      drawIsoFlower(ctx, cx, cy, "#e2e8f0"); // 灰色花朵
+    } else if (value < 1500) {
+      // 快遞紙箱
+      drawIsoBlock(ctx, cx, cy, 12, 10, 6, "#d97706", "#b45309", "#78350f");
+    } else if (value < 5000) {
+      // 貨櫃
+      drawIsoBlock(ctx, cx, cy, 22, 12, 12, colors.shopping.top, colors.shopping.left, colors.shopping.right);
+      ctx.strokeStyle = "rgba(0,0,0,0.15)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cx - 5, cy + 2); ctx.lineTo(cx - 5, cy - 10);
+      ctx.moveTo(cx + 5, cy - 3); ctx.lineTo(cx + 5, cy - 15);
+      ctx.stroke();
+    } else {
+      // 配送中心與貨車
+      drawIsoBlock(ctx, cx - 4, cy + 2, 22, 14, 14, colors.shopping.top, colors.shopping.left, colors.shopping.right);
+      drawIsoPyramid(ctx, cx - 4, cy + 2, 22, 14, 6, "#475569", "#334155");
+      drawIsoBlock(ctx, cx + 10, cy - 1, 8, 5, "#f43f5e", "#e11d48", "#991b1b"); // 紅色小貨車
+    }
+  } else if (type === 'transfer') {
+    if (value <= 0) {
+      drawIsoFlower(ctx, cx, cy, "#fef08a"); // 黃色花朵
+    } else if (value < 5000) {
+      // 飄浮小圓球
+      ctx.fillStyle = "#a855f7";
+      ctx.beginPath();
+      ctx.arc(cx, cy - 10 - floatY, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (value < 15000) {
+      // 熱氣球
+      drawIsoBalloon(ctx, cx, cy, floatY, colors.transfer.balloon, colors.transfer.basket);
+    } else {
+      // 雙氣球
+      drawIsoBalloon(ctx, cx - 8, cy, floatY, colors.transfer.balloon, colors.transfer.basket);
+      drawIsoBalloon(ctx, cx + 10, cy - 10, Math.sin(Date.now() / 380) * 4.5, "#3b82f6", "#ca8a04");
+    }
+  }
+}
+
+// 獲取地標狀態描述
+function getBuildingStatusText(type, val) {
+  if (type === 'castle') {
+    if (val <= 0) return '🔴 赤字荒地';
+    if (val < 5000) return '🔥 營火小木屋';
+    if (val < 50000) return '🏠 舒適莊園';
+    return '🏰 繁榮城堡';
+  } else if (type === 'dining') {
+    if (val <= 0) return '🌸 尚未消費';
+    if (val < 1500) return '☕ 街角咖啡攤';
+    if (val < 6000) return '🍰 溫馨咖啡廳';
+    return '🍽️ 豪華餐廳 (超預算警告)';
+  } else if (type === 'grocery') {
+    if (val <= 0) return '🌸 尚未消費';
+    if (val < 1000) return '🥬 迷你菜園';
+    if (val < 4000) return '🥦 自動溫室';
+    return '🌾 豐收穀倉';
+  } else if (type === 'travel') {
+    if (val <= 0) return '🌸 尚未消費';
+    if (val < 2000) return '⛺ 旅行帳篷';
+    if (val < 8000) return '🏡 渡假小屋';
+    return '🏨 泳池別墅';
+  } else if (type === 'transport') {
+    if (val <= 0) return '🌸 尚未消費';
+    if (val < 800) return '🛤️ 簡易軌道';
+    if (val < 3000) return '🚉 候車月台';
+    return '🚆 蒸汽火車站';
+  } else if (type === 'rent') {
+    if (val <= 0) return '🌸 尚未消費';
+    if (val < 5000) return '📮 迷你郵筒';
+    if (val < 15000) return '🏠 磚瓦洋房';
+    return '🏢 高階住宅大樓';
+  } else if (type === 'utilities') {
+    if (val <= 0) return '🌸 尚未消費';
+    if (val < 1000) return '💧 簡易水源';
+    if (val < 3000) return '💨 風力發電';
+    return '⚡ 大型變電所';
+  } else if (type === 'shopping') {
+    if (val <= 0) return '🌸 尚未消費';
+    if (val < 1500) return '📦 快遞紙箱';
+    if (val < 5000) return '🚢 貨櫃箱';
+    return '🏬 物流配送中心';
+  } else if (type === 'transfer') {
+    if (val <= 0) return '🌸 尚未消費';
+    if (val < 5000) return '🎈 飄浮氣球';
+    if (val < 15000) return '🎈 夢想熱氣球';
+    return '🎈 雙重夢想氣球';
+  }
+  return '';
+}
+
+// 更新小島地標導航欄
+function updateIslandLegend(cats, balance) {
+  const legendEl = document.getElementById('islandLegend');
+  if (!legendEl) return;
+  
+  const items = [
+    { icon: '🏰', name: '帳戶餘額', type: 'castle', val: balance, prefix: '目前水位: ' },
+    { icon: '🍽️', name: '餐飲與飲料', type: 'dining', val: cats.dining, prefix: '本月支出: ' },
+    { icon: '🛒', name: '超市與超商', type: 'grocery', val: cats.grocery, prefix: '本月支出: ' },
+    { icon: '🏨', name: '住宿與景點', type: 'travel', val: cats.travel, prefix: '本月支出: ' },
+    { icon: '🚆', name: '交通出行', type: 'transport', val: cats.transport, prefix: '本月支出: ' },
+    { icon: '🏠', name: '房租支出', type: 'rent', val: cats.rent, prefix: '本月支出: ' },
+    { icon: '⚡', name: '水電瓦斯網路', type: 'utilities', val: cats.utilities, prefix: '本月支出: ' },
+    { icon: '📦', name: '網購消費', type: 'shopping', val: cats.shopping, prefix: '本月支出: ' },
+    { icon: '🎈', name: '固定轉帳', type: 'transfer', val: cats.transfer, prefix: '本月支出: ' }
+  ];
+  
+  legendEl.innerHTML = items.map(item => {
+    const status = getBuildingStatusText(item.type, item.val);
+    return `
+      <div class="island-legend-item">
+        <span class="island-legend-icon">${item.icon}</span>
+        <div class="island-legend-text">
+          <span class="island-legend-name">${item.name}</span>
+          <span class="island-legend-desc">${item.prefix}${fmt(item.val)}</span>
+          <span class="island-legend-desc" style="color:var(--text); font-weight:500; font-size:10px; opacity:0.8;">建置狀態: ${status}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}

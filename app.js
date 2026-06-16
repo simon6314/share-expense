@@ -7,6 +7,15 @@ let manualSeason = null;
 let islandAnimationId = null;
 let windmillAngle = 0;
 let cloudOffset = 0;
+let islandZoom = 1.0;
+let islandOffsetX = 0;
+let islandOffsetY = 0;
+let mouseX = -1000;
+let mouseY = -1000;
+const hoverProgress = {
+  castle: 0, dining: 0, grocery: 0, travel: 0, transport: 0,
+  rent: 0, utilities: 0, shopping: 0, transfer: 0
+};
 
 // 立體地標圖檔載入器與去背引擎
 const ASSET_FILES = {
@@ -19,7 +28,14 @@ const ASSET_FILES = {
   apartment: 'assets/apartment.png?v=2',
   windmill: 'assets/windmill.png?v=2',
   warehouse: 'assets/warehouse.png?v=2',
-  balloon: 'assets/balloon.png?v=2'
+  balloon: 'assets/balloon.png?v=2',
+  bicycle: 'assets/bicycle.png?v=2',
+  car: 'assets/car.png?v=2',
+  train: 'assets/train.png?v=2',
+  airplane: 'assets/airplane.png?v=2',
+  beverage: 'assets/beverage.png?v=2',
+  bento: 'assets/bento.png?v=2',
+  restaurant: 'assets/restaurant.png?v=2'
 };
 
 const ASSETS = {};
@@ -888,8 +904,134 @@ function renderIsland() {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   
+  // 註冊滑鼠與觸控手勢 (拖曳平移、雙指/滾輪縮放、雙擊重設)
+  let isDragging = false;
+  let lastPointerX = 0;
+  let lastPointerY = 0;
+  let pinchStartDist = 0;
+  let pinchStartScale = 1.0;
+  
+  function getPointerCoords(e) {
+    if (e.touches && e.touches.length > 0) {
+      return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+    return { x: e.clientX, y: e.clientY };
+  }
+  
+  canvas.onmousedown = (e) => {
+    isDragging = true;
+    const coords = getPointerCoords(e);
+    lastPointerX = coords.x;
+    lastPointerY = coords.y;
+    
+    const rect = canvas.getBoundingClientRect();
+    mouseX = coords.x - rect.left;
+    mouseY = coords.y - rect.top;
+    e.preventDefault();
+  };
+  
+  canvas.onmousemove = (e) => {
+    const coords = getPointerCoords(e);
+    const rect = canvas.getBoundingClientRect();
+    mouseX = coords.x - rect.left;
+    mouseY = coords.y - rect.top;
+    
+    if (!isDragging) return;
+    const dx = coords.x - lastPointerX;
+    const dy = coords.y - lastPointerY;
+    
+    islandOffsetX += dx;
+    islandOffsetY += dy;
+    
+    const maxPan = 500;
+    islandOffsetX = Math.min(Math.max(islandOffsetX, -maxPan), maxPan);
+    islandOffsetY = Math.min(Math.max(islandOffsetY, -maxPan), maxPan);
+    
+    lastPointerX = coords.x;
+    lastPointerY = coords.y;
+    e.preventDefault();
+  };
+  
+  canvas.onmouseup = canvas.onmouseleave = () => {
+    isDragging = false;
+    mouseX = -1000;
+    mouseY = -1000;
+  };
+  
+  canvas.ontouchstart = (e) => {
+    if (e.touches.length === 1) {
+      isDragging = true;
+      const coords = getPointerCoords(e);
+      lastPointerX = coords.x;
+      lastPointerY = coords.y;
+      
+      const rect = canvas.getBoundingClientRect();
+      mouseX = coords.x - rect.left;
+      mouseY = coords.y - rect.top;
+    } else if (e.touches.length === 2) {
+      isDragging = false;
+      pinchStartDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      pinchStartScale = islandZoom;
+    }
+  };
+  
+  canvas.ontouchmove = (e) => {
+    if (e.touches.length === 1 && isDragging) {
+      const coords = getPointerCoords(e);
+      const dx = coords.x - lastPointerX;
+      const dy = coords.y - lastPointerY;
+      islandOffsetX += dx;
+      islandOffsetY += dy;
+      
+      const maxPan = 500;
+      islandOffsetX = Math.min(Math.max(islandOffsetX, -maxPan), maxPan);
+      islandOffsetY = Math.min(Math.max(islandOffsetY, -maxPan), maxPan);
+      
+      const rect = canvas.getBoundingClientRect();
+      mouseX = coords.x - rect.left;
+      mouseY = coords.y - rect.top;
+      
+      lastPointerX = coords.x;
+      lastPointerY = coords.y;
+      e.preventDefault();
+    } else if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      if (pinchStartDist > 0) {
+        const factor = dist / pinchStartDist;
+        islandZoom = Math.min(Math.max(pinchStartScale * factor, 0.4), 4.0);
+      }
+      e.preventDefault();
+    }
+  };
+  
+  canvas.ontouchend = () => {
+    isDragging = false;
+    pinchStartDist = 0;
+    mouseX = -1000;
+    mouseY = -1000;
+  };
+  
+  canvas.onwheel = (e) => {
+    e.preventDefault();
+    const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
+    islandZoom = Math.min(Math.max(islandZoom * zoomFactor, 0.4), 4.0);
+  };
+  
+  canvas.ondblclick = (e) => {
+    islandZoom = 1.0;
+    islandOffsetX = 0;
+    islandOffsetY = 0;
+    e.preventDefault();
+  };
+  
   const width = canvas.parentElement.clientWidth || 500;
-  const height = 320;
+  const height = 500;
   
   const dpr = window.devicePixelRatio || 1;
   canvas.width = width * dpr;
@@ -897,6 +1039,8 @@ function renderIsland() {
   canvas.style.width = width + 'px';
   canvas.style.height = height + 'px';
   ctx.scale(dpr, dpr);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
   
   const catExpenses = getCategoryExpenses();
   const balance = getAccountBalance();
@@ -908,7 +1052,7 @@ function renderIsland() {
   }
   
   const baseCx = width / 2;
-  const baseCy = height / 2 - 10; // 稍微上移以容納小島厚度
+  const baseCy = 330; // 往下拉並對齊草地中心
   
   const tileW = 76;
   const tileH = 38;
@@ -926,6 +1070,12 @@ function renderIsland() {
     if (cloudOffset > width + 60) cloudOffset = -60;
     drawCloud(ctx, cloudOffset, 35, 18);
     drawCloud(ctx, (cloudOffset + width / 2) % (width + 120) - 60, 65, 22);
+    
+    ctx.save();
+    // 應用手勢縮放與平移 (繞著畫布中心縮放)
+    ctx.translate(width / 2 + islandOffsetX, height / 2 + islandOffsetY);
+    ctx.scale(islandZoom, islandZoom);
+    ctx.translate(-width / 2, -height / 2);
     
     // 2. 繪製浮空島嶼基座
     drawBaseIsland(ctx, baseCx, baseCy, tileW, tileH);
@@ -946,7 +1096,10 @@ function renderIsland() {
       { r: 2, c: 2, type: 'transfer', val: catExpenses.transfer }
     ];
     
-    const spacing = 32;
+    const localMouseX = (mouseX - width / 2 - islandOffsetX) / islandZoom + width / 2;
+    const localMouseY = (mouseY - height / 2 - islandOffsetY) / islandZoom + height / 2;
+    
+    const spacing = 90;
     drawOrder.forEach(item => {
       const dx = (item.r - 1) * spacing;
       const dy = (item.c - 1) * spacing;
@@ -956,8 +1109,10 @@ function renderIsland() {
       let finalCy = cy;
       if (item.type === 'transfer') finalCy += 4; // micro-adjust front balloon
       
-      drawIsoBuilding(ctx, cx, finalCy, item.type, item.val, windmillAngle, floatY);
+      drawIsoBuilding(ctx, cx, finalCy, item.type, item.val, windmillAngle, floatY, localMouseX, localMouseY);
     });
+    
+    ctx.restore();
     
     islandAnimationId = requestAnimationFrame(animLoop);
   }
@@ -981,11 +1136,11 @@ function drawBaseIsland(ctx, cx, cy, tileW, tileH) {
   if (assetsLoaded && ASSETS.island_base) {
     try {
       const img = ASSETS.island_base;
-      const w = 295;
+      const w = 900;
       const imgW = img.naturalWidth || img.width || 1;
       const imgH = img.naturalHeight || img.height || 1;
       const h = w * (imgH / imgW);
-      ctx.drawImage(img, cx - w/2, cy - h/2 + 15, w, h);
+      ctx.drawImage(img, Math.round(cx - w/2), Math.round(cy - h/2 + 135), Math.round(w), Math.round(h));
       return;
     } catch (err) {
       console.warn('Failed to draw island_base, falling back to lines:', err);
@@ -1280,35 +1435,71 @@ function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
       transfer: { img: ASSETS.balloon, zeroColor: "#fef08a", th1: 5000, th2: 15000 }
     };
     const info = assetMap[type];
-    if (info && info.img) {
+    if (info) {
       try {
         if (value <= 0) {
           drawIsoFlower(ctx, cx, cy, info.zeroColor);
           return;
         }
         let size = 56;
-        if (value < info.th1) {
-          size = 35;
-        } else if (value < info.th2) {
-          size = 46;
+        let img = info.img;
+        let yOffset = 0;
+        
+        if (type === 'transport') {
+          if (value < 100) {
+            img = ASSETS.bicycle;
+            size = 76;
+          } else if (value < 500) {
+            img = ASSETS.car;
+            size = 90;
+          } else if (value < 3000) {
+            img = ASSETS.train;
+            size = 105;
+          } else {
+            img = ASSETS.airplane;
+            size = 120;
+            yOffset = floatY + 22; // Let the airplane float high in the air
+          }
+        } else if (type === 'dining') {
+          if (value < 500) {
+            img = ASSETS.beverage;
+            size = 76;
+          } else if (value < 2000) {
+            img = ASSETS.bento;
+            size = 90;
+          } else if (value < 5000) {
+            img = ASSETS.cafe;
+            size = 105;
+          } else {
+            img = ASSETS.restaurant;
+            size = 120;
+          }
         } else {
-          size = 62;
+          if (value < info.th1) {
+            size = 80;
+          } else if (value < info.th2) {
+            size = 110;
+          } else {
+            size = 140;
+          }
+          yOffset = (type === 'transfer') ? floatY : 0;
         }
-        const img = info.img;
-        const w = size;
-        const imgW = img.naturalWidth || img.width || 1;
-        const imgH = img.naturalHeight || img.height || 1;
-        const h = w * (imgH / imgW);
-        const yOffset = (type === 'transfer') ? floatY : 0;
-        ctx.drawImage(img, cx - w/2, cy - h + 14 - yOffset, w, h);
-        if (type === 'dining' && value >= info.th2) {
-          const sy = (Date.now() / 25) % 15;
-          ctx.fillStyle = 'rgba(100, 116, 139, 0.4)';
-          ctx.beginPath();
-          ctx.arc(cx - 8 + Math.sin(sy/2)*2, cy - h + 8 - sy, 2 + sy/8, 0, Math.PI*2);
-          ctx.fill();
+        
+        if (img) {
+          const w = size;
+          const imgW = img.naturalWidth || img.width || 1;
+          const imgH = img.naturalHeight || img.height || 1;
+          const h = w * (imgH / imgW);
+          ctx.drawImage(img, Math.round(cx - w/2), Math.round(cy - h + 30 - yOffset), Math.round(w), Math.round(h));
+          if (type === 'dining' && value >= 5000) {
+            const sy = (Date.now() / 25) % 15;
+            ctx.fillStyle = 'rgba(100, 116, 139, 0.4)';
+            ctx.beginPath();
+            ctx.arc(cx - 16 + Math.sin(sy/2)*2, cy - h + 12 - sy, 2.5 + sy/8, 0, Math.PI*2);
+            ctx.fill();
+          }
+          return;
         }
-        return;
       } catch (err) {
         console.warn('Failed to draw building image, falling back to lines:', err);
       }
@@ -1373,17 +1564,35 @@ function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
   } else if (type === 'dining') {
     if (value <= 0) {
       drawIsoFlower(ctx, cx, cy, "#fef08a"); // 黃色花朵
-    } else if (value < 1500) {
-      // 街角咖啡攤
+    } else if (value < 500) {
+      // 1. 街角飲料店 (0 - 500 元)
       drawIsoBlock(ctx, cx, cy, 14, 8, colors.dining.top, colors.dining.left, colors.dining.right);
-      ctx.fillStyle = "#ef4444"; // 紅雨棚
+      // 雨棚
+      ctx.fillStyle = "#f43f5e"; // 粉紅雨棚
       ctx.fillRect(cx - 7, cy - 10, 14, 2);
-    } else if (value < 6000) {
-      // 溫馨咖啡廳
+      // 招牌珍奶杯 (微型幾何)
+      ctx.fillStyle = "#cbd5e1"; // 杯身
+      ctx.fillRect(cx - 2, cy - 15, 4, 5);
+      ctx.strokeStyle = "#ea580c"; // 橘色吸管
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 15);
+      ctx.lineTo(cx + 2, cy - 18);
+      ctx.stroke();
+    } else if (value < 2000) {
+      // 2. 台式便當店 (500 - 2000 元)
+      drawIsoBlock(ctx, cx, cy, 20, 12, colors.dining.top, colors.dining.left, colors.dining.right);
+      drawIsoPyramid(ctx, cx, cy, 20, 12, 6, "#ea580c", "#c2410c"); // 亮橘屋頂
+      // 便當招牌 (小小白色方塊)
+      drawIsoBlock(ctx, cx - 4, cy - 2, 6, 6, "#ffffff", "#e2e8f0", "#cbd5e1");
+      ctx.fillStyle = "#ef4444";
+      ctx.fillRect(cx - 3, cy - 6, 2, 2); // 招牌上的紅字點綴
+    } else if (value < 5000) {
+      // 3. 溫馨咖啡廳 (2000 - 5000 元)
       drawIsoBlock(ctx, cx, cy, 22, 14, colors.dining.top, colors.dining.left, colors.dining.right);
       drawIsoPyramid(ctx, cx, cy, 22, 14, 8, "#b45309", "#78350f"); // 褐頂
     } else {
-      // 豪華餐廳 (帶煙囪煙霧)
+      // 4. 豪華西餐廳 (5000 元以上)
       drawIsoBlock(ctx, cx, cy, 26, 16, colors.dining.top, colors.dining.left, colors.dining.right);
       drawIsoBlock(ctx, cx, cy - 16, 18, 10, "#fef3c7", colors.dining.left, colors.dining.right);
       drawIsoPyramid(ctx, cx, cy - 26, 18, 8, "#b91c1c", "#991b1b");
@@ -1452,23 +1661,148 @@ function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
   } else if (type === 'transport') {
     if (value <= 0) {
       drawIsoFlower(ctx, cx, cy, "#fbcfe8"); // 粉色花朵
-    } else if (value < 800) {
-      // 軌道
-      ctx.strokeStyle = "#78350f";
+    } else if (value < 100) {
+      // 1. 綠能腳踏車 (0 - 100 元)
+      // 軌道/道路底線
+      ctx.strokeStyle = "rgba(0,0,0,0.12)";
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.moveTo(cx - 10, cy + 4); ctx.lineTo(cx + 10, cy - 6);
-      ctx.moveTo(cx - 6, cy + 6); ctx.lineTo(cx + 14, cy - 4);
+      ctx.moveTo(cx - 10, cy + 5); ctx.lineTo(cx + 10, cy - 5);
       ctx.stroke();
+      
+      // 前後輪
+      ctx.fillStyle = "#475569";
+      ctx.beginPath();
+      ctx.arc(cx - 5, cy + 2, 2.5, 0, Math.PI * 2);
+      ctx.arc(cx + 5, cy - 3, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // 車架與把手
+      ctx.strokeStyle = "#10b981"; // 綠色車架
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(cx - 5, cy + 2);
+      ctx.lineTo(cx, cy - 1);
+      ctx.lineTo(cx + 5, cy - 3);
+      ctx.moveTo(cx - 5, cy + 2);
+      ctx.lineTo(cx - 2, cy - 4);
+      ctx.lineTo(cx + 5, cy - 3);
+      // 把手
+      ctx.moveTo(cx - 2, cy - 4);
+      ctx.lineTo(cx - 3, cy - 7);
+      ctx.lineTo(cx - 5, cy - 7);
+      ctx.stroke();
+      
+      // 座墊
+      ctx.fillStyle = "#1e293b";
+      ctx.fillRect(cx + 1, cy - 3, 3, 1);
+    } else if (value < 500) {
+      // 2. 街頭小汽車 (100 - 500 元)
+      // 底層陰影
+      ctx.fillStyle = "rgba(0,0,0,0.12)";
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 3, 10, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // 車身
+      drawIsoBlock(ctx, cx, cy + 2, 16, 6, "#3b82f6", "#2563eb", "#1d4ed8"); // 藍色底座
+      drawIsoBlock(ctx, cx - 1, cy - 4, 10, 5, "#60a5fa", "#3b82f6", "#2563eb"); // 淺藍車頂
+      
+      // 輪胎
+      ctx.fillStyle = "#1e293b";
+      ctx.beginPath();
+      ctx.arc(cx - 5, cy + 4, 2, 0, Math.PI * 2);
+      ctx.arc(cx + 4, cy - 1, 2, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // 前大燈
+      ctx.fillStyle = "#fef08a";
+      ctx.beginPath();
+      ctx.arc(cx - 7, cy + 1, 1.2, 0, Math.PI * 2);
+      ctx.fill();
     } else if (value < 3000) {
-      // 站台
-      drawIsoBlock(ctx, cx, cy, 22, 12, colors.transport.top, colors.transport.left, colors.transport.right);
-      drawIsoPyramid(ctx, cx, cy, 22, 12, 6, "#475569", "#334155");
+      // 3. 蒸汽小火車 (500 - 3000 元)
+      // 鐵軌
+      ctx.strokeStyle = "#57534e";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(cx - 15, cy + 7); ctx.lineTo(cx + 15, cy - 7);
+      ctx.stroke();
+      
+      // 枕木
+      ctx.strokeStyle = "#78350f";
+      ctx.lineWidth = 1;
+      for (let i = -3; i <= 3; i++) {
+        const tx = cx + i * 4;
+        const ty = cy - i * 2;
+        ctx.beginPath();
+        ctx.moveTo(tx - 3, ty - 1.5);
+        ctx.lineTo(tx + 3, ty + 1.5);
+        ctx.stroke();
+      }
+      
+      // 火車主體 (紅色車廂與黑色鍋爐)
+      drawIsoBlock(ctx, cx + 5, cy + 2, 10, 12, "#ef4444", "#dc2626", "#b91c1c"); // 車主體
+      drawIsoBlock(ctx, cx - 3, cy + 2, 8, 8, "#334155", "#1e293b", "#0f172a");  // 黑色鍋爐
+      
+      // 煙囪
+      ctx.fillStyle = "#1e293b";
+      ctx.fillRect(cx - 5, cy - 9, 2, 4);
+      
+      // 蒸汽動畫
+      const sy = (Date.now() / 25) % 15;
+      ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+      ctx.beginPath();
+      ctx.arc(cx - 4 + Math.sin(sy/2)*1.5, cy - 9 - sy, 2 + sy/6, 0, Math.PI * 2);
+      ctx.fill();
     } else {
-      // 蒸汽火車站
-      drawIsoBlock(ctx, cx - 4, cy + 2, 20, 14, colors.transport.top, colors.transport.left, colors.transport.right);
-      drawIsoPyramid(ctx, cx - 4, cy + 2, 20, 14, 8, "#475569", "#334155");
-      drawIsoBlock(ctx, cx + 10, cy - 2, 8, 6, "#0f172a", "#1e293b", "#0f172a");
+      // 4. 夢想雙翼機 (3000 元以上)
+      const ay = cy - 20 - floatY; // 飛在空中
+      
+      // 地面投影陰影 (隨高度縮放)
+      const shadowScale = 1.0 - (floatY / 30);
+      ctx.fillStyle = "rgba(0,0,0,0.08)";
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 8, 12 * shadowScale, 6 * shadowScale, 0, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // 機身 (主圓體)
+      drawIsoBlock(ctx, cx, ay, 18, 5, "#cbd5e1", "#94a3b8", "#64748b");
+      
+      // 機翼
+      ctx.fillStyle = "#ef4444"; // 紅色機翼
+      // 左翼
+      ctx.beginPath();
+      ctx.moveTo(cx - 9, ay);
+      ctx.lineTo(cx - 18, ay - 4);
+      ctx.lineTo(cx - 9, ay - 4);
+      ctx.closePath();
+      ctx.fill();
+      // 右翼
+      ctx.beginPath();
+      ctx.moveTo(cx + 9, ay - 4);
+      ctx.lineTo(cx + 18, ay - 8);
+      ctx.lineTo(cx + 9, ay - 8);
+      ctx.closePath();
+      ctx.fill();
+      
+      // 螺旋槳轉軸與葉片
+      ctx.fillStyle = "#f59e0b";
+      ctx.beginPath();
+      ctx.arc(cx - 9, ay + 2, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      
+      ctx.strokeStyle = "#475569";
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 2; i++) {
+        const a = (angle * 3) + (i * Math.PI); // 轉動
+        const px = cx - 9 + Math.cos(a) * 7;
+        const py = ay + 2 + Math.sin(a) * 3;
+        ctx.beginPath();
+        ctx.moveTo(cx - 9, ay + 2);
+        ctx.lineTo(px, py);
+        ctx.stroke();
+      }
     }
   } else if (type === 'rent') {
     if (value <= 0) {
@@ -1566,9 +1900,10 @@ function getBuildingStatusText(type, val) {
     return '🏰 繁榮城堡';
   } else if (type === 'dining') {
     if (val <= 0) return '🌸 尚未消費';
-    if (val < 1500) return '☕ 街角咖啡攤';
-    if (val < 6000) return '🍰 溫馨咖啡廳';
-    return '🍽️ 豪華餐廳 (超預算警告)';
+    if (val < 500) return '🧋 街角飲料店';
+    if (val < 2000) return '🍱 台式便當店';
+    if (val < 5000) return '🍰 溫馨咖啡廳';
+    return '🍽️ 豪華西餐廳 (超預算警告)';
   } else if (type === 'grocery') {
     if (val <= 0) return '🌸 尚未消費';
     if (val < 1000) return '🥬 迷你菜園';
@@ -1581,9 +1916,10 @@ function getBuildingStatusText(type, val) {
     return '🏨 泳池別墅';
   } else if (type === 'transport') {
     if (val <= 0) return '🌸 尚未消費';
-    if (val < 800) return '🛤️ 簡易軌道';
-    if (val < 3000) return '🚉 候車月台';
-    return '🚆 蒸汽火車站';
+    if (val < 100) return '🚲 綠能腳踏車';
+    if (val < 500) return '🚗 街頭小汽車';
+    if (val < 3000) return '🚆 蒸汽小火車';
+    return '✈️ 夢想雙翼機';
   } else if (type === 'rent') {
     if (val <= 0) return '🌸 尚未消費';
     if (val < 5000) return '📮 迷你郵筒';

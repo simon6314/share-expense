@@ -789,72 +789,7 @@ let assetsLoaded = false;
 
 // 自動對白底圖檔進行 flood-fill 去背 (Chroma keying)
 function makeBackgroundTransparent(imgEl, callback) {
-  try {
-    const canvas = document.createElement('canvas');
-    const w = imgEl.naturalWidth || imgEl.width;
-    const h = imgEl.naturalHeight || imgEl.height;
-    if (!w || !h) {
-      callback(imgEl);
-      return;
-    }
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(imgEl, 0, 0);
-    
-    const imgData = ctx.getImageData(0, 0, w, h);
-    const data = imgData.data;
-    const visited = new Uint8Array(w * h);
-    const queue = [];
-    
-    const getIdx = (x, y) => (y * w + x) * 4;
-    const isLight = (x, y) => {
-      const idx = getIdx(x, y);
-      return data[idx] > 240 && data[idx+1] > 240 && data[idx+2] > 240;
-    };
-    
-    const pushPixel = (x, y) => {
-      if (x >= 0 && x < w && y >= 0 && y < h) {
-        const offset = y * w + x;
-        if (!visited[offset]) {
-          visited[offset] = 1;
-          if (isLight(x, y)) {
-            queue.push([x, y]);
-          }
-        }
-      }
-    };
-    
-    // 初始化邊界像素
-    for (let x = 0; x < w; x++) {
-      pushPixel(x, 0);
-      pushPixel(x, h - 1);
-    }
-    for (let y = 0; y < h; y++) {
-      pushPixel(0, y);
-      pushPixel(w - 1, y);
-    }
-    
-    while (queue.length > 0) {
-      const [cx, cy] = queue.shift();
-      const idx = getIdx(cx, cy);
-      data[idx+3] = 0; // alpha 透明度設為 0
-      
-      pushPixel(cx + 1, cy);
-      pushPixel(cx - 1, cy);
-      pushPixel(cx, cy + 1);
-      pushPixel(cx, cy - 1);
-    }
-    
-    ctx.putImageData(imgData, 0, 0);
-    const newImg = new Image();
-    newImg.src = canvas.toDataURL('image/png');
-    newImg.onload = () => callback(newImg);
-    newImg.onerror = () => callback(imgEl);
-  } catch (err) {
-    console.warn("Chroma keying bypassed (local file restriction):", err);
-    callback(imgEl);
-  }
+  callback(imgEl);
 }
 
 function preloadAssets(callback) {

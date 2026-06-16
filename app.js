@@ -4,6 +4,28 @@ let catChartInst = null;
 let amountType = 'expense';
 let manualSeason = null;
 
+let islandAnimationId = null;
+let windmillAngle = 0;
+let cloudOffset = 0;
+
+// 立體地標圖檔載入器與去背引擎
+const ASSET_FILES = {
+  island_base: 'assets/island_base.png?v=2',
+  castle: 'assets/castle.png?v=2',
+  cafe: 'assets/cafe.png?v=2',
+  farm: 'assets/farm.png?v=2',
+  resort: 'assets/resort.png?v=2',
+  station: 'assets/station.png?v=2',
+  apartment: 'assets/apartment.png?v=2',
+  windmill: 'assets/windmill.png?v=2',
+  warehouse: 'assets/warehouse.png?v=2',
+  balloon: 'assets/balloon.png?v=2'
+};
+
+const ASSETS = {};
+let assetsLoaded = false;
+
+
 // ── 12個月粉嫩質感主題 ──────────────────────────────────────────
 const MONTH_THEMES = {
   1: { name: '1月・元月新春', emoji: '🏮', particles: ['🏮','🧧','🍊','✨'], bg: 'linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%)', elf: '#b91c1c', elfBg: '#fde8e8', fox: '#c27803', foxBg: '#fef9c3', themeAttr: 'm1' },
@@ -766,26 +788,6 @@ preloadAssets(() => {
 });
 
 // ── 視覺小島 (Visual Island) 繪圖引擎 ──────────────────────────
-let islandAnimationId = null;
-let windmillAngle = 0;
-let cloudOffset = 0;
-
-// 立體地標圖檔載入器與去背引擎
-const ASSET_FILES = {
-  island_base: 'assets/island_base.png',
-  castle: 'assets/castle.png',
-  cafe: 'assets/cafe.png',
-  farm: 'assets/farm.png',
-  resort: 'assets/resort.png',
-  station: 'assets/station.png',
-  apartment: 'assets/apartment.png',
-  windmill: 'assets/windmill.png',
-  warehouse: 'assets/warehouse.png',
-  balloon: 'assets/balloon.png'
-};
-
-const ASSETS = {};
-let assetsLoaded = false;
 
 // 自動對白底圖檔進行 flood-fill 去背 (Chroma keying)
 function makeBackgroundTransparent(imgEl, callback) {
@@ -906,7 +908,7 @@ function renderIsland() {
   }
   
   const baseCx = width / 2;
-  const baseCy = height / 2 - 15; // 稍微上移以容納小島厚度
+  const baseCy = height / 2 - 10; // 稍微上移以容納小島厚度
   
   const tileW = 76;
   const tileH = 38;
@@ -944,13 +946,17 @@ function renderIsland() {
       { r: 2, c: 2, type: 'transfer', val: catExpenses.transfer }
     ];
     
+    const spacing = 32;
     drawOrder.forEach(item => {
-      const dx = (item.r - 1) * (tileW * 0.82);
-      const dy = (item.c - 1) * (tileW * 0.82);
+      const dx = (item.r - 1) * spacing;
+      const dy = (item.c - 1) * spacing;
       const cx = baseCx + (dx - dy);
-      const cy = baseCy + (dx + dy) / 2;
+      const cy = baseCy + (dx + dy) * 0.46;
       
-      drawIsoBuilding(ctx, cx, cy, item.type, item.val, windmillAngle, floatY);
+      let finalCy = cy;
+      if (item.type === 'transfer') finalCy += 4; // micro-adjust front balloon
+      
+      drawIsoBuilding(ctx, cx, finalCy, item.type, item.val, windmillAngle, floatY);
     });
     
     islandAnimationId = requestAnimationFrame(animLoop);
@@ -968,21 +974,24 @@ function drawCloud(ctx, x, y, r) {
   ctx.arc(x + r * 0.6, y + r * 0.2, r * 0.7, 0, Math.PI * 2);
   ctx.closePath();
   ctx.fill();
-}// 繪製島嶼基座 (草地及岩土層)
+}
+
+// 繪製島嶼基座 (草地及岩土層)
 function drawBaseIsland(ctx, cx, cy, tileW, tileH) {
   if (assetsLoaded && ASSETS.island_base) {
     try {
       const img = ASSETS.island_base;
-      const w = 360;
+      const w = 295;
       const imgW = img.naturalWidth || img.width || 1;
       const imgH = img.naturalHeight || img.height || 1;
       const h = w * (imgH / imgW);
-      ctx.drawImage(img, cx - w/2, cy - h/2 - 10, w, h);
+      ctx.drawImage(img, cx - w/2, cy - h/2 + 15, w, h);
       return;
     } catch (err) {
-      console.warn("Failed to draw island_base, falling back to lines:", err);
+      console.warn('Failed to draw island_base, falling back to lines:', err);
     }
   }
+
   const w = tileW * 3.5;
   const h = tileH * 3.5;
   const w2 = w / 2;

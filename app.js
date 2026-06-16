@@ -1036,13 +1036,18 @@ function drawCloud(ctx, x, y, r) {
 }// 繪製島嶼基座 (草地及岩土層)
 function drawBaseIsland(ctx, cx, cy, tileW, tileH) {
   if (assetsLoaded && ASSETS.island_base) {
-    const img = ASSETS.island_base;
-    const w = 360;
-    const h = w * (img.height / img.width);
-    ctx.drawImage(img, cx - w/2, cy - h/2 - 10, w, h);
-    return;
+    try {
+      const img = ASSETS.island_base;
+      const w = 360;
+      const imgW = img.naturalWidth || img.width || 1;
+      const imgH = img.naturalHeight || img.height || 1;
+      const h = w * (imgH / imgW);
+      ctx.drawImage(img, cx - w/2, cy - h/2 - 10, w, h);
+      return;
+    } catch (err) {
+      console.warn("Failed to draw island_base, falling back to lines:", err);
+    }
   }
-  
   const w = tileW * 3.5;
   const h = tileH * 3.5;
   const w2 = w / 2;
@@ -1332,33 +1337,38 @@ function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
     };
     const info = assetMap[type];
     if (info && info.img) {
-      if (value <= 0) {
-        drawIsoFlower(ctx, cx, cy, info.zeroColor);
+      try {
+        if (value <= 0) {
+          drawIsoFlower(ctx, cx, cy, info.zeroColor);
+          return;
+        }
+        let size = 56;
+        if (value < info.th1) {
+          size = 35;
+        } else if (value < info.th2) {
+          size = 46;
+        } else {
+          size = 62;
+        }
+        const img = info.img;
+        const w = size;
+        const imgW = img.naturalWidth || img.width || 1;
+        const imgH = img.naturalHeight || img.height || 1;
+        const h = w * (imgH / imgW);
+        const yOffset = (type === 'transfer') ? floatY : 0;
+        ctx.drawImage(img, cx - w/2, cy - h + 14 - yOffset, w, h);
+        if (type === 'dining' && value >= info.th2) {
+          const sy = (Date.now() / 25) % 15;
+          ctx.fillStyle = 'rgba(100, 116, 139, 0.4)';
+          ctx.beginPath();
+          ctx.arc(cx - 8 + Math.sin(sy/2)*2, cy - h + 8 - sy, 2 + sy/8, 0, Math.PI*2);
+          ctx.fill();
+        }
         return;
+      } catch (err) {
+        console.warn('Failed to draw building image, falling back to lines:', err);
       }
-      let size = 56;
-      if (value < info.th1) {
-        size = 35;
-      } else if (value < info.th2) {
-        size = 46;
-      } else {
-        size = 62;
-      }
-      const img = info.img;
-      const w = size;
-      const h = w * (img.height / img.width);
-      const yOffset = type === 'transfer' ? floatY : 0;
-      ctx.drawImage(img, cx - w/2, cy - h + 14 - yOffset, w, h);
-      if (type === 'dining' && value >= info.th2) {
-        const sy = (Date.now() / 25) % 15;
-        ctx.fillStyle = "rgba(100, 116, 139, 0.4)";
-        ctx.beginPath();
-        ctx.arc(cx - 8 + Math.sin(sy/2)*2, cy - h + 8 - sy, 2 + sy/8, 0, Math.PI*2);
-        ctx.fill();
-      }
-      return;
-    }
-  }
+    }}
   const colors = {
     castle: { top: "#c7d2fe", left: "#6366f1", right: "#4f46e5" },
     dining: { top: "#fef08a", left: "#eab308", right: "#ca8a04" },

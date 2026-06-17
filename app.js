@@ -26,7 +26,10 @@ const ASSET_FILES = {
   luxury_hotel: 'assets/luxury_hotel.png?v=2',
   cafe: 'assets/cafe.png?v=3',
   farm: 'assets/farm.png?v=2',
-  resort: 'assets/resort.png?v=2',
+  hydrangea_garden: 'assets/hydrangea_garden.png?v=2',
+  ferris_wheel: 'assets/ferris_wheel.png?v=2',
+  amusement_park: 'assets/amusement_park.png?v=2',
+  luxury_hotel_universal: 'assets/luxury_hotel_universal.png?v=2',
   station: 'assets/station.png?v=2',
   apartment: 'assets/apartment.png?v=2',
   windmill: 'assets/windmill.png?v=2',
@@ -1442,7 +1445,7 @@ function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
     const assetMap = {
       dining: { img: ASSETS.cafe, zeroColor: "#fef08a", th1: 1500, th2: 6000 },
       grocery: { img: ASSETS.farm, zeroColor: "#bbf7d0", th1: 1000, th2: 4000 },
-      travel: { img: ASSETS.resort, zeroColor: "#bfdbfe", th1: 2000, th2: 8000 },
+      travel: { zeroColor: "#bfdbfe" },
       transport: { img: ASSETS.station, zeroColor: "#fbcfe8", th1: 800, th2: 3000 },
       rent: { img: ASSETS.apartment, zeroColor: "#ffedd5", th1: 5000, th2: 15000 },
       utilities: { img: ASSETS.windmill, zeroColor: "#ddd6fe", th1: 1000, th2: 3000 },
@@ -1505,6 +1508,20 @@ function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
           } else {
             img = ASSETS.restaurant;
             size = 120;
+          }
+        } else if (type === 'travel') {
+          if (value < 3000) {
+            img = ASSETS.hydrangea_garden;
+            size = 75;
+          } else if (value < 6000) {
+            img = ASSETS.ferris_wheel;
+            size = 90;
+          } else if (value < 10000) {
+            img = ASSETS.amusement_park;
+            size = 110;
+          } else {
+            img = ASSETS.luxury_hotel_universal;
+            size = 140;
           }
         } else {
           if (value < info.th1) {
@@ -1673,28 +1690,37 @@ function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
   } else if (type === 'travel') {
     if (value <= 0) {
       drawIsoFlower(ctx, cx, cy, "#bfdbfe"); // 藍色花朵
-    } else if (value < 2000) {
-      // 帳篷
-      ctx.fillStyle = "#3b82f6";
+    } else if (value < 3000) {
+      // 繡球花園 (藍、粉、紫小花朵)
+      drawIsoFlower(ctx, cx - 6, cy + 2, "#93c5fd");
+      drawIsoFlower(ctx, cx + 6, cy + 4, "#f472b6");
+      drawIsoFlower(ctx, cx, cy - 2, "#c084fc");
+    } else if (value < 6000) {
+      // 摩天輪 (支架與大圓環)
+      ctx.strokeStyle = "#94a3b8";
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(cx - 8, cy + 2);
-      ctx.lineTo(cx, cy - 8);
-      ctx.lineTo(cx + 8, cy + 2);
-      ctx.closePath();
+      ctx.moveTo(cx, cy + 8);
+      ctx.lineTo(cx, cy - 14);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx, cy - 14, 10, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = "#fb7185";
+      ctx.beginPath();
+      ctx.arc(cx - 10, cy - 14, 2, 0, Math.PI * 2);
+      ctx.arc(cx + 10, cy - 14, 2, 0, Math.PI * 2);
+      ctx.arc(cx, cy - 24, 2, 0, Math.PI * 2);
       ctx.fill();
-    } else if (value < 8000) {
-      // 渡假小屋
+    } else if (value < 10000) {
+      // 遊樂園 (城堡與大帳篷)
       drawIsoBlock(ctx, cx, cy, 22, 14, colors.travel.top, colors.travel.left, colors.travel.right);
-      drawIsoPyramid(ctx, cx, cy, 22, 14, 8, "#e2e8f0", "#94a3b8");
+      drawIsoPyramid(ctx, cx, cy, 22, 14, 8, "#fb7185", "#f43f5e");
     } else {
-      // 泳池別墅
-      ctx.fillStyle = "#38bdf8"; // 泳池水面
+      // 高級飯店與環球影城 (別墅 + 大地球)
+      ctx.fillStyle = "#38bdf8"; // 藍色地球
       ctx.beginPath();
-      ctx.moveTo(cx - 15, cy + 4);
-      ctx.lineTo(cx, cy + 11);
-      ctx.lineTo(cx + 15, cy + 4);
-      ctx.lineTo(cx, cy - 3);
-      ctx.closePath();
+      ctx.arc(cx - 12, cy - 2, 6, 0, Math.PI * 2);
       ctx.fill();
       drawIsoBlock(ctx, cx + 4, cy - 2, 22, 16, colors.travel.top, colors.travel.left, colors.travel.right);
       drawIsoBlock(ctx, cx + 4, cy - 18, 16, 12, "#cbd5e1", "#94a3b8", "#64748b");
@@ -1953,9 +1979,10 @@ function getBuildingStatusText(type, val) {
     return '🌾 豐收穀倉';
   } else if (type === 'travel') {
     if (val <= 0) return '🌸 尚未消費';
-    if (val < 2000) return '⛺ 旅行帳篷';
-    if (val < 8000) return '🏡 渡假小屋';
-    return '🏨 泳池別墅';
+    if (val < 3000) return '🌺 繡球花園';
+    if (val < 6000) return '🎡 摩天輪';
+    if (val < 10000) return '🎢 遊樂園';
+    return '🏰 高級飯店與環球影城';
   } else if (type === 'transport') {
     if (val <= 0) return '🌸 尚未消費';
     if (val < 100) return '🚲 綠能腳踏車';
@@ -1997,11 +2024,17 @@ function updateIslandLegend(cats, balance) {
   else if (balance < 20000) castleIcon = '⛺';
   else if (balance < 50000) castleIcon = '🏢';
   
+  let travelIcon = '🏰';
+  if (cats.travel <= 0) travelIcon = '🏨';
+  else if (cats.travel < 3000) travelIcon = '🌺';
+  else if (cats.travel < 6000) travelIcon = '🎡';
+  else if (cats.travel < 10000) travelIcon = '🎢';
+  
   const items = [
     { icon: castleIcon, name: '帳戶餘額', type: 'castle', val: balance, prefix: '目前水位: ' },
     { icon: '🍽️', name: '餐飲與飲料', type: 'dining', val: cats.dining, prefix: '本月支出: ' },
     { icon: '🛒', name: '超市與超商', type: 'grocery', val: cats.grocery, prefix: '本月支出: ' },
-    { icon: '🏨', name: '住宿與景點', type: 'travel', val: cats.travel, prefix: '本月支出: ' },
+    { icon: travelIcon, name: '住宿與景點', type: 'travel', val: cats.travel, prefix: '本月支出: ' },
     { icon: '🚆', name: '交通出行', type: 'transport', val: cats.transport, prefix: '本月支出: ' },
     { icon: '🏠', name: '房租支出', type: 'rent', val: cats.rent, prefix: '本月支出: ' },
     { icon: '⚡', name: '水電瓦斯網路', type: 'utilities', val: cats.utilities, prefix: '本月支出: ' },

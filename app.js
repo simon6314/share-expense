@@ -20,22 +20,25 @@ const hoverProgress = {
 // 立體地標圖檔載入器與去背引擎
 const ASSET_FILES = {
   island_base: 'assets/island_base.png?v=2',
-  castle: 'assets/castle.png?v=2',
-  cafe: 'assets/cafe.png?v=2',
+  campfire: 'assets/campfire.png?v=2',
+  tent: 'assets/tent.png?v=2',
+  simple_hotel: 'assets/simple_hotel.png?v=2',
+  luxury_hotel: 'assets/luxury_hotel.png?v=2',
+  cafe: 'assets/cafe.png?v=3',
   farm: 'assets/farm.png?v=2',
   resort: 'assets/resort.png?v=2',
   station: 'assets/station.png?v=2',
   apartment: 'assets/apartment.png?v=2',
   windmill: 'assets/windmill.png?v=2',
   warehouse: 'assets/warehouse.png?v=2',
-  balloon: 'assets/balloon.png?v=2',
+  balloon: 'assets/balloon.png?v=6',
   bicycle: 'assets/bicycle.png?v=2',
   car: 'assets/car.png?v=2',
   train: 'assets/train.png?v=2',
   airplane: 'assets/airplane.png?v=2',
   beverage: 'assets/beverage.png?v=2',
   bento: 'assets/bento.png?v=2',
-  restaurant: 'assets/restaurant.png?v=2'
+  restaurant: 'assets/restaurant.png?v=3'
 };
 
 const ASSETS = {};
@@ -854,6 +857,12 @@ function getCategoryExpenses() {
   
   const realRecs = records.filter(r => !isSummaryRow(r));
   realRecs.forEach(r => {
+    // 專門處理「每月的愛」（屬於收入項，故加總其 income 金額）
+    if (r.item && r.item.includes('每月的愛')) {
+      catExpenses.transfer += (r.income || 0);
+      return;
+    }
+    
     if (r.expense <= 0) return;
     const cat = categorize(r.item);
     if (cat === '餐飲' || cat === '飲料') {
@@ -870,8 +879,6 @@ function getCategoryExpenses() {
       catExpenses.utilities += r.expense;
     } else if (cat === '網購') {
       catExpenses.shopping += r.expense;
-    } else if (cat === '固定轉帳') {
-      catExpenses.transfer += r.expense;
     }
   });
   
@@ -1086,20 +1093,20 @@ function renderIsland() {
     
     const drawOrder = [
       { r: 0, c: 0, type: 'castle', val: balance },
+      { r: 0, c: 0, type: 'transfer', val: catExpenses.transfer }, // 熱氣球移至莊園上方
       { r: 0, c: 1, type: 'dining', val: catExpenses.dining },
-      { r: 1, c: 0, type: 'travel', val: catExpenses.travel },
       { r: 0, c: 2, type: 'grocery', val: catExpenses.grocery },
       { r: 1, c: 1, type: 'utilities', val: catExpenses.utilities },
       { r: 2, c: 0, type: 'transport', val: catExpenses.transport },
-      { r: 1, c: 2, type: 'rent', val: catExpenses.rent },
+      { r: 1, c: 2, type: 'travel', val: catExpenses.travel },
       { r: 2, c: 1, type: 'shopping', val: catExpenses.shopping },
-      { r: 2, c: 2, type: 'transfer', val: catExpenses.transfer }
+      { r: 2, c: 2, type: 'rent', val: catExpenses.rent }
     ];
     
     const localMouseX = (mouseX - width / 2 - islandOffsetX) / islandZoom + width / 2;
     const localMouseY = (mouseY - height / 2 - islandOffsetY) / islandZoom + height / 2;
     
-    const spacing = 90;
+    const spacing = 102;
     drawOrder.forEach(item => {
       const dx = (item.r - 1) * spacing;
       const dy = (item.c - 1) * spacing;
@@ -1107,9 +1114,18 @@ function renderIsland() {
       const cy = baseCy + (dx + dy) * 0.46;
       
       let finalCy = cy;
-      if (item.type === 'transfer') finalCy += 4; // micro-adjust front balloon
+      let finalFloatY = floatY;
       
-      drawIsoBuilding(ctx, cx, finalCy, item.type, item.val, windmillAngle, floatY, localMouseX, localMouseY);
+      if (item.type === 'transfer') {
+        // 根據帳戶餘額地標的尺寸動態調整熱氣球的高度，使其精確懸浮在屋頂上方
+        let castleSize = 140;
+        if (balance < 5000) castleSize = 75;
+        else if (balance < 20000) castleSize = 90;
+        else if (balance < 50000) castleSize = 110;
+        finalFloatY = floatY + castleSize + 25;
+      }
+      
+      drawIsoBuilding(ctx, cx, finalCy, item.type, item.val, windmillAngle, finalFloatY, localMouseX, localMouseY);
     });
     
     ctx.restore();
@@ -1424,7 +1440,6 @@ function drawIsoFlower(ctx, cx, cy, col) {
 function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
   if (assetsLoaded) {
     const assetMap = {
-      castle: { img: ASSETS.castle, zeroColor: "#ef4444", th1: 5000, th2: 50000 },
       dining: { img: ASSETS.cafe, zeroColor: "#fef08a", th1: 1500, th2: 6000 },
       grocery: { img: ASSETS.farm, zeroColor: "#bbf7d0", th1: 1000, th2: 4000 },
       travel: { img: ASSETS.resort, zeroColor: "#bfdbfe", th1: 2000, th2: 8000 },
@@ -1434,7 +1449,10 @@ function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
       shopping: { img: ASSETS.warehouse, zeroColor: "#e2e8f0", th1: 1500, th2: 5000 },
       transfer: { img: ASSETS.balloon, zeroColor: "#fef08a", th1: 5000, th2: 15000 }
     };
-    const info = assetMap[type];
+    let info = assetMap[type];
+    if (type === 'castle') {
+      info = { zeroColor: "#ef4444" };
+    }
     if (info) {
       try {
         if (value <= 0) {
@@ -1445,7 +1463,21 @@ function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
         let img = info.img;
         let yOffset = 0;
         
-        if (type === 'transport') {
+        if (type === 'castle') {
+          if (value < 5000) {
+            img = ASSETS.campfire;
+            size = 75;
+          } else if (value < 20000) {
+            img = ASSETS.tent;
+            size = 90;
+          } else if (value < 50000) {
+            img = ASSETS.simple_hotel;
+            size = 110;
+          } else {
+            img = ASSETS.luxury_hotel;
+            size = 140;
+          }
+        } else if (type === 'transport') {
           if (value < 100) {
             img = ASSETS.bicycle;
             size = 76;
@@ -1532,8 +1564,17 @@ function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
       ctx.beginPath();
       ctx.arc(cx, cy - 4 - Math.sin(Date.now() / 150) * 1.5, 4, 0, Math.PI * 2);
       ctx.fill();
+    } else if (value < 20000) {
+      // 露營帳篷 (5000-20000)
+      ctx.fillStyle = "#3b82f6";
+      ctx.beginPath();
+      ctx.moveTo(cx - 8, cy + 2);
+      ctx.lineTo(cx, cy - 8);
+      ctx.lineTo(cx + 8, cy + 2);
+      ctx.closePath();
+      ctx.fill();
     } else if (value < 50000) {
-      // 莊園別墅
+      // 簡單飯店 (20000-50000)
       drawIsoBlock(ctx, cx, cy, 22, 14, colors.castle.top, colors.castle.left, colors.castle.right);
       drawIsoPyramid(ctx, cx, cy, 22, 14, 8, "#f43f5e", "#e11d48"); // 紅頂小屋
     } else {
@@ -1895,9 +1936,10 @@ function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
 function getBuildingStatusText(type, val) {
   if (type === 'castle') {
     if (val <= 0) return '🔴 赤字荒地';
-    if (val < 5000) return '🔥 營火小木屋';
-    if (val < 50000) return '🏠 舒適莊園';
-    return '🏰 繁榮城堡';
+    if (val < 5000) return '🔥 溫馨營火';
+    if (val < 20000) return '⛺ 露營帳篷';
+    if (val < 50000) return '🏢 簡單飯店';
+    return '🏨 高級泳池飯店';
   } else if (type === 'dining') {
     if (val <= 0) return '🌸 尚未消費';
     if (val < 500) return '🧋 街角飲料店';
@@ -1936,7 +1978,7 @@ function getBuildingStatusText(type, val) {
     if (val < 5000) return '🚢 貨櫃箱';
     return '🏬 物流配送中心';
   } else if (type === 'transfer') {
-    if (val <= 0) return '🌸 尚未消費';
+    if (val <= 0) return '🌸 尚未存入';
     if (val < 5000) return '🎈 飄浮氣球';
     if (val < 15000) return '🎈 夢想熱氣球';
     return '🎈 雙重夢想氣球';
@@ -1949,8 +1991,14 @@ function updateIslandLegend(cats, balance) {
   const legendEl = document.getElementById('islandLegend');
   if (!legendEl) return;
   
+  let castleIcon = '🏨';
+  if (balance <= 0) castleIcon = '🔴';
+  else if (balance < 5000) castleIcon = '🔥';
+  else if (balance < 20000) castleIcon = '⛺';
+  else if (balance < 50000) castleIcon = '🏢';
+  
   const items = [
-    { icon: '🏰', name: '帳戶餘額', type: 'castle', val: balance, prefix: '目前水位: ' },
+    { icon: castleIcon, name: '帳戶餘額', type: 'castle', val: balance, prefix: '目前水位: ' },
     { icon: '🍽️', name: '餐飲與飲料', type: 'dining', val: cats.dining, prefix: '本月支出: ' },
     { icon: '🛒', name: '超市與超商', type: 'grocery', val: cats.grocery, prefix: '本月支出: ' },
     { icon: '🏨', name: '住宿與景點', type: 'travel', val: cats.travel, prefix: '本月支出: ' },
@@ -1958,7 +2006,7 @@ function updateIslandLegend(cats, balance) {
     { icon: '🏠', name: '房租支出', type: 'rent', val: cats.rent, prefix: '本月支出: ' },
     { icon: '⚡', name: '水電瓦斯網路', type: 'utilities', val: cats.utilities, prefix: '本月支出: ' },
     { icon: '📦', name: '網購消費', type: 'shopping', val: cats.shopping, prefix: '本月支出: ' },
-    { icon: '🎈', name: '固定轉帳', type: 'transfer', val: cats.transfer, prefix: '本月支出: ' }
+    { icon: '🎈', name: '每月的愛', type: 'transfer', val: cats.transfer, prefix: '共同存入: ' }
   ];
   
   legendEl.innerHTML = items.map(item => {

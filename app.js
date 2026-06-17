@@ -31,7 +31,7 @@ const ASSET_FILES = {
   apartment: 'assets/apartment.png?v=2',
   windmill: 'assets/windmill.png?v=2',
   warehouse: 'assets/warehouse.png?v=2',
-  balloon: 'assets/balloon.png?v=6',
+  balloon: 'assets/balloon.png?v=7',
   bicycle: 'assets/bicycle.png?v=2',
   car: 'assets/car.png?v=2',
   train: 'assets/train.png?v=2',
@@ -1089,7 +1089,7 @@ function renderIsland() {
     
     // 3. 按照深度排序繪製地標 (row + col 越小在越後方，先繪製；越大在越前方，後繪製)
     windmillAngle += 0.03;
-    const floatY = Math.sin(Date.now() / 450) * 4.5;
+    const floatY = Math.sin(Date.now() / 450) * 8.5;
     
     const drawOrder = [
       { r: 0, c: 0, type: 'castle', val: balance },

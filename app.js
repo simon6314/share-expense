@@ -7,7 +7,7 @@ let manualSeason = null;
 let islandAnimationId = null;
 let windmillAngle = 0;
 let cloudOffset = 0;
-let islandZoom = 1.0;
+let islandZoom = null;
 let islandOffsetX = 0;
 let islandOffsetY = 0;
 let mouseX = -1000;
@@ -19,7 +19,7 @@ const hoverProgress = {
 
 // 立體地標圖檔載入器與去背引擎
 const ASSET_FILES = {
-  island_base: 'assets/island_base.png?v=2',
+  island_base: 'assets/island_base.png?v=3',
   campfire: 'assets/campfire.png?v=2',
   tent: 'assets/tent.png?v=2',
   simple_hotel: 'assets/simple_hotel.png?v=2',
@@ -1033,15 +1033,19 @@ function renderIsland() {
     islandZoom = Math.min(Math.max(islandZoom * zoomFactor, 0.4), 4.0);
   };
   
+  const width = canvas.parentElement.clientWidth || 500;
+  const height = 500;
+  const defaultZoom = (width / 900) * 0.96; // 讓小島寬度佔滿畫布寬度
+  if (islandZoom === null) {
+    islandZoom = defaultZoom;
+  }
+  
   canvas.ondblclick = (e) => {
-    islandZoom = 1.0;
+    islandZoom = defaultZoom;
     islandOffsetX = 0;
     islandOffsetY = 0;
     e.preventDefault();
   };
-  
-  const width = canvas.parentElement.clientWidth || 500;
-  const height = 500;
   
   const dpr = window.devicePixelRatio || 1;
   canvas.width = width * dpr;
@@ -1062,7 +1066,7 @@ function renderIsland() {
   }
   
   const baseCx = width / 2;
-  const baseCy = 330; // 往下拉並對齊草地中心
+  const baseCy = 300; // 往下拉並對齊草地中心 (調降至 390 配合較大間距，讓地標完美均勻分佈在整片草地上)
   
   const tileW = 76;
   const tileH = 38;
@@ -1109,23 +1113,42 @@ function renderIsland() {
     const localMouseX = (mouseX - width / 2 - islandOffsetX) / islandZoom + width / 2;
     const localMouseY = (mouseY - height / 2 - islandOffsetY) / islandZoom + height / 2;
     
-    const spacing = 102;
+    const spacing = 165; // 配合地標放大，將格點間距擴大至 165，讓地標往草地四周均勻擴散分佈
+    
+    // 每個地標的微調偏移量，特別將靠近樹木的 transport 往左下偏移較多，其餘微調以保持美觀
+    const offsets = {
+      'castle': { x: -15, y: 120 },
+      'transfer': { x: -10, y: 80 },
+      'dining': { x: 0, y: 150 },
+      'grocery': { x: 350, y: 180 },
+      'utilities': { x: 300, y: 170 },
+      'travel': { x: 0, y: 175 },
+      'transport': { x: -115, y: 130 }, // 往左下移，在較大間距下徹底避開右側樹木
+      'shopping': { x: 0, y: 180 },
+      'rent': { x: 0, y: 220 }
+    };
+
     drawOrder.forEach(item => {
       const dx = (item.r - 1) * spacing;
       const dy = (item.c - 1) * spacing;
-      const cx = baseCx + (dx - dy);
-      const cy = baseCy + (dx + dy) * 0.46;
+      let cx = baseCx + (dx - dy);
+      let cy = baseCy + (dx + dy) * 0.46;
+      
+      // 套用自訂微調偏移量
+      const offset = offsets[item.type] || { x: 0, y: 0 };
+      cx += offset.x;
+      cy += offset.y;
       
       let finalCy = cy;
       let finalFloatY = floatY;
       
       if (item.type === 'transfer') {
-        // 根據帳戶餘額地標的尺寸動態調整熱氣球的高度，使其精確懸浮在屋頂上方
+        // 根據帳戶餘額地標的尺寸動態調整熱氣球的高度 (配合 1.25 倍放大)
         let castleSize = 140;
         if (balance < 5000) castleSize = 75;
         else if (balance < 20000) castleSize = 90;
         else if (balance < 50000) castleSize = 110;
-        finalFloatY = floatY + castleSize + 25;
+        finalFloatY = floatY + (castleSize * 1.25) + 25;
       }
       
       drawIsoBuilding(ctx, cx, finalCy, item.type, item.val, windmillAngle, finalFloatY, localMouseX, localMouseY);
@@ -1535,7 +1558,7 @@ function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
         }
         
         if (img) {
-          const w = size;
+          const w = size * 1.75 ; // 等比例放大 1.25 倍
           const imgW = img.naturalWidth || img.width || 1;
           const imgH = img.naturalHeight || img.height || 1;
           const h = w * (imgH / imgW);
@@ -1544,7 +1567,7 @@ function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
             const sy = (Date.now() / 25) % 15;
             ctx.fillStyle = 'rgba(100, 116, 139, 0.4)';
             ctx.beginPath();
-            ctx.arc(cx - 16 + Math.sin(sy/2)*2, cy - h + 12 - sy, 2.5 + sy/8, 0, Math.PI*2);
+            ctx.arc(cx - 20 + Math.sin(sy/2)*2, cy - h + 15 - sy, (2.5 + sy/8) * 1.25, 0, Math.PI*2);
             ctx.fill();
           }
           return;

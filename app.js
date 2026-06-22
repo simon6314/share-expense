@@ -27,7 +27,7 @@ const ASSET_FILES = {
   cafe: 'assets/cafe.png?v=3',
   farm: 'assets/farm.png?v=2',
   hydrangea_garden: 'assets/hydrangea_garden.png?v=2',
-  ferris_wheel: 'assets/ferris_wheel.png?v=2',
+  ferris_wheel: 'assets/ferris_wheel.png?v=3',
   amusement_park: 'assets/amusement_park.png?v=2',
   luxury_hotel_universal: 'assets/luxury_hotel_universal.png?v=2',
   station: 'assets/station.png?v=2',
@@ -41,7 +41,19 @@ const ASSET_FILES = {
   airplane: 'assets/airplane.png?v=2',
   beverage: 'assets/beverage.png?v=2',
   bento: 'assets/bento.png?v=2',
-  restaurant: 'assets/restaurant.png?v=3'
+  restaurant: 'assets/restaurant.png?v=3',
+  rent_apartment: 'assets/rent_apartment.png?v=3',
+  rent_villa: 'assets/rent_villa.png?v=3',
+  rent_luxury_building: 'assets/rent_luxury_building.png?v=3',
+  rent_palace: 'assets/rent_palace.png?v=3',
+  grocery_garden: 'assets/grocery_garden.png?v=1',
+  grocery_greenhouse: 'assets/grocery_greenhouse.png?v=1',
+  grocery_supermarket: 'assets/grocery_supermarket.png?v=1',
+  grocery_large_supermarket: 'assets/grocery_large_supermarket.png?v=1',
+  shopping_boxes: 'assets/shopping_boxes.png?v=1',
+  shopping_general_store: 'assets/shopping_general_store.png?v=1',
+  shopping_department_store: 'assets/shopping_department_store.png?v=1',
+  shopping_logistics: 'assets/shopping_logistics.png?v=1'
 };
 
 const ASSETS = {};
@@ -1467,12 +1479,12 @@ function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
   if (assetsLoaded) {
     const assetMap = {
       dining: { img: ASSETS.cafe, zeroColor: "#fef08a", th1: 1500, th2: 6000 },
-      grocery: { img: ASSETS.farm, zeroColor: "#bbf7d0", th1: 1000, th2: 4000 },
+      grocery: { img: ASSETS.grocery_garden, zeroColor: "#bbf7d0", th1: 1500, th2: 3500 },
       travel: { zeroColor: "#bfdbfe" },
       transport: { img: ASSETS.station, zeroColor: "#fbcfe8", th1: 800, th2: 3000 },
-      rent: { img: ASSETS.apartment, zeroColor: "#ffedd5", th1: 5000, th2: 15000 },
+      rent: { img: ASSETS.rent_apartment, zeroColor: "#ffedd5", th1: 10000, th2: 30000 },
       utilities: { img: ASSETS.windmill, zeroColor: "#ddd6fe", th1: 1000, th2: 3000 },
-      shopping: { img: ASSETS.warehouse, zeroColor: "#e2e8f0", th1: 1500, th2: 5000 },
+      shopping: { img: ASSETS.shopping_boxes, zeroColor: "#e2e8f0", th1: 1500, th2: 3500 },
       transfer: { img: ASSETS.balloon, zeroColor: "#fef08a", th1: 5000, th2: 15000 }
     };
     let info = assetMap[type];
@@ -1538,12 +1550,54 @@ function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
             size = 75;
           } else if (value < 6000) {
             img = ASSETS.ferris_wheel;
-            size = 90;
+            size = 80;
           } else if (value < 10000) {
             img = ASSETS.amusement_park;
             size = 110;
           } else {
             img = ASSETS.luxury_hotel_universal;
+            size = 140;
+          }
+        } else if (type === 'rent') {
+          if (value < 10000) {
+            img = ASSETS.rent_apartment;
+            size = 120;
+          } else if (value < 30000) {
+            img = ASSETS.rent_villa;
+            size = 120;
+          } else if (value < 50000) {
+            img = ASSETS.rent_luxury_building;
+            size = 130;
+          } else {
+            img = ASSETS.rent_palace;
+            size = 140;
+          }
+        } else if (type === 'grocery') {
+          if (value < 1500) {
+            img = ASSETS.grocery_garden;
+            size = 100;
+          } else if (value < 3500) {
+            img = ASSETS.grocery_greenhouse;
+            size = 100;
+          } else if (value < 6000) {
+            img = ASSETS.grocery_supermarket;
+            size = 120;
+          } else {
+            img = ASSETS.grocery_large_supermarket;
+            size = 140;
+          }
+        } else if (type === 'shopping') {
+          if (value < 1500) {
+            img = ASSETS.shopping_boxes;
+            size = 100;
+          } else if (value < 3500) {
+            img = ASSETS.shopping_general_store;
+            size = 100;
+          } else if (value < 6000) {
+            img = ASSETS.shopping_department_store;
+            size = 120;
+          } else {
+            img = ASSETS.shopping_logistics;
             size = 140;
           }
         } else {
@@ -1689,8 +1743,8 @@ function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
   } else if (type === 'grocery') {
     if (value <= 0) {
       drawIsoFlower(ctx, cx, cy, "#bbf7d0"); // 綠色花朵
-    } else if (value < 1000) {
-      // 迷你菜園
+    } else if (value < 1500) {
+      // 小菜園
       ctx.fillStyle = "#78350f";
       ctx.beginPath();
       ctx.ellipse(cx, cy + 2, 8, 4, 0, 0, Math.PI * 2);
@@ -1700,15 +1754,19 @@ function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
       ctx.arc(cx - 3, cy + 1, 1.5, 0, Math.PI * 2);
       ctx.arc(cx + 3, cy + 3, 1.5, 0, Math.PI * 2);
       ctx.fill();
-    } else if (value < 4000) {
-      // 溫室
+    } else if (value < 3500) {
+      // 溫室農場
       drawIsoBlock(ctx, cx, cy, 22, 14, colors.grocery.top, colors.grocery.left, colors.grocery.right);
       drawIsoPyramid(ctx, cx, cy, 22, 14, 6, "#64748b", "#475569");
+    } else if (value < 6000) {
+      // 超市賣場
+      drawIsoBlock(ctx, cx, cy, 24, 16, colors.grocery.top, colors.grocery.left, colors.grocery.right);
+      drawIsoPyramid(ctx, cx, cy, 24, 16, 8, "#b45309", "#78350f");
     } else {
-      // 穀倉及筒倉
-      drawIsoBlock(ctx, cx - 4, cy + 2, 18, 14, "#4ade80", colors.grocery.left, colors.grocery.right);
-      drawIsoPyramid(ctx, cx - 4, cy + 2, 18, 14, 8, "#f59e0b", "#d97706");
-      drawIsoCylinder(ctx, cx + 10, cy - 2, 8, 18, "#cbd5e1", "#64748b", "#475569");
+      // 大型超市賣場
+      drawIsoBlock(ctx, cx, cy, 26, 18, colors.grocery.top, colors.grocery.left, colors.grocery.right);
+      drawIsoBlock(ctx, cx, cy - 18, 20, 10, "#86efac", colors.grocery.left, colors.grocery.right);
+      drawIsoPyramid(ctx, cx, cy - 28, 20, 8, "#b45309", "#78350f");
     }
   } else if (type === 'travel') {
     if (value <= 0) {
@@ -1897,29 +1955,29 @@ function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
   } else if (type === 'rent') {
     if (value <= 0) {
       drawIsoFlower(ctx, cx, cy, "#ffedd5"); // 橘色花朵
-    } else if (value < 5000) {
-      // 迷你郵箱
-      ctx.fillStyle = "#ea580c";
-      ctx.fillRect(cx - 2, cy - 7, 4, 7);
-      ctx.fillStyle = "#f43f5e";
-      ctx.beginPath();
-      ctx.moveTo(cx - 4, cy - 7); ctx.lineTo(cx, cy - 11); ctx.lineTo(cx + 4, cy - 7);
-      ctx.closePath();
-      ctx.fill();
-    } else if (value < 15000) {
-      // 洋房
+    } else if (value < 10000) {
+      // 小公寓
+      drawIsoBlock(ctx, cx, cy, 20, 15, colors.rent.top, colors.rent.left, colors.rent.right);
+      drawIsoPyramid(ctx, cx, cy, 20, 15, 6, "#64748b", "#475569");
+    } else if (value < 30000) {
+      // 磚瓦洋房
       drawIsoBlock(ctx, cx, cy, 22, 14, colors.rent.top, colors.rent.left, colors.rent.right);
       drawIsoPyramid(ctx, cx, cy, 22, 14, 8, "#78350f", "#451a03");
-    } else {
-      // 高階大樓
-      drawIsoBlock(ctx, cx, cy, 24, 14, 28, colors.rent.top, colors.rent.left, colors.rent.right);
-      drawIsoPyramid(ctx, cx, cy, 24, 14, 6, "#78350f", "#451a03");
+    } else if (value < 50000) {
+      // 豪華大樓
+      drawIsoBlock(ctx, cx, cy, 24, 25, colors.rent.top, colors.rent.left, colors.rent.right);
+      drawIsoPyramid(ctx, cx, cy, 24, 25, 6, "#475569", "#334155");
       // 亮燈窗戶
       ctx.fillStyle = "#fef08a";
-      ctx.fillRect(cx - 5, cy - 22, 3, 4);
-      ctx.fillRect(cx + 2, cy - 22, 3, 4);
-      ctx.fillRect(cx - 5, cy - 13, 3, 4);
-      ctx.fillRect(cx + 2, cy - 13, 3, 4);
+      ctx.fillRect(cx - 4, cy - 20, 2, 3);
+      ctx.fillRect(cx + 2, cy - 20, 2, 3);
+      ctx.fillRect(cx - 4, cy - 12, 2, 3);
+      ctx.fillRect(cx + 2, cy - 12, 2, 3);
+    } else {
+      // 類似帝寶的大樓
+      drawIsoBlock(ctx, cx - 6, cy, 16, 32, colors.rent.top, colors.rent.left, colors.rent.right);
+      drawIsoBlock(ctx, cx + 6, cy, 16, 32, colors.rent.top, colors.rent.left, colors.rent.right);
+      drawIsoPyramid(ctx, cx, cy, 26, 32, 10, "#fb7185", "#f43f5e");
     }
   } else if (type === 'utilities') {
     if (value <= 0) {
@@ -1944,22 +2002,24 @@ function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
     if (value <= 0) {
       drawIsoFlower(ctx, cx, cy, "#e2e8f0"); // 灰色花朵
     } else if (value < 1500) {
-      // 快遞紙箱
-      drawIsoBlock(ctx, cx, cy, 12, 10, 6, "#d97706", "#b45309", "#78350f");
-    } else if (value < 5000) {
-      // 貨櫃
-      drawIsoBlock(ctx, cx, cy, 22, 12, 12, colors.shopping.top, colors.shopping.left, colors.shopping.right);
-      ctx.strokeStyle = "rgba(0,0,0,0.15)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(cx - 5, cy + 2); ctx.lineTo(cx - 5, cy - 10);
-      ctx.moveTo(cx + 5, cy - 3); ctx.lineTo(cx + 5, cy - 15);
-      ctx.stroke();
+      // 幾個紙箱
+      ctx.fillStyle = "#d97706";
+      drawIsoBlock(ctx, cx - 4, cy + 2, 6, 6, "#f59e0b", "#d97706", "#b45309");
+      drawIsoBlock(ctx, cx + 4, cy - 2, 8, 8, "#f59e0b", "#d97706", "#b45309");
+    } else if (value < 3500) {
+      // 五金雜貨行
+      drawIsoBlock(ctx, cx, cy, 20, 12, colors.shopping.top, colors.shopping.left, colors.shopping.right);
+      drawIsoPyramid(ctx, cx, cy, 20, 12, 6, "#b45309", "#78350f");
+    } else if (value < 6000) {
+      // 百貨公司
+      drawIsoBlock(ctx, cx, cy, 24, 18, colors.shopping.top, colors.shopping.left, colors.shopping.right);
+      drawIsoBlock(ctx, cx, cy - 18, 16, 12, "#cbd5e1", colors.shopping.left, colors.shopping.right);
+      drawIsoPyramid(ctx, cx, cy - 30, 16, 6, "#3b82f6", "#2563eb");
     } else {
-      // 配送中心與貨車
-      drawIsoBlock(ctx, cx - 4, cy + 2, 22, 14, 14, colors.shopping.top, colors.shopping.left, colors.shopping.right);
-      drawIsoPyramid(ctx, cx - 4, cy + 2, 22, 14, 6, "#475569", "#334155");
-      drawIsoBlock(ctx, cx + 10, cy - 1, 8, 5, "#f43f5e", "#e11d48", "#991b1b"); // 紅色小貨車
+      // 自動化物流廠房
+      drawIsoBlock(ctx, cx - 4, cy + 2, 18, 14, "#94a3b8", colors.shopping.left, colors.shopping.right);
+      drawIsoPyramid(ctx, cx - 4, cy + 2, 18, 14, 8, "#f59e0b", "#d97706");
+      drawIsoCylinder(ctx, cx + 10, cy - 2, 8, 18, "#cbd5e1", "#64748b", "#475569");
     }
   } else if (type === 'transfer') {
     if (value <= 0) {
@@ -1997,9 +2057,10 @@ function getBuildingStatusText(type, val) {
     return '🍽️ 豪華西餐廳 (超預算警告)';
   } else if (type === 'grocery') {
     if (val <= 0) return '🌸 尚未消費';
-    if (val < 1000) return '🥬 迷你菜園';
-    if (val < 4000) return '🥦 自動溫室';
-    return '🌾 豐收穀倉';
+    if (val < 1500) return '🥬 小菜園樣式';
+    if (val < 3500) return '🥦 溫室農場';
+    if (val < 6000) return '🛒 超市賣場';
+    return '🛒 大型超市賣場';
   } else if (type === 'travel') {
     if (val <= 0) return '🌸 尚未消費';
     if (val < 3000) return '🌺 繡球花園';
@@ -2014,9 +2075,10 @@ function getBuildingStatusText(type, val) {
     return '✈️ 夢想雙翼機';
   } else if (type === 'rent') {
     if (val <= 0) return '🌸 尚未消費';
-    if (val < 5000) return '📮 迷你郵筒';
-    if (val < 15000) return '🏠 磚瓦洋房';
-    return '🏢 高階住宅大樓';
+    if (val < 10000) return '🏢 小公寓樣式';
+    if (val < 30000) return '🏠 磚瓦洋房';
+    if (val < 50000) return '🏙️ 豪華大樓';
+    return '🏰 頂級豪宅大樓';
   } else if (type === 'utilities') {
     if (val <= 0) return '🌸 尚未消費';
     if (val < 1000) return '💧 簡易水源';
@@ -2024,9 +2086,10 @@ function getBuildingStatusText(type, val) {
     return '⚡ 大型變電所';
   } else if (type === 'shopping') {
     if (val <= 0) return '🌸 尚未消費';
-    if (val < 1500) return '📦 快遞紙箱';
-    if (val < 5000) return '🚢 貨櫃箱';
-    return '🏬 物流配送中心';
+    if (val < 1500) return '📦 幾個紙箱';
+    if (val < 3500) return '🏪 五金雜貨行';
+    if (val < 6000) return '🏬 百貨公司';
+    return '🏭 自動化物流廠';
   } else if (type === 'transfer') {
     if (val <= 0) return '🌸 尚未存入';
     if (val < 5000) return '🎈 飄浮氣球';
@@ -2052,16 +2115,37 @@ function updateIslandLegend(cats, balance) {
   else if (cats.travel < 3000) travelIcon = '🌺';
   else if (cats.travel < 6000) travelIcon = '🎡';
   else if (cats.travel < 10000) travelIcon = '🎢';
+
+  let rentIcon = '🏠';
+  if (cats.rent <= 0) rentIcon = '🌸';
+  else if (cats.rent < 10000) rentIcon = '🏢';
+  else if (cats.rent < 30000) rentIcon = '🏠';
+  else if (cats.rent < 50000) rentIcon = '🏙️';
+  else rentIcon = '🏰';
+
+  let groceryIcon = '🛒';
+  if (cats.grocery <= 0) groceryIcon = '🌸';
+  else if (cats.grocery < 1500) groceryIcon = '🥬';
+  else if (cats.grocery < 3500) groceryIcon = '🥦';
+  else if (cats.grocery < 6000) groceryIcon = '🛒';
+  else groceryIcon = '🛒';
+
+  let shoppingIcon = '📦';
+  if (cats.shopping <= 0) shoppingIcon = '🌸';
+  else if (cats.shopping < 1500) shoppingIcon = '📦';
+  else if (cats.shopping < 3500) shoppingIcon = '🏪';
+  else if (cats.shopping < 6000) shoppingIcon = '🏬';
+  else shoppingIcon = '🏭';
   
   const items = [
     { icon: castleIcon, name: '帳戶餘額', type: 'castle', val: balance, prefix: '目前水位: ' },
     { icon: '🍽️', name: '餐飲與飲料', type: 'dining', val: cats.dining, prefix: '本月支出: ' },
-    { icon: '🛒', name: '超市與超商', type: 'grocery', val: cats.grocery, prefix: '本月支出: ' },
+    { icon: groceryIcon, name: '超市與超商', type: 'grocery', val: cats.grocery, prefix: '本月支出: ' },
     { icon: travelIcon, name: '住宿與景點', type: 'travel', val: cats.travel, prefix: '本月支出: ' },
     { icon: '🚆', name: '交通出行', type: 'transport', val: cats.transport, prefix: '本月支出: ' },
-    { icon: '🏠', name: '房租支出', type: 'rent', val: cats.rent, prefix: '本月支出: ' },
+    { icon: rentIcon, name: '房租支出', type: 'rent', val: cats.rent, prefix: '本月支出: ' },
     { icon: '⚡', name: '水電瓦斯網路', type: 'utilities', val: cats.utilities, prefix: '本月支出: ' },
-    { icon: '📦', name: '網購消費', type: 'shopping', val: cats.shopping, prefix: '本月支出: ' },
+    { icon: shoppingIcon, name: '網購消費', type: 'shopping', val: cats.shopping, prefix: '本月支出: ' },
     { icon: '🎈', name: '每月的愛', type: 'transfer', val: cats.transfer, prefix: '共同存入: ' }
   ];
   

@@ -32,8 +32,10 @@ const ASSET_FILES = {
   luxury_hotel_universal: 'assets/luxury_hotel_universal.png?v=2',
   station: 'assets/station.png?v=2',
   apartment: 'assets/apartment.png?v=2',
-  windmill: 'assets/windmill.png?v=2',
-  warehouse: 'assets/warehouse.png?v=2',
+  utilities_windmill: 'assets/utilities_windmill.png?v=1',
+  utilities_solar_water: 'assets/utilities_solar_water.png?v=1',
+  utilities_substation: 'assets/utilities_substation.png?v=1',
+  utilities_reactor: 'assets/utilities_reactor.png?v=1',
   balloon: 'assets/balloon.png?v=7',
   bicycle: 'assets/bicycle.png?v=2',
   car: 'assets/car.png?v=2',
@@ -1483,7 +1485,7 @@ function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
       travel: { zeroColor: "#bfdbfe" },
       transport: { img: ASSETS.station, zeroColor: "#fbcfe8", th1: 800, th2: 3000 },
       rent: { img: ASSETS.rent_apartment, zeroColor: "#ffedd5", th1: 10000, th2: 30000 },
-      utilities: { img: ASSETS.windmill, zeroColor: "#ddd6fe", th1: 1000, th2: 3000 },
+      utilities: { img: ASSETS.utilities_windmill, zeroColor: "#ddd6fe", th1: 1000, th2: 2000 },
       shopping: { img: ASSETS.shopping_boxes, zeroColor: "#e2e8f0", th1: 1500, th2: 3500 },
       transfer: { img: ASSETS.balloon, zeroColor: "#fef08a", th1: 5000, th2: 15000 }
     };
@@ -1598,6 +1600,20 @@ function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
             size = 120;
           } else {
             img = ASSETS.shopping_logistics;
+            size = 140;
+          }
+        } else if (type === 'utilities') {
+          if (value < 1000) {
+            img = ASSETS.utilities_windmill;
+            size = 90;
+          } else if (value < 2000) {
+            img = ASSETS.utilities_solar_water;
+            size = 110;
+          } else if (value < 5000) {
+            img = ASSETS.utilities_substation;
+            size = 125;
+          } else {
+            img = ASSETS.utilities_reactor;
             size = 140;
           }
         } else {
@@ -1983,20 +1999,37 @@ function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
     if (value <= 0) {
       drawIsoFlower(ctx, cx, cy, "#ddd6fe"); // 紫色花朵
     } else if (value < 1000) {
-      // 消防栓
-      ctx.fillStyle = "#ef4444";
-      ctx.fillRect(cx - 2.5, cy - 8, 5, 8);
-      ctx.fillStyle = "#cbd5e1";
-      ctx.beginPath();
-      ctx.arc(cx, cy - 8, 3.5, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (value < 3000) {
       // 風車
       drawIsoWindmill(ctx, cx, cy, 24, angle, colors.utilities.tower, colors.utilities.blades);
+    } else if (value < 2000) {
+      // 太陽能與水塔
+      drawIsoCylinder(ctx, cx - 6, cy + 2, 6, 12, "#94a3b8", "#64748b", "#475569");
+      ctx.fillStyle = "#3b82f6";
+      ctx.beginPath();
+      ctx.moveTo(cx + 2, cy);
+      ctx.lineTo(cx + 8, cy - 3);
+      ctx.lineTo(cx + 6, cy - 6);
+      ctx.lineTo(cx, cy - 3);
+      ctx.closePath();
+      ctx.fill();
+    } else if (value < 5000) {
+      // 變電所
+      drawIsoBlock(ctx, cx, cy, 22, 14, "#cbd5e1", "#94a3b8", "#64748b");
+      ctx.strokeStyle = "#eab308";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(cx - 2, cy - 8);
+      ctx.lineTo(cx + 1, cy - 5);
+      ctx.lineTo(cx - 1, cy - 5);
+      ctx.lineTo(cx + 2, cy - 2);
+      ctx.stroke();
     } else {
-      // 雙風車發電廠
-      drawIsoBlock(ctx, cx - 6, cy + 3, 14, 10, "#cbd5e1", "#94a3b8", "#64748b");
-      drawIsoWindmill(ctx, cx + 4, cy - 3, 32, angle, colors.utilities.tower, colors.utilities.blades);
+      // 未來反應爐
+      drawIsoCylinder(ctx, cx, cy, 14, 20, "#e2e8f0", "#94a3b8", "#64748b");
+      ctx.fillStyle = "rgba(168, 85, 247, 0.6)";
+      ctx.beginPath();
+      ctx.arc(cx, cy - 10, 6, 0, Math.PI * 2);
+      ctx.fill();
     }
   } else if (type === 'shopping') {
     if (value <= 0) {
@@ -2081,9 +2114,10 @@ function getBuildingStatusText(type, val) {
     return '🏰 頂級豪宅大樓';
   } else if (type === 'utilities') {
     if (val <= 0) return '🌸 尚未消費';
-    if (val < 1000) return '💧 簡易水源';
-    if (val < 3000) return '💨 風力發電';
-    return '⚡ 大型變電所';
+    if (val < 1000) return '💨 綠能風力發電';
+    if (val < 2000) return '☀️ 太陽能儲能與水塔';
+    if (val < 5000) return '🎛️ 現代水務與變電站';
+    return '⚡ 未來聚變反應爐';
   } else if (type === 'shopping') {
     if (val <= 0) return '🌸 尚未消費';
     if (val < 1500) return '📦 幾個紙箱';
@@ -2136,6 +2170,13 @@ function updateIslandLegend(cats, balance) {
   else if (cats.shopping < 3500) shoppingIcon = '🏪';
   else if (cats.shopping < 6000) shoppingIcon = '🏬';
   else shoppingIcon = '🏭';
+
+  let utilitiesIcon = '⚡';
+  if (cats.utilities <= 0) utilitiesIcon = '🌸';
+  else if (cats.utilities < 1000) utilitiesIcon = '💨';
+  else if (cats.utilities < 2000) utilitiesIcon = '☀️';
+  else if (cats.utilities < 5000) utilitiesIcon = '🎛️';
+  else utilitiesIcon = '⚡';
   
   const items = [
     { icon: castleIcon, name: '帳戶餘額', type: 'castle', val: balance, prefix: '目前水位: ' },
@@ -2144,7 +2185,7 @@ function updateIslandLegend(cats, balance) {
     { icon: travelIcon, name: '住宿與景點', type: 'travel', val: cats.travel, prefix: '本月支出: ' },
     { icon: '🚆', name: '交通出行', type: 'transport', val: cats.transport, prefix: '本月支出: ' },
     { icon: rentIcon, name: '房租支出', type: 'rent', val: cats.rent, prefix: '本月支出: ' },
-    { icon: '⚡', name: '水電瓦斯網路', type: 'utilities', val: cats.utilities, prefix: '本月支出: ' },
+    { icon: utilitiesIcon, name: '水電瓦斯網路', type: 'utilities', val: cats.utilities, prefix: '本月支出: ' },
     { icon: shoppingIcon, name: '網購消費', type: 'shopping', val: cats.shopping, prefix: '本月支出: ' },
     { icon: '🎈', name: '每月的愛', type: 'transfer', val: cats.transfer, prefix: '共同存入: ' }
   ];

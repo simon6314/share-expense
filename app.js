@@ -1605,7 +1605,7 @@ function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
         } else if (type === 'utilities') {
           if (value < 1000) {
             img = ASSETS.utilities_windmill;
-            size = 90;
+            size = 110;
           } else if (value < 2000) {
             img = ASSETS.utilities_solar_water;
             size = 110;

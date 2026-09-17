@@ -600,7 +600,7 @@ function renderCategoryDetail(category) {
 function renderMembers() {
   const people = ['精靈','小狐狸'];
   const prepaid = {'小狐狸':-6300};
-  const monthlyContrib = {'精靈':13000,'小狐狸':7500};
+  const monthlyContrib = {'精靈':32500,'小狐狸':18750};
   document.getElementById('memberGrid').innerHTML = people.map(p => {
     const expTotal = records.filter(r=>r.owner===p&&r.expense>0).reduce((s,r)=>s+r.expense,0);
     const count = records.filter(r=>r.owner===p&&r.expense>0).length;

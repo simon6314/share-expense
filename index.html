@@ -95,24 +95,34 @@
   <div class="member-grid" id="memberGrid"></div>
   <p class="section-title">進帳比例設定</p>
   <p style="font-size:12px;color:var(--text3);margin-bottom:8px">年收入與比例可直接修改，修改後只儲存在這台裝置的瀏覽器中。</p>
-  <div class="income-table-wrap">
-    <table>
-      <thead><tr><th>成員</th><th>年收入</th><th>計算方式</th><th>每月預期進帳</th></tr></thead>
-      <tbody>
-        <tr>
-          <td><span class="owner-badge badge-elf">🐎 精靈</span></td>
-          <td><input class="income-input" type="number" min="0" step="1" inputmode="numeric" data-person="精靈" aria-label="精靈年收入" placeholder="輸入年收入"></td>
-          <td class="rate-cell"><input class="rate-input" type="number" min="0" max="100" step="0.1" inputmode="decimal" data-person="精靈" aria-label="精靈進帳比例（%）"><span>% ÷ 14月</span></td>
-          <td class="amount-income" data-contrib="精靈">—</td>
-        </tr>
-        <tr>
-          <td><span class="owner-badge badge-fox">🦊 小狐狸</span></td>
-          <td><input class="income-input" type="number" min="0" step="1" inputmode="numeric" data-person="小狐狸" aria-label="小狐狸年收入" placeholder="輸入年收入"></td>
-          <td class="rate-cell"><input class="rate-input" type="number" min="0" max="100" step="0.1" inputmode="decimal" data-person="小狐狸" aria-label="小狐狸進帳比例（%）"><span>% ÷ 14月</span></td>
-          <td class="amount-income" data-contrib="小狐狸">—</td>
-        </tr>
-      </tbody>
-    </table>
+  <div class="income-cards">
+    <div class="income-card">
+      <div class="income-card-head"><span class="owner-badge badge-elf">🐎 精靈</span></div>
+      <label class="income-field"><span>年收入</span>
+        <input class="income-input" type="number" min="0" step="1" inputmode="numeric" data-person="精靈" data-field="annual" aria-label="精靈年收入"></label>
+      <label class="income-field"><span>進帳比例（%）</span>
+        <input class="rate-input" type="number" min="0" max="100" step="0.1" inputmode="decimal" data-person="精靈" data-field="rate" aria-label="精靈進帳比例"></label>
+      <label class="income-field"><span>分攤月數（÷ 月）</span>
+        <input class="months-input" type="number" min="1" max="24" step="1" inputmode="numeric" data-person="精靈" data-field="months" aria-label="精靈分攤月數"></label>
+      <div class="income-result">
+        <div class="income-formula" data-formula="精靈">—</div>
+        <div class="income-final"><span>每月預期進帳</span><strong data-contrib="精靈">—</strong></div>
+      </div>
+    </div>
+
+    <div class="income-card">
+      <div class="income-card-head"><span class="owner-badge badge-fox">🦊 小狐狸</span></div>
+      <label class="income-field"><span>年收入</span>
+        <input class="income-input" type="number" min="0" step="1" inputmode="numeric" data-person="小狐狸" data-field="annual" aria-label="小狐狸年收入"></label>
+      <label class="income-field"><span>進帳比例（%）</span>
+        <input class="rate-input" type="number" min="0" max="100" step="0.1" inputmode="decimal" data-person="小狐狸" data-field="rate" aria-label="小狐狸進帳比例"></label>
+      <label class="income-field"><span>分攤月數（÷ 月）</span>
+        <input class="months-input" type="number" min="1" max="24" step="1" inputmode="numeric" data-person="小狐狸" data-field="months" aria-label="小狐狸分攤月數"></label>
+      <div class="income-result">
+        <div class="income-formula" data-formula="小狐狸">—</div>
+        <div class="income-final"><span>每月預期進帳</span><strong data-contrib="小狐狸">—</strong></div>
+      </div>
+    </div>
   </div>
 </div>
 

@@ -263,9 +263,19 @@ tr:hover td { background: var(--bg); }
 /* ── INCOME INPUT ── */
 .income-input { width: 130px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text); }
 .income-input:focus { outline: 2px solid var(--text2); outline-offset: 1px; }
-.rate-cell { color: var(--text3); font-size: 12px; white-space: nowrap; }
-.rate-input { width: 70px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text); margin-right: 4px; }
 .rate-input:focus { outline: 2px solid var(--text2); outline-offset: 1px; }
+
+/* 進帳設定卡片：單欄排列，不需要橫向捲動 */
+.income-cards { display: grid; grid-template-columns: 1fr; gap: 12px; max-width: 100%; }
+.income-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.income-card-head { display: flex; align-items: center; }
+.income-field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text2); min-width: 0; }
+.income-field input { width: 100%; min-width: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); font-family: 'DM Mono', monospace; font-size: 15px; color: var(--text); }
+.income-result { margin-top: 4px; padding-top: 10px; border-top: 1px dashed var(--border); display: flex; flex-direction: column; gap: 6px; }
+.income-formula { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text3); word-break: break-all; }
+.income-final { display: flex; justify-content: space-between; align-items: center; }
+.income-final strong { font-family: 'DM Mono', monospace; font-size: 20px; color: var(--income); }
+.months-input, .rate-input, .income-input { -moz-appearance: textfield; }
 
 /* 鍵盤焦點可見性 */
 button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--text2); outline-offset: 2px; }

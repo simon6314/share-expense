@@ -611,68 +611,81 @@ function renderCategoryDetail(category) {
     ).join('') + `</div>`;
 }
 
-// 進帳設定：年收入與比例可在頁面修改，儲存在本機 localStorage；預設值如下
-const INCOME_KEY = 'shareExpense.income.v2';
+// 進帳設定：年收入、比例、分攤月數都可在頁面修改，儲存在本機 localStorage
+const INCOME_KEY = 'shareExpense.income.v3';
 const INCOME_PEOPLE = ['精靈','小狐狸'];
-const CONTRIB_MONTHS = 14;    // ÷14 個月
 const DEFAULT_INCOME = {
-  '精靈':   { annual: 1250000, rate: 37.5 },
-  '小狐狸': { annual: 700000,  rate: 37.5 },
+  '精靈':   { annual: 1250000, rate: 37.5, months: 14 },
+  '小狐狸': { annual: 700000,  rate: 37.5, months: 14 },
 };
 
 function loadIncomeStore() {
   try { return JSON.parse(localStorage.getItem(INCOME_KEY)) || {}; } catch(e) { return {}; }
 }
 
-// 取得某人目前生效的年收入與比例（有儲存值用儲存值，否則用預設值）
+// 取得某人目前生效的設定（有儲存值用儲存值，否則用預設值）
 function getIncomeSettings(person) {
   const saved = loadIncomeStore()[person] || {};
   const def = DEFAULT_INCOME[person];
   return {
     annual: Number.isFinite(saved.annual) ? saved.annual : def.annual,
     rate:   Number.isFinite(saved.rate)   ? saved.rate   : def.rate,
+    months: Number.isFinite(saved.months) ? saved.months : def.months,
   };
 }
 
+// 每月預期進帳 = 年收入 × 比例 ÷ 分攤月數
 function monthlyContribOf(person) {
   const s = getIncomeSettings(person);
-  return Math.round(s.annual * (s.rate / 100) / CONTRIB_MONTHS);
+  return Math.round(s.annual * (s.rate / 100) / s.months);
 }
 
 function refreshContribCells() {
   INCOME_PEOPLE.forEach(p => {
-    const cell = document.querySelector(`[data-contrib="${p}"]`);
-    if (cell) cell.textContent = '+' + fmt(monthlyContribOf(p));
+    const s = getIncomeSettings(p);
+    const result = document.querySelector(`[data-contrib="${p}"]`);
+    if (result) result.textContent = '+' + fmt(monthlyContribOf(p));
+    const formula = document.querySelector(`[data-formula="${p}"]`);
+    if (formula) {
+      formula.textContent = `${fmt(s.annual)} × ${s.rate}% ÷ ${s.months} 月`;
+    }
   });
 }
 
 function initIncomeTable() {
   INCOME_PEOPLE.forEach(p => {
-    const annualInp = document.querySelector(`.income-input[data-person="${p}"]`);
-    const rateInp = document.querySelector(`.rate-input[data-person="${p}"]`);
-    if (!annualInp || !rateInp) return;
+    const inputs = {
+      annual: document.querySelector(`.income-input[data-person="${p}"]`),
+      rate:   document.querySelector(`.rate-input[data-person="${p}"]`),
+      months: document.querySelector(`.months-input[data-person="${p}"]`),
+    };
+    if (!inputs.annual || !inputs.rate || !inputs.months) return;
 
     const s = getIncomeSettings(p);
-    annualInp.value = s.annual;
-    rateInp.value = s.rate;
+    inputs.annual.value = s.annual;
+    inputs.rate.value = s.rate;
+    inputs.months.value = s.months;
 
     const onChange = () => {
-      const a = parseFloat(annualInp.value);
-      const r = parseFloat(rateInp.value);
+      const def = DEFAULT_INCOME[p];
+      const a = parseFloat(inputs.annual.value);
+      const r = parseFloat(inputs.rate.value);
+      const m = parseInt(inputs.months.value, 10);
       const next = {
-        annual: Number.isFinite(a) && a >= 0 ? a : DEFAULT_INCOME[p].annual,
-        rate:   Number.isFinite(r) && r >= 0 && r <= 100 ? r : DEFAULT_INCOME[p].rate,
+        annual: Number.isFinite(a) && a >= 0 ? a : def.annual,
+        rate:   Number.isFinite(r) && r >= 0 && r <= 100 ? r : def.rate,
+        months: Number.isFinite(m) && m >= 1 && m <= 24 ? m : def.months,
       };
       const store = loadIncomeStore();
       store[p] = next;
       try { localStorage.setItem(INCOME_KEY, JSON.stringify(store)); } catch(e) {}
-      annualInp.value = next.annual;
-      rateInp.value = next.rate;
+      inputs.annual.value = next.annual;
+      inputs.rate.value = next.rate;
+      inputs.months.value = next.months;
       refreshContribCells();
       renderMembers();
     };
-    annualInp.addEventListener('change', onChange);
-    rateInp.addEventListener('change', onChange);
+    Object.values(inputs).forEach(inp => inp.addEventListener('change', onChange));
   });
   refreshContribCells();
 }

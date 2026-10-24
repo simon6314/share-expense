@@ -263,6 +263,9 @@ tr:hover td { background: var(--bg); }
 /* ── INCOME INPUT ── */
 .income-input { width: 130px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text); }
 .income-input:focus { outline: 2px solid var(--text2); outline-offset: 1px; }
+.rate-cell { color: var(--text3); font-size: 12px; white-space: nowrap; }
+.rate-input { width: 70px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text); margin-right: 4px; }
+.rate-input:focus { outline: 2px solid var(--text2); outline-offset: 1px; }
 
 /* 鍵盤焦點可見性 */
 button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--text2); outline-offset: 2px; }

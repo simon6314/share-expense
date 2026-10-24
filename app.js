@@ -611,43 +611,68 @@ function renderCategoryDetail(category) {
     ).join('') + `</div>`;
 }
 
-// 進帳比例：年收入由使用者輸入，存在本機 localStorage，不寫進原始碼
-const INCOME_KEY = 'shareExpense.annualIncome';
+// 進帳設定：年收入與比例可在頁面修改，儲存在本機 localStorage；預設值如下
+const INCOME_KEY = 'shareExpense.income.v2';
 const INCOME_PEOPLE = ['精靈','小狐狸'];
-const CONTRIB_RATE = 0.375;   // 37.5%
 const CONTRIB_MONTHS = 14;    // ÷14 個月
+const DEFAULT_INCOME = {
+  '精靈':   { annual: 1250000, rate: 37.5 },
+  '小狐狸': { annual: 700000,  rate: 37.5 },
+};
 
-function loadAnnualIncome() {
+function loadIncomeStore() {
   try { return JSON.parse(localStorage.getItem(INCOME_KEY)) || {}; } catch(e) { return {}; }
 }
 
+// 取得某人目前生效的年收入與比例（有儲存值用儲存值，否則用預設值）
+function getIncomeSettings(person) {
+  const saved = loadIncomeStore()[person] || {};
+  const def = DEFAULT_INCOME[person];
+  return {
+    annual: Number.isFinite(saved.annual) ? saved.annual : def.annual,
+    rate:   Number.isFinite(saved.rate)   ? saved.rate   : def.rate,
+  };
+}
+
 function monthlyContribOf(person) {
-  const annual = Number(loadAnnualIncome()[person]) || 0;
-  return Math.round(annual * CONTRIB_RATE / CONTRIB_MONTHS);
+  const s = getIncomeSettings(person);
+  return Math.round(s.annual * (s.rate / 100) / CONTRIB_MONTHS);
 }
 
 function refreshContribCells() {
   INCOME_PEOPLE.forEach(p => {
     const cell = document.querySelector(`[data-contrib="${p}"]`);
-    if (!cell) return;
-    const annual = Number(loadAnnualIncome()[p]) || 0;
-    cell.textContent = annual > 0 ? '+' + fmt(monthlyContribOf(p)) : '—';
+    if (cell) cell.textContent = '+' + fmt(monthlyContribOf(p));
   });
 }
 
 function initIncomeTable() {
-  const saved = loadAnnualIncome();
-  document.querySelectorAll('.income-input').forEach(inp => {
-    const p = inp.dataset.person;
-    if (saved[p] !== undefined) inp.value = saved[p];
-    inp.addEventListener('change', () => {
-      const data = loadAnnualIncome();
-      const v = parseFloat(inp.value);
-      if (Number.isFinite(v) && v >= 0) data[p] = v; else delete data[p];
-      try { localStorage.setItem(INCOME_KEY, JSON.stringify(data)); } catch(e) {}
+  INCOME_PEOPLE.forEach(p => {
+    const annualInp = document.querySelector(`.income-input[data-person="${p}"]`);
+    const rateInp = document.querySelector(`.rate-input[data-person="${p}"]`);
+    if (!annualInp || !rateInp) return;
+
+    const s = getIncomeSettings(p);
+    annualInp.value = s.annual;
+    rateInp.value = s.rate;
+
+    const onChange = () => {
+      const a = parseFloat(annualInp.value);
+      const r = parseFloat(rateInp.value);
+      const next = {
+        annual: Number.isFinite(a) && a >= 0 ? a : DEFAULT_INCOME[p].annual,
+        rate:   Number.isFinite(r) && r >= 0 && r <= 100 ? r : DEFAULT_INCOME[p].rate,
+      };
+      const store = loadIncomeStore();
+      store[p] = next;
+      try { localStorage.setItem(INCOME_KEY, JSON.stringify(store)); } catch(e) {}
+      annualInp.value = next.annual;
+      rateInp.value = next.rate;
       refreshContribCells();
       renderMembers();
-    });
+    };
+    annualInp.addEventListener('change', onChange);
+    rateInp.addEventListener('change', onChange);
   });
   refreshContribCells();
 }

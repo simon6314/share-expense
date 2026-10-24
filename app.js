@@ -220,6 +220,7 @@ async function addRecord(data) {
 async function updateTransfer(row, field, value) {
   setSyncStatus('loading', '更新中…');
   const rec = records.find(r => r.row === row);
+  let foxSync = null; // 需要同步到小狐狸「支出部分轉回」列的金額
   if (rec) {
     if (field === 'income') rec.income = parseFloat(value) || 0;
     else rec.expense = parseFloat(value) || 0;
@@ -240,11 +241,12 @@ async function updateTransfer(row, field, value) {
           const el = document.getElementById(id);
           if (el) { el.textContent = (foxResult >= 0 ? '+' : '') + foxResult.toLocaleString(); el.style.color = foxResult >= 0 ? 'var(--income)' : 'var(--expense)'; }
         });
-        await apiCall({ action: 'updateTransfer', sheet: currentSheet(), row: foxRec.row, field: 'income', value: result });
+        foxSync = { row: foxRec.row, value: result };
       }
     }
   }
   try {
+    if (foxSync) await apiCall({ action: 'updateTransfer', sheet: currentSheet(), row: foxSync.row, field: 'income', value: foxSync.value });
     await apiCall({ action: 'updateTransfer', sheet: currentSheet(), row, field, value: parseFloat(value) || 0 });
     setSyncStatus('ok', '已同步 · ' + new Date().toLocaleTimeString('zh-TW'));
     showToast('已更新 ✓');
@@ -259,32 +261,44 @@ async function updateTransfer(row, field, value) {
   } catch(e) {
     setSyncStatus('err', '更新失敗');
     showToast('更新失敗，請重試');
+    loadData(); // 以試算表的實際資料還原畫面，避免顯示與後端不一致
   }
 }
 
 async function deleteRecord(row) {
   if (!confirm('確定刪除這筆記錄？')) return;
+  const rec = records.find(r => r.row === row);
   setSyncStatus('loading', '刪除中…');
   try {
     await apiCall({ action: 'delete', sheet: currentSheet(), row });
-    showToast('已刪除');
     await loadData();
-  } catch(e) { setSyncStatus('err', '刪除失敗'); }
+    if (rec) {
+      // 保留刪除前的內容，讓使用者可以短時間內復原（以新增方式寫回）
+      const snapshot = { date: rec.date, owner: rec.owner, item: rec.item, income: rec.income || 0, expense: rec.expense || 0, note: rec.note || '' };
+      showToast('已刪除', { label: '復原', onClick: () => addRecord(snapshot) });
+    } else {
+      showToast('已刪除');
+    }
+  } catch(e) { setSyncStatus('err', '刪除失敗'); showToast('刪除失敗，請重試'); }
 }
 
 // ── RENDER ────────────────────────────────────────────────────
+// 所有來自試算表的文字在放進 innerHTML 前都要跳脫，避免 XSS
+function esc(v) {
+  return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 function fmt(n) { return '$' + Math.round(n).toLocaleString(); }
 const DAY_NAMES = ['日','一','二','三','四','五','六'];
 function formatDate(raw) {
   if (!raw) return '';
   const d = new Date(raw);
-  if (isNaN(d.getTime())) return String(raw);
+  if (isNaN(d.getTime())) return esc(raw);
   return d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0') + ' (' + DAY_NAMES[d.getDay()] + ')';
 }
 function formatDateShort(raw) {
   if (!raw) return '';
   const d = new Date(raw);
-  if (isNaN(d.getTime())) return String(raw);
+  if (isNaN(d.getTime())) return esc(raw);
   return String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0') + ' (' + DAY_NAMES[d.getDay()] + ')';
 }
 
@@ -392,16 +406,16 @@ function renderRecords() {
     const badge = isJoint
       ? `<span class="owner-badge" style="background:linear-gradient(135deg, var(--elf-bg) 0%, var(--fox-bg) 100%); color:var(--text); border:1px solid var(--border); font-weight:600">🐎 &amp; 🦊 共同</span>`
       : (r.owner && !isSummary
-        ? `<span class="owner-badge ${r.owner==='精靈'?'badge-elf':'badge-fox'}">${r.owner==='精靈'?'🐎':'🦊'} ${r.owner}</span>`
+        ? `<span class="owner-badge ${r.owner==='精靈'?'badge-elf':'badge-fox'}">${r.owner==='精靈'?'🐎':'🦊'} ${esc(r.owner)}</span>`
         : '<span style="color:var(--text3);font-size:14px">—</span>');
 
     if (isTransfer) {
       return `<tr style="background:var(--surface2)">
         <td style="font-family:'DM Mono',monospace;font-size:13px;color:var(--text2);white-space:nowrap">${formatDate(r.date)}</td>
         <td>${badge}</td>
-        <td style="font-size:15px;font-weight:500">${r.item}</td>
+        <td style="font-size:15px;font-weight:500">${esc(r.item)}</td>
         <td>${buildTransferCells(r, false)}</td>
-        <td><span class="note-text">${r.note||''}</span></td>
+        <td><span class="note-text">${esc(r.note||'')}</span></td>
         <td></td></tr>`;
     }
     if (isSummary) {
@@ -411,9 +425,9 @@ function renderRecords() {
       return `<tr style="background:var(--surface2)">
         <td style="font-family:'DM Mono',monospace;font-size:13px;color:var(--text2);white-space:nowrap">${formatDate(r.date)}</td>
         <td><span style="font-size:13px;color:var(--text3);font-weight:500">彙總</span></td>
-        <td style="font-size:15px;font-weight:500">${r.item}</td>
+        <td style="font-size:15px;font-weight:500">${esc(r.item)}</td>
         <td>${incAmt}${expAmt}${netAmt}</td>
-        <td><span class="note-text">${r.note||''}</span></td>
+        <td><span class="note-text">${esc(r.note||'')}</span></td>
         <td></td></tr>`;
     }
     const isPrepaid = r.note && r.note.includes('先付');
@@ -422,13 +436,13 @@ function renderRecords() {
       : r.expense > 0
       ? `<span class="amount-expense">-${fmt(r.expense)}</span>${isPrepaid?'<span style="font-size:12px;color:var(--text3);margin-left:4px">先付</span>':''}`
       : '';
-    const delBtn = r.item === '帳戶餘額' ? '' : `<button class="delete-btn" onclick="deleteRecord(${r.row})">✕</button>`;
+    const delBtn = r.item === '帳戶餘額' ? '' : `<button class="delete-btn" aria-label="刪除此筆記錄" onclick="deleteRecord(${r.row})">✕</button>`;
     return `<tr>
       <td style="font-family:'DM Mono',monospace;font-size:13px;color:var(--text2);white-space:nowrap">${formatDate(r.date)}</td>
       <td>${badge}</td>
-      <td style="font-size:15px">${r.item}</td>
+      <td style="font-size:15px">${esc(r.item)}</td>
       <td>${amt}</td>
-      <td><span class="note-text">${r.note||''}</span></td>
+      <td><span class="note-text">${esc(r.note||'')}</span></td>
       <td>${delBtn}</td></tr>`;
   }).join('');
 
@@ -442,7 +456,7 @@ function renderRecords() {
     const badgeHtml = isJoint
       ? `<span class="owner-badge" style="background:linear-gradient(135deg, var(--elf-bg) 0%, var(--fox-bg) 100%); color:var(--text); border:1px solid var(--border); font-weight:600">🐎 &amp; 🦊 共同</span>`
       : (r.owner
-        ? `<span class="owner-badge ${r.owner==='精靈'?'badge-elf':'badge-fox'}">${r.owner==='精靈'?'🐎':'🦊'} ${r.owner}</span>`
+        ? `<span class="owner-badge ${r.owner==='精靈'?'badge-elf':'badge-fox'}">${r.owner==='精靈'?'🐎':'🦊'} ${esc(r.owner)}</span>`
         : '');
 
     if (isTransfer) {
@@ -453,7 +467,7 @@ function renderRecords() {
         </div>
         <div class="record-card-mid">
           ${badgeHtml}
-          <span class="record-card-item" style="font-weight:600">${r.item}</span>
+          <span class="record-card-item" style="font-weight:600">${esc(r.item)}</span>
         </div>
         <div style="margin-top:10px; padding-top:8px; border-top:1px dashed var(--border)">
           ${buildTransferCells(r, true)}
@@ -470,7 +484,7 @@ function renderRecords() {
           <span class="record-card-date">${formatDateShort(r.date)}</span>
           <span style="font-size:13px;color:var(--text3)">彙總</span>
         </div>
-        <div class="record-card-item">${r.item}</div>
+        <div class="record-card-item">${esc(r.item)}</div>
         <div style="margin-top:6px">${incAmt}${expAmt}${net}</div>
       </div>`;
     }
@@ -480,7 +494,7 @@ function renderRecords() {
     const amtVal = r.income > 0 ? r.income : r.expense;
     const amtHtml = amtVal > 0 ? `<span style="color:${amtColor};font-weight:700;font-family:'DM Mono',monospace;font-size:18px">${amtSign}${fmt(amtVal)}</span>` : '';
 
-    const delBtn = r.item === '帳戶餘額' ? '' : `<button class="delete-btn" onclick="deleteRecord(${r.row})">✕</button>`;
+    const delBtn = r.item === '帳戶餘額' ? '' : `<button class="delete-btn" aria-label="刪除此筆記錄" onclick="deleteRecord(${r.row})">✕</button>`;
     return `<div class="record-card">
       <div class="record-card-top">
         <span class="record-card-date">${formatDateShort(r.date)}</span>
@@ -488,10 +502,10 @@ function renderRecords() {
       </div>
       <div class="record-card-mid">
         ${badgeHtml}
-        <span class="record-card-item">${r.item}</span>
+        <span class="record-card-item">${esc(r.item)}</span>
       </div>
       <div class="record-card-bottom">
-        <span class="record-card-note">${r.note||''}${isPrepaid?' · <span style="color:var(--text3)">先付</span>':''}</span>
+        <span class="record-card-note">${esc(r.note||'')}${isPrepaid?' · <span style="color:var(--text3)">先付</span>':''}</span>
         ${delBtn}
       </div>
     </div>`;
@@ -584,12 +598,12 @@ function renderCategoryDetail(category) {
                   border:1px solid var(--border)">
         <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <span class="owner-badge ${r.owner==='精靈'?'badge-elf':'badge-fox'}">${r.owner==='精靈'?'🐎':'🦊'} ${r.owner}</span>
-            <span style="font-size:15px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.item}</span>
+            <span class="owner-badge ${r.owner==='精靈'?'badge-elf':'badge-fox'}">${r.owner==='精靈'?'🐎':'🦊'} ${esc(r.owner)}</span>
+            <span style="font-size:15px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.item)}</span>
           </div>
           <div style="display:flex;gap:8px;align-items:center">
             <span style="font-size:13px;color:var(--text3);font-family:'DM Mono',monospace">${formatDateShort(r.date)}</span>
-            ${r.note ? `<span style="font-size:13px;color:var(--text3)">· ${r.note}</span>` : ''}
+            ${r.note ? `<span style="font-size:13px;color:var(--text3)">· ${esc(r.note)}</span>` : ''}
           </div>
         </div>
         <span class="amount-expense" style="margin-left:10px;flex-shrink:0">-${fmt(r.expense)}</span>
@@ -597,10 +611,50 @@ function renderCategoryDetail(category) {
     ).join('') + `</div>`;
 }
 
+// 進帳比例：年收入由使用者輸入，存在本機 localStorage，不寫進原始碼
+const INCOME_KEY = 'shareExpense.annualIncome';
+const INCOME_PEOPLE = ['精靈','小狐狸'];
+const CONTRIB_RATE = 0.375;   // 37.5%
+const CONTRIB_MONTHS = 14;    // ÷14 個月
+
+function loadAnnualIncome() {
+  try { return JSON.parse(localStorage.getItem(INCOME_KEY)) || {}; } catch(e) { return {}; }
+}
+
+function monthlyContribOf(person) {
+  const annual = Number(loadAnnualIncome()[person]) || 0;
+  return Math.round(annual * CONTRIB_RATE / CONTRIB_MONTHS);
+}
+
+function refreshContribCells() {
+  INCOME_PEOPLE.forEach(p => {
+    const cell = document.querySelector(`[data-contrib="${p}"]`);
+    if (!cell) return;
+    const annual = Number(loadAnnualIncome()[p]) || 0;
+    cell.textContent = annual > 0 ? '+' + fmt(monthlyContribOf(p)) : '—';
+  });
+}
+
+function initIncomeTable() {
+  const saved = loadAnnualIncome();
+  document.querySelectorAll('.income-input').forEach(inp => {
+    const p = inp.dataset.person;
+    if (saved[p] !== undefined) inp.value = saved[p];
+    inp.addEventListener('change', () => {
+      const data = loadAnnualIncome();
+      const v = parseFloat(inp.value);
+      if (Number.isFinite(v) && v >= 0) data[p] = v; else delete data[p];
+      try { localStorage.setItem(INCOME_KEY, JSON.stringify(data)); } catch(e) {}
+      refreshContribCells();
+      renderMembers();
+    });
+  });
+  refreshContribCells();
+}
+
 function renderMembers() {
   const people = ['精靈','小狐狸'];
   const prepaid = {'小狐狸':-6300};
-  const monthlyContrib = {'精靈':32500,'小狐狸':18750};
   document.getElementById('memberGrid').innerHTML = people.map(p => {
     const expTotal = records.filter(r=>r.owner===p&&r.expense>0).reduce((s,r)=>s+r.expense,0);
     const count = records.filter(r=>r.owner===p&&r.expense>0).length;
@@ -608,7 +662,7 @@ function renderMembers() {
     const emoji = p==='精靈'?'🐎':'🦊';
     return `<div class="member-card">
       <div class="member-name">${emoji} ${p}</div>
-      <div class="member-stat"><span class="member-stat-label">每月進帳</span><span class="member-stat-value" style="color:var(--income)">+${fmt(monthlyContrib[p])}</span></div>
+      <div class="member-stat"><span class="member-stat-label">每月進帳</span><span class="member-stat-value" style="color:var(--income)">+${fmt(monthlyContribOf(p))}</span></div>
       ${prep<0?`<div class="member-stat"><span class="member-stat-label">先付款項</span><span class="member-stat-value" style="color:var(--expense)">-${fmt(Math.abs(prep))}</span></div>`:''}
       <div class="member-stat"><span class="member-stat-label">支出筆數</span><span class="member-stat-value">${count} 筆</span></div>
       <div class="member-stat"><span class="member-stat-label">支出合計</span><span class="member-stat-value" style="color:var(--expense)">-${fmt(expTotal)}</span></div>
@@ -736,8 +790,8 @@ function openModal() {
   const dd = String(today.getDate()).padStart(2,'0');
   document.getElementById('overlayContainer').innerHTML = `
     <div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
-      <div class="modal">
-        <div class="modal-header"><span class="modal-title">新增記錄</span><button class="modal-close" onclick="closeModal()">×</button></div>
+      <div class="modal" role="dialog" aria-modal="true" aria-label="新增記錄">
+        <div class="modal-header"><span class="modal-title">新增記錄</span><button class="modal-close" aria-label="關閉" onclick="closeModal()">×</button></div>
         <div class="amount-toggle">
           <button class="toggle-btn" id="toggleExpense" onclick="setType('expense')" style="background:var(--fox-bg);color:var(--expense)">支出 −</button>
           <button class="toggle-btn" id="toggleIncome" onclick="setType('income')">收入 ＋</button>
@@ -758,6 +812,7 @@ function openModal() {
         </div>
       </div>
     </div>`;
+  document.getElementById('f-item').focus();
 }
 
 function setType(type) {
@@ -768,6 +823,16 @@ function setType(type) {
 
 function closeModal() { document.getElementById('overlayContainer').innerHTML=''; }
 
+// 接受 MM/DD 或 YYYY/MM/DD，並檢查月份與日期範圍
+function isValidDateInput(s) {
+  const m = s.match(/^(?:(\d{4})\/)?(\d{1,2})\/(\d{1,2})$/);
+  if (!m) return false;
+  const month = parseInt(m[2], 10), day = parseInt(m[3], 10);
+  if (month < 1 || month > 12 || day < 1) return false;
+  const year = m[1] ? parseInt(m[1], 10) : 2024; // 只檢查日數上限，閏年以 2024 計
+  return day <= new Date(year, month, 0).getDate();
+}
+
 async function submitRecord() {
   const date = document.getElementById('f-date').value.trim();
   const owner = document.getElementById('f-owner').value;
@@ -775,17 +840,28 @@ async function submitRecord() {
   const amount = parseFloat(document.getElementById('f-amount').value)||0;
   const note = document.getElementById('f-note').value.trim();
   if (!date||!item||amount<=0) { showToast('請填寫日期、項目和金額'); return; }
+  if (!isValidDateInput(date)) { showToast('日期格式請用 MM/DD（例如 10/24）'); return; }
   const btn = document.getElementById('saveBtn');
   btn.disabled=true; btn.textContent='儲存中…';
   await addRecord({ date, owner, item, income: amountType==='income'?amount:0, expense: amountType==='expense'?amount:0, note });
   closeModal();
 }
 
-function showToast(msg) {
+function showToast(msg, action) {
   const t = document.createElement('div');
-  t.className='toast'; t.textContent=msg;
+  t.className = 'toast';
+  const text = document.createElement('span');
+  text.textContent = msg;
+  t.appendChild(text);
+  if (action) {
+    const btn = document.createElement('button');
+    btn.className = 'toast-action';
+    btn.textContent = action.label;
+    btn.onclick = () => { t.remove(); action.onClick(); };
+    t.appendChild(btn);
+  }
   document.body.appendChild(t);
-  setTimeout(()=>t.remove(),2200);
+  setTimeout(() => t.remove(), action ? 5000 : 2200);
 }
 
 function sheetNameToLabel(name) {
@@ -815,7 +891,13 @@ async function initSheets() {
 
 // ── INIT ─────────────────────────────────────────────────────
 applyMonthTheme(getAutoMonth());
+initIncomeTable();
 initSheets();
+
+// 按 Esc 關閉彈出視窗
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeModal(); closeSeasonModal(); }
+});
 preloadAssets(() => {
   const islandTab = document.getElementById('tab-island');
   if (islandTab && islandTab.style.display !== 'none') {
@@ -824,11 +906,6 @@ preloadAssets(() => {
 });
 
 // ── 視覺小島 (Visual Island) 繪圖引擎 ──────────────────────────
-
-// 自動對白底圖檔進行 flood-fill 去背 (Chroma keying)
-function makeBackgroundTransparent(imgEl, callback) {
-  callback(imgEl);
-}
 
 function preloadAssets(callback) {
   let loadedCount = 0;
@@ -839,14 +916,12 @@ function preloadAssets(callback) {
     const img = new Image();
     img.src = ASSET_FILES[key];
     img.onload = () => {
-      makeBackgroundTransparent(img, (processedImg) => {
-        ASSETS[key] = processedImg;
-        loadedCount++;
-        if (loadedCount === total) {
-          assetsLoaded = true;
-          if (callback) callback();
-        }
-      });
+      ASSETS[key] = img;
+      loadedCount++;
+      if (loadedCount === total) {
+        assetsLoaded = true;
+        if (callback) callback();
+      }
     };
     img.onerror = () => {
       console.warn("Failed to load asset: " + key);

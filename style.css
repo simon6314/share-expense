@@ -258,6 +258,14 @@ tr:hover td { background: var(--bg); }
 /* ── TOAST ── */
 .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--text); color: #fff; padding: 12px 24px; border-radius: 30px; font-size: 14px; z-index: 999; animation: toastIn 0.2s ease; white-space: nowrap; }
 @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(8px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+.toast-action { margin-left: 14px; background: none; border: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 0; }
+
+/* ── INCOME INPUT ── */
+.income-input { width: 130px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text); }
+.income-input:focus { outline: 2px solid var(--text2); outline-offset: 1px; }
+
+/* 鍵盤焦點可見性 */
+button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--text2); outline-offset: 2px; }
 
 /* ── RESPONSIVE ── */
 .mobile-only { display: none; }

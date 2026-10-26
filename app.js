@@ -522,7 +522,7 @@ function categorize(item) {
   if (/電費|電力|台電/.test(item)) return '電費';
   if (/水費|自來水/.test(item)) return '水費';
   if (/瓦斯|天然氣/.test(item)) return '瓦斯費';
-  if (/網路費|寬頻|第四台|有線電視|MOD/.test(item)) return '網路與第四台';
+  if (/網路費|寬頻|第四台|有線電視|MOD|Google AI|AI Pro|訂閱/i.test(item)) return '網路與第四台';
   if (/管理費|社區管理/.test(item)) return '社區管理費';
   if (/修繕|水電工/.test(item)) return '水電雜支';
   if (/每月的愛/.test(item)) return '固定轉帳';

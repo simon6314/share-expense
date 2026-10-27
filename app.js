@@ -87,6 +87,19 @@ function getAutoMonth() {
   return new Date().getMonth() + 1;
 }
 
+// 每月的霓虹強調色：[精靈色, 小狐狸色]，搭配深色底使用
+const NEON_ACCENTS = {
+  1: ['#ff3b5c', '#ffc53d'], 2: ['#818cf8', '#c084fc'], 3: ['#f472b6', '#fb7185'],
+  4: ['#34d399', '#a3e635'], 5: ['#60a5fa', '#38bdf8'], 6: ['#22d3ee', '#2dd4bf'],
+  7: ['#fbbf24', '#fb923c'], 8: ['#a78bfa', '#e879f9'], 9: ['#facc15', '#2dd4bf'],
+  10: ['#fb923c', '#f43f5e'], 11: ['#eab308', '#d97706'], 12: ['#4ade80', '#f87171'],
+};
+
+function hexToRgba(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+}
+
 function applyMonthTheme(m) {
   const t = MONTH_THEMES[m];
   if (!t) return;
@@ -98,14 +111,19 @@ function applyMonthTheme(m) {
   
   // 直接將 CSS 變數設定在 document.body.style 上 (最高權限的 Inline Style)
   const target = document.body;
-  target.style.setProperty('--bg', '#fbfaf8');
-  target.style.setProperty('--season-bg', t.bg);
-  target.style.setProperty('--elf', t.elf);
-  target.style.setProperty('--elf-bg', t.elfBg);
-  target.style.setProperty('--fox', t.fox);
-  target.style.setProperty('--fox-bg', t.foxBg);
-  target.style.setProperty('--income', t.elf);
-  target.style.setProperty('--expense', t.fox);
+  const [elf, fox] = NEON_ACCENTS[m];
+  target.style.setProperty('--bg', '#070a12');
+  target.style.setProperty('--season-bg',
+    `radial-gradient(1000px 600px at 0% -10%, ${hexToRgba(elf, 0.22)}, transparent 60%), ` +
+    `radial-gradient(900px 700px at 110% 110%, ${hexToRgba(fox, 0.18)}, transparent 60%), #070a12`);
+  target.style.setProperty('--elf', elf);
+  target.style.setProperty('--elf-bg', hexToRgba(elf, 0.12));
+  target.style.setProperty('--fox', fox);
+  target.style.setProperty('--fox-bg', hexToRgba(fox, 0.12));
+  target.style.setProperty('--income', elf);
+  target.style.setProperty('--expense', fox);
+  target.style.setProperty('--btn', `linear-gradient(135deg, ${elf}, ${fox})`);
+  target.style.setProperty('--btn-text', '#070a12');
   
   spawnParticles(t.particles);
 }
@@ -1012,6 +1030,11 @@ async function initSheets() {
 
 // ── INIT ─────────────────────────────────────────────────────
 applyMonthTheme(getAutoMonth());
+// 圖表文字與格線配合深色底
+if (window.Chart) {
+  Chart.defaults.color = '#94a3b8';
+  Chart.defaults.borderColor = 'rgba(148,163,184,0.12)';
+}
 initIncomeTable();
 initSheets();
 

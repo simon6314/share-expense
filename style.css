@@ -1,12 +1,14 @@
 /* ── 季節主題 ── */
+/* 深色科技底：每月的霓虹強調色由 applyMonthTheme 設定在 body 上 */
 :root {
-  --bg: #f7f5f0; --surface: #fff; --surface2: #f0ede6; --border: #e2ddd5;
-  --text: #1a1814; --text2: #6b6560; --text3: #9e9890;
-  --elf: #2d7a5f; --elf-bg: #e8f5ef; --fox: #c45a2a; --fox-bg: #fdf0e8;
-  --income: #2d7a5f; --expense: #c45a2a;
-  --accent: #1a1814; --radius: 12px; --radius-sm: 8px;
+  --bg: #070a12; --surface: rgba(16,22,36,0.78); --surface2: rgba(28,36,56,0.7); --border: rgba(148,163,184,0.16);
+  --text: #e6edf7; --text2: #94a3b8; --text3: #64748b;
+  --elf: #22d3ee; --elf-bg: rgba(34,211,238,0.12); --fox: #f472b6; --fox-bg: rgba(244,114,182,0.12);
+  --income: #34d399; --expense: #fb7185;
+  --accent: #e6edf7; --radius: 12px; --radius-sm: 8px;
+  --btn: linear-gradient(135deg, #22d3ee, #f472b6); --btn-text: #070a12;
   --season-emoji: "🌸"; --season-name: "春・櫻花季";
-  --season-bg: linear-gradient(135deg, #fce4ec 0%, #f8bbd9 50%, #ffeeff 100%);
+  --season-bg: #070a12;
   --season-particle: "🌸";
 }
 [data-season="spring"] {
@@ -100,7 +102,7 @@ body { font-family: 'Noto Sans TC', sans-serif; font-size: 15px; background: var
   max-width: 130px;
 }
 .btn-add {
-  background: var(--text); color: #fff; border: none; border-radius: var(--radius-sm);
+  background: var(--btn); color: var(--btn-text); border: none; border-radius: var(--radius-sm);
   padding: 8px 14px; font-size: 15px; font-family: 'Noto Sans TC', sans-serif;
   font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px;
   white-space: nowrap; transition: opacity 0.15s;
@@ -236,7 +238,7 @@ tr:hover td { background: var(--bg); }
 .toggle-btn { padding: 12px; font-size: 15px; font-family: 'Noto Sans TC', sans-serif; border: none; background: var(--bg); color: var(--text2); cursor: pointer; font-weight: 500; }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
 .btn-cancel { padding: 12px 18px; font-size: 15px; font-family: 'Noto Sans TC', sans-serif; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text2); cursor: pointer; }
-.btn-save { padding: 12px 20px; font-size: 15px; font-family: 'Noto Sans TC', sans-serif; font-weight: 600; border: none; border-radius: var(--radius-sm); background: var(--text); color: #fff; cursor: pointer; transition: opacity 0.15s; }
+.btn-save { padding: 12px 20px; font-size: 15px; font-family: 'Noto Sans TC', sans-serif; font-weight: 600; border: none; border-radius: var(--radius-sm); background: var(--btn); color: var(--btn-text); cursor: pointer; transition: opacity 0.15s; }
 .btn-save:hover { opacity: 0.8; }
 .btn-save:disabled { opacity: 0.4; cursor: not-allowed; }
 
@@ -252,11 +254,11 @@ tr:hover td { background: var(--bg); }
 .season-auto { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; font-family: 'Noto Sans TC', sans-serif; background: var(--bg); color: var(--text); cursor: pointer; margin-bottom: 12px; font-weight: 500; transition: all 0.2s ease; }
 .season-auto:hover { border-color: var(--text2); }
 .season-auto.active { background: var(--surface2); border-color: var(--text); font-weight: 600; box-shadow: inset 0 0 0 1px var(--text); }
-.season-close { width: 100%; padding: 12px; border: none; border-radius: var(--radius-sm); font-size: 14px; font-family: 'Noto Sans TC', sans-serif; background: var(--text); color: #fff; cursor: pointer; font-weight: 600; margin-top: 12px; transition: opacity 0.15s ease; }
+.season-close { width: 100%; padding: 12px; border: none; border-radius: var(--radius-sm); font-size: 14px; font-family: 'Noto Sans TC', sans-serif; background: var(--btn); color: var(--btn-text); cursor: pointer; font-weight: 600; margin-top: 12px; transition: opacity 0.15s ease; }
 .season-close:hover { opacity: 0.85; }
 
 /* ── TOAST ── */
-.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--text); color: #fff; padding: 12px 24px; border-radius: 30px; font-size: 14px; z-index: 999; animation: toastIn 0.2s ease; white-space: nowrap; }
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--btn); color: var(--btn-text); padding: 12px 24px; border-radius: 30px; font-size: 14px; z-index: 999; animation: toastIn 0.2s ease; white-space: nowrap; }
 @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(8px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
 .toast-action { margin-left: 14px; background: none; border: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 0; }
 
@@ -266,6 +268,35 @@ tr:hover td { background: var(--bg); }
 .rate-input:focus { outline: 2px solid var(--text2); outline-offset: 1px; }
 .edit-btn { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; cursor: pointer; color: var(--text3); font-size: 14px; transition: all 0.15s; }
 .edit-btn:hover { color: var(--text); border-color: var(--text2); }
+
+/* ── 深色科技風：玻璃卡片、霓虹光暈、背景網格 ── */
+body::before {
+  content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(148,163,184,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148,163,184,0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(ellipse at center, #000 30%, transparent 85%);
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 30%, transparent 85%);
+}
+.header, .card, .income-card, .member-card, .record-card, .table-wrap, .income-table-wrap, .chart-wrap, #category-detail {
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+}
+.card, .income-card, .member-card, .record-card {
+  border: 1px solid var(--border);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 10px 30px -12px rgba(0,0,0,0.6);
+  transition: box-shadow .25s ease, border-color .25s ease;
+}
+.card:hover, .income-card:hover, .member-card:hover, .record-card:hover {
+  border-color: var(--elf);
+  box-shadow: 0 0 0 1px var(--elf-bg), 0 0 28px -4px var(--elf-bg), 0 10px 30px -12px rgba(0,0,0,0.6);
+}
+.card-value { text-shadow: 0 0 18px var(--elf-bg); }
+.card-value.expense { text-shadow: 0 0 18px var(--fox-bg); }
+.income-final strong { text-shadow: 0 0 16px var(--elf-bg); }
+.tab.active { color: var(--elf); text-shadow: 0 0 12px var(--elf-bg); }
+.btn-add, .btn-save, .toast { box-shadow: 0 0 22px -6px var(--elf); }
 
 /* 進帳設定卡片：單欄排列，不需要橫向捲動 */
 .income-cards { display: grid; grid-template-columns: 1fr; gap: 12px; max-width: 100%; }

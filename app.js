@@ -111,19 +111,22 @@ function applyMonthTheme(m) {
   
   // 直接將 CSS 變數設定在 document.body.style 上 (最高權限的 Inline Style)
   const target = document.body;
-  const [elf, fox] = NEON_ACCENTS[m];
-  target.style.setProperty('--bg', '#070a12');
+  const [glowA, glowB] = NEON_ACCENTS[m]; // 霓虹色：光暈與漸層
+  target.style.setProperty('--bg', '#f4f7fb');
   target.style.setProperty('--season-bg',
-    `radial-gradient(1000px 600px at 0% -10%, ${hexToRgba(elf, 0.22)}, transparent 60%), ` +
-    `radial-gradient(900px 700px at 110% 110%, ${hexToRgba(fox, 0.18)}, transparent 60%), #070a12`);
-  target.style.setProperty('--elf', elf);
-  target.style.setProperty('--elf-bg', hexToRgba(elf, 0.12));
-  target.style.setProperty('--fox', fox);
-  target.style.setProperty('--fox-bg', hexToRgba(fox, 0.12));
-  target.style.setProperty('--income', elf);
-  target.style.setProperty('--expense', fox);
-  target.style.setProperty('--btn', `linear-gradient(135deg, ${elf}, ${fox})`);
-  target.style.setProperty('--btn-text', '#070a12');
+    `radial-gradient(1000px 600px at 0% -10%, ${hexToRgba(glowA, 0.18)}, transparent 60%), ` +
+    `radial-gradient(900px 700px at 110% 110%, ${hexToRgba(glowB, 0.14)}, transparent 60%), #f4f7fb`);
+  // 文字與數字使用較深的月份色，確保在淺色底上清楚
+  target.style.setProperty('--elf', t.elf);
+  target.style.setProperty('--elf-bg', hexToRgba(glowA, 0.12));
+  target.style.setProperty('--fox', t.fox);
+  target.style.setProperty('--fox-bg', hexToRgba(glowB, 0.12));
+  target.style.setProperty('--income', t.elf);
+  target.style.setProperty('--expense', t.fox);
+  target.style.setProperty('--glow-elf', glowA);
+  target.style.setProperty('--glow-fox', glowB);
+  target.style.setProperty('--btn', `linear-gradient(135deg, ${glowA}, ${glowB})`);
+  target.style.setProperty('--btn-text', '#0b1220');
   
   spawnParticles(t.particles);
 }
@@ -1032,8 +1035,8 @@ async function initSheets() {
 applyMonthTheme(getAutoMonth());
 // 圖表文字與格線配合深色底
 if (window.Chart) {
-  Chart.defaults.color = '#94a3b8';
-  Chart.defaults.borderColor = 'rgba(148,163,184,0.12)';
+  Chart.defaults.color = '#475569';
+  Chart.defaults.borderColor = 'rgba(100,116,139,0.18)';
 }
 initIncomeTable();
 initSheets();

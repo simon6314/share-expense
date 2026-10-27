@@ -1,14 +1,15 @@
 /* ── 季節主題 ── */
-/* 深色科技底：每月的霓虹強調色由 applyMonthTheme 設定在 body 上 */
+/* 淺色底的科技風：文字色取自月份主題，霓虹色用於光暈與漸層 */
 :root {
-  --bg: #070a12; --surface: rgba(16,22,36,0.78); --surface2: rgba(28,36,56,0.7); --border: rgba(148,163,184,0.16);
-  --text: #e6edf7; --text2: #94a3b8; --text3: #64748b;
-  --elf: #22d3ee; --elf-bg: rgba(34,211,238,0.12); --fox: #f472b6; --fox-bg: rgba(244,114,182,0.12);
-  --income: #34d399; --expense: #fb7185;
-  --accent: #e6edf7; --radius: 12px; --radius-sm: 8px;
-  --btn: linear-gradient(135deg, #22d3ee, #f472b6); --btn-text: #070a12;
+  --bg: #f4f7fb; --surface: rgba(255,255,255,0.72); --surface2: rgba(240,244,250,0.85); --border: rgba(100,116,139,0.22);
+  --text: #0f172a; --text2: #475569; --text3: #64748b;
+  --elf: #0e7490; --elf-bg: rgba(34,211,238,0.12); --fox: #be185d; --fox-bg: rgba(244,114,182,0.12);
+  --income: #0e7490; --expense: #be185d;
+  --glow-elf: #22d3ee; --glow-fox: #f472b6;
+  --accent: #0f172a; --radius: 12px; --radius-sm: 8px;
+  --btn: linear-gradient(135deg, #22d3ee, #f472b6); --btn-text: #0b1220;
   --season-emoji: "🌸"; --season-name: "春・櫻花季";
-  --season-bg: #070a12;
+  --season-bg: #f4f7fb;
   --season-particle: "🌸";
 }
 [data-season="spring"] {
@@ -269,15 +270,19 @@ tr:hover td { background: var(--bg); }
 .edit-btn { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; cursor: pointer; color: var(--text3); font-size: 14px; transition: all 0.15s; }
 .edit-btn:hover { color: var(--text); border-color: var(--text2); }
 
-/* ── 深色科技風：玻璃卡片、霓虹光暈、背景網格 ── */
+/* ── 科技風：玻璃卡片、霓虹光暈、網格背景與頂部漸層線 ── */
 body::before {
   content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background-image:
-    linear-gradient(rgba(148,163,184,0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148,163,184,0.05) 1px, transparent 1px);
+    linear-gradient(rgba(15,23,42,0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15,23,42,0.045) 1px, transparent 1px);
   background-size: 40px 40px;
   mask-image: radial-gradient(ellipse at center, #000 30%, transparent 85%);
   -webkit-mask-image: radial-gradient(ellipse at center, #000 30%, transparent 85%);
+}
+.header::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; pointer-events: none;
+  background: linear-gradient(90deg, var(--glow-elf), var(--glow-fox)); opacity: .85;
 }
 .header, .card, .income-card, .member-card, .record-card, .table-wrap, .income-table-wrap, .chart-wrap, #category-detail {
   backdrop-filter: blur(14px) saturate(140%);
@@ -285,18 +290,17 @@ body::before {
 }
 .card, .income-card, .member-card, .record-card {
   border: 1px solid var(--border);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 10px 30px -12px rgba(0,0,0,0.6);
+  box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 12px 28px -18px rgba(15,23,42,0.35);
   transition: box-shadow .25s ease, border-color .25s ease;
 }
 .card:hover, .income-card:hover, .member-card:hover, .record-card:hover {
-  border-color: var(--elf);
-  box-shadow: 0 0 0 1px var(--elf-bg), 0 0 28px -4px var(--elf-bg), 0 10px 30px -12px rgba(0,0,0,0.6);
+  border-color: color-mix(in srgb, var(--glow-elf) 60%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--glow-elf) 40%, transparent),
+              0 0 26px -6px color-mix(in srgb, var(--glow-elf) 55%, transparent),
+              0 12px 28px -18px rgba(15,23,42,0.35);
 }
-.card-value { text-shadow: 0 0 18px var(--elf-bg); }
-.card-value.expense { text-shadow: 0 0 18px var(--fox-bg); }
-.income-final strong { text-shadow: 0 0 16px var(--elf-bg); }
-.tab.active { color: var(--elf); text-shadow: 0 0 12px var(--elf-bg); }
-.btn-add, .btn-save, .toast { box-shadow: 0 0 22px -6px var(--elf); }
+.tab.active { color: var(--elf); }
+.btn-add, .btn-save, .toast { box-shadow: 0 6px 18px -8px var(--glow-elf); }
 
 /* 進帳設定卡片：單欄排列，不需要橫向捲動 */
 .income-cards { display: grid; grid-template-columns: 1fr; gap: 12px; max-width: 100%; }

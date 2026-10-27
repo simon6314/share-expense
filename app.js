@@ -183,6 +183,7 @@ async function loadData() {
   document.getElementById('recordCards').innerHTML = loadHTML;
   setSyncStatus('loading', '同步中…');
   try {
+    loadIncomeSettings(); // 同步試算表的進帳設定（不等待）
     const data = await apiCall({ action: 'getAll', sheet: currentSheet() });
     if (data.error) throw new Error(data.error);
     records = data.records || [];
@@ -214,6 +215,24 @@ async function addRecord(data) {
   } catch(e) {
     setSyncStatus('err', '儲存失敗');
     showToast('儲存失敗，請重試');
+  }
+}
+
+// 編輯既有記錄：以列號寫入，並帶入原本的項目名稱讓後端確認是同一筆
+async function updateRecordApi(rec, data) {
+  setSyncStatus('loading', '儲存中…');
+  try {
+    const res = await apiCall({
+      action: 'updateRecord', sheet: currentSheet(), row: rec.row,
+      data: JSON.stringify({ ...data, expectedItem: rec.item })
+    });
+    if (res.error) throw new Error(res.message || res.error);
+    showToast('已更新 ✓');
+    await loadData();
+  } catch(e) {
+    setSyncStatus('err', '儲存失敗');
+    showToast(e.message || '儲存失敗，請重試');
+    loadData(); // 以試算表的實際資料還原畫面
   }
 }
 
@@ -436,7 +455,7 @@ function renderRecords() {
       : r.expense > 0
       ? `<span class="amount-expense">-${fmt(r.expense)}</span>${isPrepaid?'<span style="font-size:12px;color:var(--text3);margin-left:4px">先付</span>':''}`
       : '';
-    const delBtn = r.item === '帳戶餘額' ? '' : `<button class="delete-btn" aria-label="刪除此筆記錄" onclick="deleteRecord(${r.row})">✕</button>`;
+    const delBtn = r.item === '帳戶餘額' ? '' : `<button class="edit-btn" aria-label="編輯此筆記錄" onclick="editRecordByRow(${r.row})">✎</button> <button class="delete-btn" aria-label="刪除此筆記錄" onclick="deleteRecord(${r.row})">✕</button>`;
     return `<tr>
       <td style="font-family:'DM Mono',monospace;font-size:13px;color:var(--text2);white-space:nowrap">${formatDate(r.date)}</td>
       <td>${badge}</td>
@@ -494,7 +513,7 @@ function renderRecords() {
     const amtVal = r.income > 0 ? r.income : r.expense;
     const amtHtml = amtVal > 0 ? `<span style="color:${amtColor};font-weight:700;font-family:'DM Mono',monospace;font-size:18px">${amtSign}${fmt(amtVal)}</span>` : '';
 
-    const delBtn = r.item === '帳戶餘額' ? '' : `<button class="delete-btn" aria-label="刪除此筆記錄" onclick="deleteRecord(${r.row})">✕</button>`;
+    const delBtn = r.item === '帳戶餘額' ? '' : `<button class="edit-btn" aria-label="編輯此筆記錄" onclick="editRecordByRow(${r.row})">✎</button> <button class="delete-btn" aria-label="刪除此筆記錄" onclick="deleteRecord(${r.row})">✕</button>`;
     return `<div class="record-card">
       <div class="record-card-top">
         <span class="record-card-date">${formatDateShort(r.date)}</span>
@@ -611,26 +630,23 @@ function renderCategoryDetail(category) {
     ).join('') + `</div>`;
 }
 
-// 進帳設定：年收入、比例、分攤月數都可在頁面修改，儲存在本機 localStorage
-const INCOME_KEY = 'shareExpense.income.v3';
+// 進帳設定：年收入、比例、分攤月數儲存在試算表的「設定」工作表，網頁讀寫同一份資料
 const INCOME_PEOPLE = ['精靈','小狐狸'];
+// 只在還沒讀到試算表資料、或無法連線時使用的備用值
 const DEFAULT_INCOME = {
   '精靈':   { annual: 1250000, rate: 37.5, months: 14 },
   '小狐狸': { annual: 700000,  rate: 37.5, months: 14 },
 };
+let incomeSettings = {}; // 從試算表讀到的設定
 
-function loadIncomeStore() {
-  try { return JSON.parse(localStorage.getItem(INCOME_KEY)) || {}; } catch(e) { return {}; }
-}
-
-// 取得某人目前生效的設定（有儲存值用儲存值，否則用預設值）
+// 取得某人目前生效的設定（試算表的值，沒有則用備用值）
 function getIncomeSettings(person) {
-  const saved = loadIncomeStore()[person] || {};
+  const saved = incomeSettings[person];
   const def = DEFAULT_INCOME[person];
   return {
-    annual: Number.isFinite(saved.annual) ? saved.annual : def.annual,
-    rate:   Number.isFinite(saved.rate)   ? saved.rate   : def.rate,
-    months: Number.isFinite(saved.months) ? saved.months : def.months,
+    annual: saved && Number.isFinite(saved.annual) ? saved.annual : def.annual,
+    rate:   saved && Number.isFinite(saved.rate)   ? saved.rate   : def.rate,
+    months: saved && Number.isFinite(saved.months) ? saved.months : def.months,
   };
 }
 
@@ -652,6 +668,39 @@ function refreshContribCells() {
   });
 }
 
+// 把目前設定填入輸入框（使用者正在輸入的欄位不覆蓋）
+function fillIncomeInputs() {
+  INCOME_PEOPLE.forEach(p => {
+    const s = getIncomeSettings(p);
+    const a = document.querySelector(`.income-input[data-person="${p}"]`);
+    const r = document.querySelector(`.rate-input[data-person="${p}"]`);
+    const m = document.querySelector(`.months-input[data-person="${p}"]`);
+    if (a && document.activeElement !== a) a.value = s.annual;
+    if (r && document.activeElement !== r) r.value = s.rate;
+    if (m && document.activeElement !== m) m.value = s.months;
+  });
+}
+
+// 從試算表讀取進帳設定，成功後更新畫面
+async function loadIncomeSettings() {
+  try {
+    const data = await apiCall({ action: 'getSettings' });
+    if (data.error) throw new Error(data.error);
+    incomeSettings = data.settings || {};
+    fillIncomeInputs();
+    refreshContribCells();
+    renderMembers();
+  } catch(e) {
+    console.warn('無法讀取進帳設定，使用備用值', e);
+  }
+}
+
+// 寫回試算表的「設定」工作表
+async function saveIncomeSettings(person, next) {
+  const data = await apiCall({ action: 'setSettings', data: JSON.stringify({ owner: person, ...next }) });
+  if (data.error) throw new Error(data.error);
+}
+
 function initIncomeTable() {
   INCOME_PEOPLE.forEach(p => {
     const inputs = {
@@ -661,12 +710,7 @@ function initIncomeTable() {
     };
     if (!inputs.annual || !inputs.rate || !inputs.months) return;
 
-    const s = getIncomeSettings(p);
-    inputs.annual.value = s.annual;
-    inputs.rate.value = s.rate;
-    inputs.months.value = s.months;
-
-    const onChange = () => {
+    const onChange = async () => {
       const def = DEFAULT_INCOME[p];
       const a = parseFloat(inputs.annual.value);
       const r = parseFloat(inputs.rate.value);
@@ -676,17 +720,25 @@ function initIncomeTable() {
         rate:   Number.isFinite(r) && r >= 0 && r <= 100 ? r : def.rate,
         months: Number.isFinite(m) && m >= 1 && m <= 24 ? m : def.months,
       };
-      const store = loadIncomeStore();
-      store[p] = next;
-      try { localStorage.setItem(INCOME_KEY, JSON.stringify(store)); } catch(e) {}
-      inputs.annual.value = next.annual;
-      inputs.rate.value = next.rate;
-      inputs.months.value = next.months;
+      // 先更新畫面，再寫入試算表
+      incomeSettings[p] = next;
+      fillIncomeInputs();
       refreshContribCells();
       renderMembers();
+      setSyncStatus('loading', '儲存設定中…');
+      try {
+        await saveIncomeSettings(p, next);
+        setSyncStatus('ok', '已同步 · ' + new Date().toLocaleTimeString('zh-TW'));
+        showToast('進帳設定已儲存 ✓');
+      } catch(e) {
+        setSyncStatus('err', '儲存失敗');
+        showToast('進帳設定儲存失敗，請重試');
+        loadIncomeSettings(); // 還原成試算表的值
+      }
     };
     Object.values(inputs).forEach(inp => inp.addEventListener('change', onChange));
   });
+  fillIncomeInputs();
   refreshContribCells();
 }
 
@@ -821,36 +873,65 @@ function switchTab(name, el) {
   if (name === 'island') setTimeout(renderIsland, 50);
 }
 
-function openModal() {
-  amountType = 'expense';
+let editingRecord = null; // 正在編輯的記錄；null 代表新增
+
+// 把試算表的日期轉成 MM/DD 供輸入框使用
+function toMMDD(raw) {
+  const s = String(raw || '').trim();
+  const short = s.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (short) return short[1].padStart(2,'0') + '/' + short[2].padStart(2,'0');
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return '';
+  return String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
+}
+
+// rec 有值時為編輯模式，預先填入該筆資料
+function openModal(rec) {
+  editingRecord = rec || null;
+  const isEdit = !!editingRecord;
   const today = new Date();
   const mm = String(today.getMonth()+1).padStart(2,'0');
   const dd = String(today.getDate()).padStart(2,'0');
+  const dateVal = isEdit ? toMMDD(rec.date) : `${mm}/${dd}`;
+  const ownerVal = isEdit ? rec.owner : '精靈';
+  const itemVal = isEdit ? esc(rec.item) : '';
+  const amountVal = isEdit ? (rec.income > 0 ? rec.income : rec.expense) : '';
+  const noteVal = isEdit ? esc(rec.note || '') : '';
+  const title = isEdit ? '編輯記錄' : '新增記錄';
+  amountType = isEdit && rec.income > 0 ? 'income' : 'expense';
+
   document.getElementById('overlayContainer').innerHTML = `
     <div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
-      <div class="modal" role="dialog" aria-modal="true" aria-label="新增記錄">
-        <div class="modal-header"><span class="modal-title">新增記錄</span><button class="modal-close" aria-label="關閉" onclick="closeModal()">×</button></div>
+      <div class="modal" role="dialog" aria-modal="true" aria-label="${title}">
+        <div class="modal-header"><span class="modal-title">${title}</span><button class="modal-close" aria-label="關閉" onclick="closeModal()">×</button></div>
         <div class="amount-toggle">
-          <button class="toggle-btn" id="toggleExpense" onclick="setType('expense')" style="background:var(--fox-bg);color:var(--expense)">支出 −</button>
+          <button class="toggle-btn" id="toggleExpense" onclick="setType('expense')">支出 −</button>
           <button class="toggle-btn" id="toggleIncome" onclick="setType('income')">收入 ＋</button>
         </div>
         <div class="row2">
-          <div class="field"><label>日期</label><input id="f-date" type="text" value="${mm}/${dd}" placeholder="MM/DD"></div>
+          <div class="field"><label>日期</label><input id="f-date" type="text" value="${dateVal}" placeholder="MM/DD"></div>
           <div class="field"><label>擁有者</label><select id="f-owner">
-            <option value="精靈">🐎 精靈</option>
-            <option value="小狐狸">🦊 小狐狸</option>
+            <option value="精靈" ${ownerVal==='精靈'?'selected':''}>🐎 精靈</option>
+            <option value="小狐狸" ${ownerVal==='小狐狸'?'selected':''}>🦊 小狐狸</option>
           </select></div>
         </div>
-        <div class="field"><label>項目</label><input id="f-item" type="text" placeholder="例：竹南 全聯"></div>
-        <div class="field"><label>金額</label><input id="f-amount" type="number" placeholder="0" min="0" inputmode="numeric"></div>
-        <div class="field"><label>備註</label><textarea id="f-note" placeholder="選填"></textarea></div>
+        <div class="field"><label>項目</label><input id="f-item" type="text" placeholder="例：竹南 全聯" value="${itemVal}"></div>
+        <div class="field"><label>金額</label><input id="f-amount" type="number" placeholder="0" min="0" inputmode="numeric" value="${amountVal}"></div>
+        <div class="field"><label>備註</label><textarea id="f-note" placeholder="選填">${noteVal}</textarea></div>
         <div class="modal-actions">
           <button class="btn-cancel" onclick="closeModal()">取消</button>
-          <button class="btn-save" id="saveBtn" onclick="submitRecord()">儲存</button>
+          <button class="btn-save" id="saveBtn" onclick="submitRecord()">${isEdit ? '儲存變更' : '儲存'}</button>
         </div>
       </div>
     </div>`;
+  setType(amountType);
   document.getElementById('f-item').focus();
+}
+
+// 依列號找到記錄並開啟編輯
+function editRecordByRow(row) {
+  const rec = records.find(r => r.row === row);
+  if (rec) openModal(rec);
 }
 
 function setType(type) {
@@ -859,7 +940,7 @@ function setType(type) {
   document.getElementById('toggleIncome').style.cssText = type==='income'?'background:var(--elf-bg);color:var(--income)':'';
 }
 
-function closeModal() { document.getElementById('overlayContainer').innerHTML=''; }
+function closeModal() { editingRecord = null; document.getElementById('overlayContainer').innerHTML=''; }
 
 // 接受 MM/DD 或 YYYY/MM/DD，並檢查月份與日期範圍
 function isValidDateInput(s) {
@@ -881,7 +962,9 @@ async function submitRecord() {
   if (!isValidDateInput(date)) { showToast('日期格式請用 MM/DD（例如 10/24）'); return; }
   const btn = document.getElementById('saveBtn');
   btn.disabled=true; btn.textContent='儲存中…';
-  await addRecord({ date, owner, item, income: amountType==='income'?amount:0, expense: amountType==='expense'?amount:0, note });
+  const payload = { date, owner, item, income: amountType==='income'?amount:0, expense: amountType==='expense'?amount:0, note };
+  if (editingRecord) await updateRecordApi(editingRecord, payload);
+  else await addRecord(payload);
   closeModal();
 }
 

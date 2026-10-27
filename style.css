@@ -264,6 +264,8 @@ tr:hover td { background: var(--bg); }
 .income-input { width: 130px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text); }
 .income-input:focus { outline: 2px solid var(--text2); outline-offset: 1px; }
 .rate-input:focus { outline: 2px solid var(--text2); outline-offset: 1px; }
+.edit-btn { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; cursor: pointer; color: var(--text3); font-size: 14px; transition: all 0.15s; }
+.edit-btn:hover { color: var(--text); border-color: var(--text2); }
 
 /* 進帳設定卡片：單欄排列，不需要橫向捲動 */
 .income-cards { display: grid; grid-template-columns: 1fr; gap: 12px; max-width: 100%; }

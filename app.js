@@ -771,12 +771,18 @@ function renderMembers() {
     const count = records.filter(r=>r.owner===p&&r.expense>0).length;
     const prep = prepaid[p]||0;
     const emoji = p==='精靈'?'🐎':'🦊';
+    // 預計月底轉回 = 每月進帳 − 支出合計 − 先付款項（轉回少，代表這個人本月花得多）
+    const contrib = monthlyContribOf(p);
+    const back = contrib - expTotal - Math.abs(prep);
+    const backSign = back < 0 ? '-' : '';
+    const backColor = back < 0 ? 'var(--expense)' : 'var(--income)';
     return `<div class="member-card">
       <div class="member-name">${emoji} ${p}</div>
       <div class="member-stat"><span class="member-stat-label">每月進帳</span><span class="member-stat-value" style="color:var(--income)">+${fmt(monthlyContribOf(p))}</span></div>
       ${prep<0?`<div class="member-stat"><span class="member-stat-label">先付款項</span><span class="member-stat-value" style="color:var(--expense)">-${fmt(Math.abs(prep))}</span></div>`:''}
       <div class="member-stat"><span class="member-stat-label">支出筆數</span><span class="member-stat-value">${count} 筆</span></div>
       <div class="member-stat"><span class="member-stat-label">支出合計</span><span class="member-stat-value" style="color:var(--expense)">-${fmt(expTotal)}</span></div>
+      <div class="member-stat"><span class="member-stat-label">預計月底轉回</span><span class="member-stat-value" style="color:${backColor}">${backSign}${fmt(Math.abs(back))}</span></div>
     </div>`;
   }).join('');
 }

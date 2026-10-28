@@ -907,6 +907,18 @@ function toMMDD(raw) {
 }
 
 // rec 有值時為編輯模式，預先填入該筆資料
+// 項目建議：從已有的紀錄取出項目名稱，依出現次數排序（排除系統列）
+function buildItemSuggestions() {
+  const counts = new Map();
+  records.forEach(r => {
+    const item = String(r.item || '').trim();
+    if (!item) return;
+    if (item.includes('總收入/支出') || item.includes('支出部分轉回') || item === '帳戶餘額' || r.owner === '帳戶餘額') return;
+    counts.set(item, (counts.get(item) || 0) + 1);
+  });
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 200).map(([name]) => name);
+}
+
 function openModal(rec) {
   editingRecord = rec || null;
   const isEdit = !!editingRecord;
@@ -936,7 +948,7 @@ function openModal(rec) {
             <option value="小狐狸" ${ownerVal==='小狐狸'?'selected':''}>🦊 小狐狸</option>
           </select></div>
         </div>
-        <div class="field"><label>項目</label><input id="f-item" type="text" placeholder="例：竹南 全聯" value="${itemVal}"></div>
+        <div class="field"><label>項目</label><input id="f-item" type="text" placeholder="例：竹南 全聯" value="${itemVal}" list="item-suggest" autocomplete="off"><datalist id="item-suggest">${buildItemSuggestions().map(n => `<option value="${esc(n)}"></option>`).join('')}</datalist></div>
         <div class="field"><label>金額</label><input id="f-amount" type="number" placeholder="0" min="0" inputmode="numeric" value="${amountVal}"></div>
         <div class="field"><label>備註</label><textarea id="f-note" placeholder="選填">${noteVal}</textarea></div>
         <div class="modal-actions">

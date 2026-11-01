@@ -377,3 +377,28 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 .island-legend-text { display: flex; flex-direction: column; gap: 2px; }
 .island-legend-name { font-weight: 600; color: var(--text); }
 .island-legend-desc { color: var(--text3); font-size: 11px; }
+
+/* ── 家用品庫存 ── */
+.inv-add { display: flex; gap: 8px; margin: 4px 0 14px; }
+.inv-add input { flex: 1; min-width: 0; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 14px; }
+.inv-add input#inv-qty { flex: 0 0 72px; text-align: center; }
+.inv-add button { padding: 10px 16px; border: none; border-radius: 12px; background: var(--btn, var(--elf)); color: var(--btn-text, #0b1220); font-weight: 600; cursor: pointer; }
+.inv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.inv-card { position: relative; padding: 14px 12px 12px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border); backdrop-filter: blur(8px); box-shadow: 0 0 0 1px color-mix(in srgb, var(--glow-elf) 18%, transparent), 0 6px 18px -10px var(--glow-elf); display: flex; flex-direction: column; gap: 6px; }
+.inv-card.low { border-color: var(--fox); box-shadow: 0 0 0 1px color-mix(in srgb, var(--glow-fox) 35%, transparent), 0 6px 18px -10px var(--glow-fox); }
+.inv-icon { font-size: 30px; line-height: 1; text-align: center; padding: 6px 0; }
+.inv-name { font-size: 14px; font-weight: 600; text-align: center; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inv-qty { display: flex; align-items: baseline; justify-content: center; gap: 4px; }
+.inv-qty span { font-family: 'DM Mono', monospace; font-size: 22px; font-weight: 500; color: var(--elf); }
+.inv-card.low .inv-qty span { color: var(--fox); }
+.inv-qty small { font-size: 11px; color: var(--text2); }
+.inv-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 4px; }
+.inv-btns button { padding: 7px 0; border-radius: 10px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); font-size: 13px; cursor: pointer; }
+.inv-btns .inv-used { grid-column: span 2; background: var(--elf-bg); color: var(--elf); border-color: transparent; font-weight: 600; }
+.inv-btns .inv-del { grid-column: span 2; font-size: 12px; opacity: 0.7; }
+.inv-shop-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.inv-chip { padding: 6px 12px; border-radius: 999px; background: var(--fox-bg); color: var(--fox); font-size: 13px; font-weight: 500; border: 1px solid color-mix(in srgb, var(--glow-fox) 40%, transparent); }
+.inv-empty-ok { font-size: 13px; color: var(--text2); margin-bottom: 14px; }
+.inv-link { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text2); margin: 4px 0 8px; cursor: pointer; }
+.inv-link input { width: 16px; height: 16px; accent-color: var(--elf); }
+@media (max-width: 420px) { .inv-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; } }

@@ -879,7 +879,7 @@ async function renderAnnualChart() {
 }
 
 function switchTab(name, el) {
-  ['records','analysis','members','annual','island'].forEach(t => {
+  ['records','analysis','members','annual','island','inventory'].forEach(t => {
     const tabEl = document.getElementById('tab-'+t);
     if (tabEl) tabEl.style.display = t===name ? '' : 'none';
   });
@@ -896,6 +896,7 @@ function switchTab(name, el) {
   if (name === 'members') renderMembers();
   if (name === 'annual') renderAnnualChart();
   if (name === 'island') setTimeout(renderIsland, 50);
+  if (name === 'inventory') loadInventory();
 }
 
 let editingRecord = null; // 正在編輯的記錄；null 代表新增
@@ -955,6 +956,7 @@ function openModal(rec) {
         <div class="field"><label>項目</label><input id="f-item" type="text" placeholder="例：竹南 全聯" value="${itemVal}" list="item-suggest" autocomplete="off"><datalist id="item-suggest">${buildItemSuggestions().map(n => `<option value="${esc(n)}"></option>`).join('')}</datalist></div>
         <div class="field"><label>金額</label><input id="f-amount" type="number" placeholder="0" min="0" inputmode="numeric" value="${amountVal}"></div>
         <div class="field"><label>備註</label><textarea id="f-note" placeholder="選填">${noteVal}</textarea></div>
+        ${isEdit ? '' : `<label class="inv-link"><input type="checkbox" id="f-inv" ${isConsumableName(itemVal) ? 'checked' : ''}> 同時加入家用品庫存</label>`}
         <div class="modal-actions">
           <button class="btn-cancel" onclick="closeModal()">取消</button>
           <button class="btn-save" id="saveBtn" onclick="submitRecord()">${isEdit ? '儲存變更' : '儲存'}</button>
@@ -962,6 +964,11 @@ function openModal(rec) {
       </div>
     </div>`;
   setType(amountType);
+  // 輸入項目時，自動判斷是否為家用品（可手動再改）
+  document.getElementById('f-item').addEventListener('input', e => {
+    const c = document.getElementById('f-inv');
+    if (c) c.checked = isConsumableName(e.target.value);
+  });
   document.getElementById('f-item').focus();
 }
 
@@ -1000,8 +1007,11 @@ async function submitRecord() {
   const btn = document.getElementById('saveBtn');
   btn.disabled=true; btn.textContent='儲存中…';
   const payload = { date, owner, item, income: amountType==='income'?amount:0, expense: amountType==='expense'?amount:0, note };
+  const invChk = document.getElementById('f-inv');
+  const linkInv = !editingRecord && amountType === 'expense' && !!(invChk && invChk.checked);
   if (editingRecord) await updateRecordApi(editingRecord, payload);
   else await addRecord(payload);
+  if (linkInv) addToInventory(item, 1).catch(() => showToast('已記帳，但加入庫存失敗'));
   closeModal();
 }
 
@@ -2441,4 +2451,142 @@ function updateIslandLegend(cats, balance) {
       </div>
     `;
   }).join('');
+}
+
+// ── 家用品庫存 ─────────────────────────────────────────────────
+let inventory = []; // null 代表載入失敗
+const INV_ICON_RULES = [
+  [/衛生紙|面紙|捲筒|廁紙/, '🧻'],
+  [/洗衣精|洗衣粉|柔軟精|洗衣/, '🧴'],
+  [/洗碗|菜瓜布|清潔|洗潔|廚房紙/, '🫧'],
+  [/牙膏|牙刷|牙線/, '🪥'],
+  [/沐浴|洗髮|潤髮|肥皂|香皂|沐浴乳/, '🧼'],
+  [/醬油|鹽|糖|醋|味精|調味|胡椒/, '🧂'],
+  [/垃圾袋/, '🗑️'],
+  [/電池/, '🔋'],
+  [/濕紙巾|紙巾/, '🧻'],
+  [/蛋/, '🥚'],
+  [/牛奶|豆漿/, '🥛'],
+  [/咖啡/, '☕'],
+  [/茶葉|茶包/, '🍵'],
+  [/米|麵|義大利麵/, '🍚'],
+];
+const INV_DEFAULT_ICON = '🧺';
+function guessInventoryIcon(name) {
+  const n = String(name || '');
+  for (const [re, icon] of INV_ICON_RULES) if (re.test(n)) return icon;
+  return INV_DEFAULT_ICON;
+}
+function isConsumableName(name) {
+  return guessInventoryIcon(name) !== INV_DEFAULT_ICON;
+}
+
+async function invApi(params) {
+  const d = await apiCall(params);
+  if (d.error) throw new Error(d.error);
+  return d;
+}
+
+async function loadInventory() {
+  const grid = document.getElementById('inv-grid');
+  if (grid && !inventory.length) grid.innerHTML = '<div class="loading-state"><div class="spinner"></div>載入中…</div>';
+  try {
+    const d = await invApi({ action: 'getInventory' });
+    inventory = d.items || [];
+  } catch (e) {
+    inventory = null;
+  }
+  renderInventory();
+}
+
+function renderInventory() {
+  const grid = document.getElementById('inv-grid');
+  const shop = document.getElementById('inv-shop');
+  if (!grid || !shop) return;
+  if (inventory === null) {
+    shop.innerHTML = '';
+    grid.innerHTML = '<div class="empty-state">⚠️ 無法載入庫存，請稍後再試</div>';
+    return;
+  }
+  const low = inventory.filter(i => i.qty < i.min);
+  shop.innerHTML = low.length
+    ? `<div class="inv-shop-list">${low.map(i => `<span class="inv-chip">${esc(i.icon)} ${esc(i.name)}</span>`).join('')}</div>`
+    : '<div class="inv-empty-ok">目前都夠用 ✨</div>';
+  grid.innerHTML = inventory.length
+    ? inventory.map(i => `
+      <div class="inv-card${i.qty < i.min ? ' low' : ''}">
+        <div class="inv-icon">${esc(i.icon)}</div>
+        <div class="inv-name">${esc(i.name)}</div>
+        <div class="inv-qty"><span>${i.qty}</span><small>剩餘</small></div>
+        <div class="inv-btns">
+          <button onclick="changeInventoryQty('${esc(i.id)}', -1)" aria-label="減少 ${esc(i.name)}">−</button>
+          <button onclick="changeInventoryQty('${esc(i.id)}', 1)" aria-label="增加 ${esc(i.name)}">＋</button>
+          <button class="inv-used" onclick="setInventoryQty('${esc(i.id)}', 0)">用完了</button>
+          <button class="inv-del" onclick="deleteInventoryItemUi('${esc(i.id)}')" aria-label="刪除 ${esc(i.name)}">🗑</button>
+        </div>
+      </div>`).join('')
+    : '<div class="empty-state">還沒有品項，請在上方新增</div>';
+}
+
+// 數量變動：先更新畫面，再送到試算表；失敗時重新載入
+async function setInventoryQty(id, qty) {
+  const it = inventory && inventory.find(i => i.id === id);
+  if (!it) return;
+  const prev = it.qty;
+  it.qty = Math.max(0, qty);
+  renderInventory();
+  try {
+    await invApi({ action: 'updateInventory', id, data: JSON.stringify({ qty: it.qty }) });
+  } catch (e) {
+    it.qty = prev;
+    renderInventory();
+    showToast('更新失敗，請重試');
+  }
+}
+
+function changeInventoryQty(id, delta) {
+  const it = inventory && inventory.find(i => i.id === id);
+  if (it) setInventoryQty(id, it.qty + delta);
+}
+
+async function deleteInventoryItemUi(id) {
+  const it = inventory && inventory.find(i => i.id === id);
+  if (!it || !confirm(`確定要刪除「${it.name}」嗎？`)) return;
+  try {
+    await invApi({ action: 'deleteInventory', id });
+    inventory = inventory.filter(i => i.id !== id);
+    renderInventory();
+  } catch (e) {
+    showToast('刪除失敗，請重試');
+  }
+}
+
+// 新增品項（同名就直接加數量）
+async function addInventoryFromForm() {
+  const nameEl = document.getElementById('inv-name');
+  const qtyEl = document.getElementById('inv-qty');
+  const name = nameEl.value.trim();
+  const qty = Math.max(0, parseInt(qtyEl.value, 10) || 0);
+  if (!name) { showToast('請輸入品項名稱'); return; }
+  await addToInventory(name, qty);
+  nameEl.value = '';
+  qtyEl.value = '1';
+}
+
+// 記帳連動或手動新增共用：同名直接加數量，沒有就新增
+async function addToInventory(name, qty) {
+  const clean = String(name || '').trim();
+  if (!clean) return;
+  const d = await invApi({
+    action: 'addInventory',
+    data: JSON.stringify({ name: clean, qty, min: 1, icon: guessInventoryIcon(clean), mode: 'merge' })
+  });
+  if (d.merged) {
+    const it = inventory && inventory.find(i => i.id === d.id);
+    if (it) it.qty += qty;
+    renderInventory();
+  } else {
+    await loadInventory();
+  }
+  showToast(`已加入庫存：${clean}`);
 }

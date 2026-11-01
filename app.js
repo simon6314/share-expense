@@ -956,7 +956,7 @@ function openModal(rec) {
         <div class="field"><label>項目</label><input id="f-item" type="text" placeholder="例：竹南 全聯" value="${itemVal}" list="item-suggest" autocomplete="off"><datalist id="item-suggest">${buildItemSuggestions().map(n => `<option value="${esc(n)}"></option>`).join('')}</datalist></div>
         <div class="field"><label>金額</label><input id="f-amount" type="number" placeholder="0" min="0" inputmode="numeric" value="${amountVal}"></div>
         <div class="field"><label>備註</label><textarea id="f-note" placeholder="選填">${noteVal}</textarea></div>
-        ${isEdit ? '' : `<label class="inv-link"><input type="checkbox" id="f-inv" ${isConsumableName(itemVal) ? 'checked' : ''}> 同時加入家用品庫存</label>`}
+        ${isEdit ? '' : `<label class="inv-link"><input type="checkbox" id="f-inv" ${isConsumableName(itemVal) ? 'checked' : ''}> 同時加入家用品庫存（從備註抓取，例：衛生紙×2、洗衣精）</label>`}
         <div class="modal-actions">
           <button class="btn-cancel" onclick="closeModal()">取消</button>
           <button class="btn-save" id="saveBtn" onclick="submitRecord()">${isEdit ? '儲存變更' : '儲存'}</button>
@@ -1011,7 +1011,7 @@ async function submitRecord() {
   const linkInv = !editingRecord && amountType === 'expense' && !!(invChk && invChk.checked);
   if (editingRecord) await updateRecordApi(editingRecord, payload);
   else await addRecord(payload);
-  if (linkInv) addToInventory(item, 1).catch(() => showToast('已記帳，但加入庫存失敗'));
+  if (linkInv) addItemsFromNote(note, item).catch(() => showToast('已記帳，但加入庫存失敗'));
   closeModal();
 }
 
@@ -2573,8 +2573,28 @@ async function addInventoryFromForm() {
   qtyEl.value = '1';
 }
 
+// 從備註解析多個品項，例如「衛生紙×2、洗衣精、牙膏 1」（沒寫數量就是 1）
+function parseInventoryNote(note) {
+  return String(note || '').split(/[、,，;；\n]+/).map(seg => seg.trim()).filter(Boolean).map(seg => {
+    const m = seg.match(/^(.+?)\s*(?:[x×X*＊]\s*(\d+)|\s+(\d+))?$/);
+    if (!m) return null;
+    const name = m[1].trim();
+    if (!name) return null;
+    const qty = parseInt(m[2] || m[3] || '1', 10);
+    return { name, qty: qty > 0 ? qty : 1 };
+  }).filter(Boolean);
+}
+
+// 記帳時加入庫存：優先用備註裡的多個品項，備註沒有就用項目名稱
+async function addItemsFromNote(note, fallbackItem) {
+  let items = parseInventoryNote(note);
+  if (items.length === 0) items = [{ name: fallbackItem, qty: 1 }];
+  for (const it of items) await addToInventory(it.name, it.qty, true);
+  showToast(`已加入庫存：${items.map(i => i.name + (i.qty > 1 ? '×' + i.qty : '')).join('、')}`);
+}
+
 // 記帳連動或手動新增共用：同名直接加數量，沒有就新增
-async function addToInventory(name, qty) {
+async function addToInventory(name, qty, silent) {
   const clean = String(name || '').trim();
   if (!clean) return;
   const d = await invApi({
@@ -2588,5 +2608,5 @@ async function addToInventory(name, qty) {
   } else {
     await loadInventory();
   }
-  showToast(`已加入庫存：${clean}`);
+  if (!silent) showToast(`已加入庫存：${clean}`);
 }

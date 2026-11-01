@@ -402,3 +402,22 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 .inv-link { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text2); margin: 4px 0 8px; cursor: pointer; }
 .inv-link input { width: 16px; height: 16px; accent-color: var(--elf); }
 @media (max-width: 420px) { .inv-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; } }
+
+/* ── 庫存狀態：用完了（紅）／快用完了（橘） ── */
+.inv-shop-box { padding: 12px 14px; margin-bottom: 16px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border); }
+.inv-shop-group + .inv-shop-group { margin-top: 12px; }
+.inv-shop-title { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+.inv-shop-group.empty .inv-shop-title { color: #dc2626; }
+.inv-shop-group.low .inv-shop-title { color: #d97706; }
+.inv-shop-group.empty .inv-chip { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; font-weight: 700; }
+.inv-shop-group.low .inv-chip { background: #fef3c7; color: #b45309; border-color: #fcd34d; }
+.inv-chip small { font-size: 11px; opacity: 0.8; }
+.inv-card.empty { border: 2px solid #dc2626; box-shadow: 0 0 0 3px rgba(220,38,38,0.18), 0 8px 22px -8px rgba(220,38,38,0.65); animation: invPulse 2.4s ease-in-out infinite; background: color-mix(in srgb, #fee2e2 45%, var(--surface)); }
+.inv-card.low { border: 1px solid #d97706; box-shadow: 0 0 0 1px rgba(217,119,6,0.35), 0 6px 18px -10px rgba(217,119,6,0.65); }
+.inv-card.empty .inv-qty span { color: #dc2626; }
+.inv-card.low .inv-qty span { color: #d97706; }
+.inv-badge { position: absolute; top: -9px; right: 8px; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; color: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+.inv-badge.empty { background: #dc2626; }
+.inv-badge.low { background: #d97706; }
+.inv-restock { grid-column: span 2; background: #dc2626 !important; color: #fff !important; border-color: transparent !important; font-weight: 700; }
+@keyframes invPulse { 50% { box-shadow: 0 0 0 6px rgba(220,38,38,0.06), 0 8px 26px -6px rgba(220,38,38,0.85); } }

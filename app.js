@@ -2501,6 +2501,13 @@ async function loadInventory() {
   renderInventory();
 }
 
+// 狀態：用完了（數量 0）、快用完了（0 < 數量 ≤ 最低數量）、其餘為夠用
+function invStatus(i) {
+  if (i.qty <= 0) return 'empty';
+  if (i.qty <= i.min) return 'low';
+  return 'ok';
+}
+
 function renderInventory() {
   const grid = document.getElementById('inv-grid');
   const shop = document.getElementById('inv-shop');
@@ -2510,23 +2517,42 @@ function renderInventory() {
     grid.innerHTML = '<div class="empty-state">⚠️ 無法載入庫存，請稍後再試</div>';
     return;
   }
-  const low = inventory.filter(i => i.qty < i.min);
-  shop.innerHTML = low.length
-    ? `<div class="inv-shop-list">${low.map(i => `<span class="inv-chip">${esc(i.icon)} ${esc(i.name)}</span>`).join('')}</div>`
+  const empty = inventory.filter(i => invStatus(i) === 'empty');
+  const low = inventory.filter(i => invStatus(i) === 'low');
+
+  const group = (title, list, cls) => {
+    if (!list.length) return '';
+    const chips = list.map(i => `<span class="inv-chip">${esc(i.icon)} ${esc(i.name)}${cls === 'low' ? ` <small>剩 ${i.qty}</small>` : ''}</span>`).join('');
+    return `<div class="inv-shop-group ${cls}"><div class="inv-shop-title">${title}（${list.length}）</div><div class="inv-shop-list">${chips}</div></div>`;
+  };
+  const shopHtml = group('⚠️ 用完了', empty, 'empty') + group('快用完了', low, 'low');
+  shop.innerHTML = shopHtml
+    ? `<div class="inv-shop-box">${shopHtml}</div>`
     : '<div class="inv-empty-ok">目前都夠用 ✨</div>';
+
   grid.innerHTML = inventory.length
-    ? inventory.map(i => `
-      <div class="inv-card${i.qty < i.min ? ' low' : ''}">
+    ? inventory.map(i => {
+        const st = invStatus(i);
+        const id = esc(i.id);
+        const badge = st === 'empty' ? '<div class="inv-badge empty">用完了</div>'
+                    : st === 'low' ? '<div class="inv-badge low">快用完了</div>' : '';
+        const mainBtn = st === 'empty'
+          ? `<button class="inv-restock" onclick="setInventoryQty('${id}', 1)">補貨</button>`
+          : `<button class="inv-used" onclick="setInventoryQty('${id}', 0)">用完了</button>`;
+        return `
+      <div class="inv-card ${st}">
+        ${badge}
         <div class="inv-icon">${esc(i.icon)}</div>
         <div class="inv-name">${esc(i.name)}</div>
         <div class="inv-qty"><span>${i.qty}</span><small>剩餘</small></div>
         <div class="inv-btns">
-          <button onclick="changeInventoryQty('${esc(i.id)}', -1)" aria-label="減少 ${esc(i.name)}">−</button>
-          <button onclick="changeInventoryQty('${esc(i.id)}', 1)" aria-label="增加 ${esc(i.name)}">＋</button>
-          <button class="inv-used" onclick="setInventoryQty('${esc(i.id)}', 0)">用完了</button>
-          <button class="inv-del" onclick="deleteInventoryItemUi('${esc(i.id)}')" aria-label="刪除 ${esc(i.name)}">🗑</button>
+          <button onclick="changeInventoryQty('${id}', -1)" aria-label="減少 ${esc(i.name)}">−</button>
+          <button onclick="changeInventoryQty('${id}', 1)" aria-label="增加 ${esc(i.name)}">＋</button>
+          ${mainBtn}
+          <button class="inv-del" onclick="deleteInventoryItemUi('${id}')" aria-label="刪除 ${esc(i.name)}">🗑</button>
         </div>
-      </div>`).join('')
+      </div>`;
+      }).join('')
     : '<div class="empty-state">還沒有品項，請在上方新增</div>';
 }
 

@@ -552,13 +552,6 @@ function renderRecords() {
   }).join('');
 }
 
-// 分類：備註裡有家用品（庫存品）就歸到「家用品」，否則依項目名稱判斷
-function categoryOf(r) {
-  const items = parseInventoryNote(r.note);
-  if (items.some(i => isConsumableName(i.name))) return '家用品';
-  return categorize(r.item);
-}
-
 function categorize(item) {
   if (/住宿|旅遊|民宿|飯店|酒店|旅館|商旅/.test(item)) return '住宿旅遊';
   if (/全聯|超市|買菜|市場|樂家康|萬家福|大全聯/.test(item)) return '超市採購';
@@ -583,13 +576,13 @@ const CAT_EMOJI = {
   '住宿旅遊':'🏨', '超市採購':'🛒', '便利商店':'🏪', '交通':'🚆',
   '飲料':'🧋', '房租':'🏠', '電費':'⚡', '水費':'💧', '瓦斯費':'🔥',
   '網路與第四台':'🌐', '社區管理費':'🏢', '水電雜支':'🔧',
-  '固定轉帳':'💸', '網購':'📦', '餐飲':'🍽️', '景點':'🎢', '相片':'📸', '家用品':'🧻'
+  '固定轉帳':'💸', '網購':'📦', '餐飲':'🍽️', '景點':'🎢', '相片':'📸'
 };
   
 function renderCharts() {
   const expRecs = records.filter(r => r.expense > 0 && r.owner !== '' && !isSummaryRow(r));
   const catMap = {};
-  expRecs.forEach(r => { const c = categoryOf(r); catMap[c] = (catMap[c]||0) + r.expense; });
+  expRecs.forEach(r => { const c = categorize(r.item); catMap[c] = (catMap[c]||0) + r.expense; });
   const cats = Object.keys(catMap).sort((a,b) => catMap[b]-catMap[a]);
   const palette = [
     '#2d7a5f','#c45a2a','#378ADD','#BA7517','#534AB7','#D4537E','#639922','#888780','#E8A838',
@@ -624,7 +617,7 @@ function renderCharts() {
 
 function renderCategoryDetail(category) {
   const recs = records
-    .filter(r => r.expense > 0 && r.owner !== '' && !isSummaryRow(r) && categoryOf(r) === category)
+    .filter(r => r.expense > 0 && r.owner !== '' && !isSummaryRow(r) && categorize(r.item) === category)
     .sort((a,b) => new Date(a.date) - new Date(b.date));
 
   const total = recs.reduce((s,r) => s + r.expense, 0);
@@ -1136,10 +1129,10 @@ function getCategoryExpenses() {
     }
     
     if (r.expense <= 0) return;
-    const cat = categoryOf(r);
+    const cat = categorize(r.item);
     if (cat === '餐飲' || cat === '飲料') {
       catExpenses.dining += r.expense;
-    } else if (cat === '超市採購' || cat === '便利商店' || cat === '家用品') {
+    } else if (cat === '超市採購' || cat === '便利商店') {
       catExpenses.grocery += r.expense;
     } else if (cat === '住宿旅遊' || cat === '景點') {
       catExpenses.travel += r.expense;

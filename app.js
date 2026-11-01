@@ -2457,27 +2457,23 @@ function updateIslandLegend(cats, balance) {
 
 // ── 家用品庫存 ─────────────────────────────────────────────────
 let inventory = []; // null 代表載入失敗
-const INV_ICON_RULES = [
-  [/衛生紙|面紙|捲筒|廁紙/, '🧻'],
-  [/洗衣精|洗衣粉|柔軟精|洗衣/, '🧴'],
-  [/洗碗|菜瓜布|清潔|洗潔|廚房紙/, '🫧'],
-  [/牙膏|牙刷|牙線/, '🪥'],
-  [/沐浴|洗髮|潤髮|肥皂|香皂|沐浴乳/, '🧼'],
-  [/醬油|鹽|糖|醋|味精|調味|胡椒/, '🧂'],
-  [/垃圾袋/, '🗑️'],
-  [/電池/, '🔋'],
-  [/濕紙巾|紙巾/, '🧻'],
-  [/蛋/, '🥚'],
-  [/牛奶|豆漿/, '🥛'],
-  [/咖啡/, '☕'],
-  [/茶葉|茶包/, '🍵'],
-  [/米|麵|義大利麵/, '🍚'],
-];
+// 庫存品：品項名稱必須與下列詞完全相同（忽略空白與大小寫）才算，圖示也由此決定
+const INV_ICON_MAP = {
+  '衛生紙': '🧻', '捲筒衛生紙': '🧻', '面紙': '🧻', '廁紙': '🧻', '濕紙巾': '🧻', '紙巾': '🧻',
+  '洗衣精': '🧴', '洗衣粉': '🧴', '柔軟精': '🧴',
+  '洗碗精': '🫧', '菜瓜布': '🫧', '清潔劑': '🫧', '廚房紙巾': '🫧',
+  '牙膏': '🪥', '牙刷': '🪥', '牙線': '🪥',
+  '沐浴乳': '🧼', '洗髮精': '🧼', '潤髮乳': '🧼', '肥皂': '🧼', '香皂': '🧼',
+  '醬油': '🧂', '鹽': '🧂', '糖': '🧂', '醋': '🧂', '味精': '🧂', '胡椒': '🧂',
+  '垃圾袋': '🗑️', '電池': '🔋',
+  '雞蛋': '🥚', '蛋': '🥚', '牛奶': '🥛', '豆漿': '🥛',
+  '咖啡': '☕', '茶葉': '🍵', '茶包': '🍵',
+  '白米': '🍚', '米': '🍚', '義大利麵': '🍝',
+};
+const invKey = name => String(name || '').replace(/\s+/g, '').toLowerCase();
 const INV_DEFAULT_ICON = '🧺';
 function guessInventoryIcon(name) {
-  const n = String(name || '');
-  for (const [re, icon] of INV_ICON_RULES) if (re.test(n)) return icon;
-  return INV_DEFAULT_ICON;
+  return Object.prototype.hasOwnProperty.call(INV_ICON_MAP, invKey(name)) ? INV_ICON_MAP[invKey(name)] : INV_DEFAULT_ICON;
 }
 function isConsumableName(name) {
   return guessInventoryIcon(name) !== INV_DEFAULT_ICON;

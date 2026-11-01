@@ -2575,16 +2575,32 @@ async function addInventoryFromForm() {
   qtyEl.value = '1';
 }
 
-// 從備註解析多個品項，例如「衛生紙×2、洗衣精、牙膏 1」（沒寫數量就是 1）
+// 從備註解析多個品項。規則：名稱後面接數字就是數量，空格或「、」分隔品項
+// 例：「衛生紙 2 洗衣精 1」「衛生紙×2、洗衣精」「衛生紙×2 洗衣精」都可以，沒寫數量就是 1
 function parseInventoryNote(note) {
-  return String(note || '').split(/[、,，;；\n]+/).map(seg => seg.trim()).filter(Boolean).map(seg => {
-    const m = seg.match(/^(.+?)\s*(?:[x×X*＊]\s*(\d+)|\s+(\d+))?$/);
-    if (!m) return null;
-    const name = m[1].trim();
-    if (!name) return null;
-    const qty = parseInt(m[2] || m[3] || '1', 10);
-    return { name, qty: qty > 0 ? qty : 1 };
-  }).filter(Boolean);
+  const out = [];
+  String(note || '').split(/[、,，;；\n]+/).forEach(seg => {
+    let lastOpenName = false; // 上一個 token 是名稱（還沒接到數量）
+    seg.trim().split(/\s+/).filter(Boolean).forEach(tok => {
+      const attached = tok.match(/^(.+?)[×xX*＊](\d+)$/);
+      if (attached) {
+        out.push({ name: attached[1], qty: parseInt(attached[2], 10) });
+        lastOpenName = false;
+      } else if (/^\d+$/.test(tok)) {
+        const last = out[out.length - 1];
+        if (last && lastOpenName) last.qty = parseInt(tok, 10);
+        lastOpenName = false;
+      } else if (lastOpenName) {
+        out[out.length - 1].name += tok; // 名稱中間有空格（例：捲筒 衛生紙）
+      } else {
+        out.push({ name: tok, qty: null });
+        lastOpenName = true;
+      }
+    });
+  });
+  return out
+    .map(i => ({ name: i.name.trim(), qty: i.qty && i.qty > 0 ? i.qty : 1 }))
+    .filter(i => i.name);
 }
 
 // 記帳時加入庫存：用備註裡的多個品項；備註沒有時，項目名稱是消耗品才用項目名稱

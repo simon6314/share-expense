@@ -2501,10 +2501,10 @@ async function loadInventory() {
   renderInventory();
 }
 
-// 狀態：用完了（數量 0）、快用完了（0 < 數量 ≤ 最低數量）、其餘為夠用
+// 狀態：用完了（數量 0）、快用完了（手動標記，數量不變）、其餘為夠用
 function invStatus(i) {
   if (i.qty <= 0) return 'empty';
-  if (i.qty <= i.min) return 'low';
+  if (i.low) return 'low';
   return 'ok';
 }
 
@@ -2538,7 +2538,8 @@ function renderInventory() {
                     : st === 'low' ? '<div class="inv-badge low">快用完了</div>' : '';
         const mainBtn = st === 'empty'
           ? `<button class="inv-restock" onclick="setInventoryQty('${id}', 1)">補貨</button>`
-          : `<button class="inv-used" onclick="setInventoryQty('${id}', 0)">用完了</button>`;
+          : `<button class="inv-lowbtn${i.low ? ' on' : ''}" onclick="toggleInventoryLow('${id}')">${i.low ? '取消快用完' : '快用完了'}</button>
+             <button class="inv-used" onclick="setInventoryQty('${id}', 0)">用完了</button>`;
         return `
       <div class="inv-card ${st}">
         ${badge}
@@ -2561,12 +2562,30 @@ async function setInventoryQty(id, qty) {
   const it = inventory && inventory.find(i => i.id === id);
   if (!it) return;
   const prev = it.qty;
+  const prevLow = it.low;
   it.qty = Math.max(0, qty);
+  if (it.qty <= 0) it.low = false;
   renderInventory();
   try {
-    await invApi({ action: 'updateInventory', id, data: JSON.stringify({ qty: it.qty }) });
+    await invApi({ action: 'updateInventory', id, data: JSON.stringify({ qty: it.qty, low: it.low }) });
   } catch (e) {
     it.qty = prev;
+    it.low = prevLow;
+    renderInventory();
+    showToast('更新失敗，請重試');
+  }
+}
+
+async function toggleInventoryLow(id) {
+  const it = inventory && inventory.find(i => i.id === id);
+  if (!it || it.qty <= 0) return;
+  const prev = it.low;
+  it.low = !prev;
+  renderInventory();
+  try {
+    await invApi({ action: 'updateInventory', id, data: JSON.stringify({ low: it.low }) });
+  } catch (e) {
+    it.low = prev;
     renderInventory();
     showToast('更新失敗，請重試');
   }
@@ -2644,7 +2663,7 @@ async function addToInventory(name, qty, silent) {
   if (!clean) return;
   const d = await invApi({
     action: 'addInventory',
-    data: JSON.stringify({ name: clean, qty, min: 1, icon: guessInventoryIcon(clean), mode: 'merge' })
+    data: JSON.stringify({ name: clean, qty, icon: guessInventoryIcon(clean), mode: 'merge' })
   });
   if (d.merged) {
     const it = inventory && inventory.find(i => i.id === d.id);

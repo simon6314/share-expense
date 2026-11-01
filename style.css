@@ -421,3 +421,5 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 .inv-badge.low { background: #d97706; }
 .inv-restock { grid-column: span 2; background: #dc2626 !important; color: #fff !important; border-color: transparent !important; font-weight: 700; }
 @keyframes invPulse { 50% { box-shadow: 0 0 0 6px rgba(220,38,38,0.06), 0 8px 26px -6px rgba(220,38,38,0.85); } }
+.inv-btns .inv-lowbtn { background: #fef3c7; color: #b45309; border-color: transparent; font-weight: 600; }
+.inv-btns .inv-lowbtn.on { background: #d97706; color: #fff; }

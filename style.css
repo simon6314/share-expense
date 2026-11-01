@@ -423,3 +423,23 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 @keyframes invPulse { 50% { box-shadow: 0 0 0 6px rgba(220,38,38,0.06), 0 8px 26px -6px rgba(220,38,38,0.85); } }
 .inv-btns .inv-lowbtn { background: #fef3c7; color: #b45309; border-color: transparent; font-weight: 600; }
 .inv-btns .inv-lowbtn.on { background: #d97706; color: #fff; }
+
+/* ── 食品／藥品：分類與有效期限 ── */
+.inv-add { flex-wrap: wrap; }
+.inv-add select { flex: 0 0 auto; padding: 10px 10px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 14px; }
+.inv-add input#inv-exp { flex: 1 1 100%; min-width: 0; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 14px; }
+.inv-cat { font-size: 11px; font-weight: 600; color: var(--text2); text-align: center; letter-spacing: 0.06em; }
+.inv-expiry { font-size: 11px; text-align: center; padding: 4px 6px; border-radius: 8px; font-weight: 600; }
+.inv-expiry.expired { background: #7f1d1d; color: #fff; }
+.inv-expiry.red { background: #fee2e2; color: #b91c1c; }
+.inv-expiry.warn { background: #fef3c7; color: #b45309; }
+.inv-expiry.ok { background: var(--surface2); color: var(--text2); }
+.inv-shop-group.expired .inv-shop-title { color: #7f1d1d; }
+.inv-shop-group.expired .inv-chip { background: #7f1d1d; color: #fff; border-color: #7f1d1d; }
+.inv-shop-group.exp-red .inv-shop-title { color: #dc2626; }
+.inv-shop-group.exp-red .inv-chip { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
+.inv-shop-group.exp-warn .inv-shop-title { color: #d97706; }
+.inv-shop-group.exp-warn .inv-chip { background: #fef3c7; color: #b45309; border-color: #fcd34d; }
+.inv-card.exp-expired { border: 2px solid #7f1d1d; box-shadow: 0 0 0 3px rgba(127,29,29,0.25), 0 8px 22px -8px rgba(127,29,29,0.7); }
+.inv-card.exp-red { border: 2px solid #dc2626; box-shadow: 0 0 0 3px rgba(220,38,38,0.15), 0 8px 22px -8px rgba(220,38,38,0.55); }
+.inv-card.exp-warn { border: 1px solid #d97706; box-shadow: 0 0 0 1px rgba(217,119,6,0.35), 0 6px 18px -10px rgba(217,119,6,0.6); }

@@ -2480,7 +2480,7 @@ function isConsumableName(name) {
 }
 // 勾選框預設：項目名稱是消耗品，或備註裡有消耗品
 function shouldLinkInventory(item, note) {
-  return isConsumableName(item) || parseInventoryNote(note).some(i => isConsumableName(i.name));
+  return isConsumableName(item) || parseInventoryNote(note).some(i => i.cat || isConsumableName(i.name));
 }
 
 async function invApi(params) {
@@ -2508,6 +2508,27 @@ function invStatus(i) {
   return 'ok';
 }
 
+// 期限：已過期 / 7 天內（red）/ 30 天內（warn）/ 夠久（ok）
+function daysUntil(dateStr) {
+  const [y, m, d] = String(dateStr).split('-').map(Number);
+  const target = new Date(y, m - 1, d);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((target - today) / 86400000);
+}
+function expiryLevel(i) {
+  if (!i.expiry) return null;
+  const n = daysUntil(i.expiry);
+  if (n < 0) return 'expired';
+  if (n <= 7) return 'red';
+  if (n <= 30) return 'warn';
+  return 'ok';
+}
+function expiryText(i) {
+  const n = daysUntil(i.expiry);
+  return n < 0 ? `已過期 ${-n} 天` : n === 0 ? '今天到期' : `還有 ${n} 天`;
+}
+
 function renderInventory() {
   const grid = document.getElementById('inv-grid');
   const shop = document.getElementById('inv-shop');
@@ -2519,13 +2540,19 @@ function renderInventory() {
   }
   const empty = inventory.filter(i => invStatus(i) === 'empty');
   const low = inventory.filter(i => invStatus(i) === 'low');
+  const expOf = lvl => inventory.filter(i => expiryLevel(i) === lvl);
 
-  const group = (title, list, cls) => {
+  const group = (title, list, cls, sub) => {
     if (!list.length) return '';
-    const chips = list.map(i => `<span class="inv-chip">${esc(i.icon)} ${esc(i.name)}${cls === 'low' ? ` <small>剩 ${i.qty}</small>` : ''}</span>`).join('');
+    const chips = list.map(i => `<span class="inv-chip">${esc(i.icon)} ${esc(i.name)}${sub ? ` <small>${sub(i)}</small>` : ''}</span>`).join('');
     return `<div class="inv-shop-group ${cls}"><div class="inv-shop-title">${title}（${list.length}）</div><div class="inv-shop-list">${chips}</div></div>`;
   };
-  const shopHtml = group('⚠️ 用完了', empty, 'empty') + group('快用完了', low, 'low');
+  const shopHtml =
+    group('⚠️ 用完了', empty, 'empty') +
+    group('快用完了', low, 'low', i => `剩 ${i.qty}`) +
+    group('🚨 已過期', expOf('expired'), 'expired', i => expiryText(i)) +
+    group('7 天內到期', expOf('red'), 'exp-red', i => expiryText(i)) +
+    group('30 天內到期', expOf('warn'), 'exp-warn', i => expiryText(i));
   shop.innerHTML = shopHtml
     ? `<div class="inv-shop-box">${shopHtml}</div>`
     : '<div class="inv-empty-ok">目前都夠用 ✨</div>';
@@ -2533,23 +2560,30 @@ function renderInventory() {
   grid.innerHTML = inventory.length
     ? inventory.map(i => {
         const st = invStatus(i);
+        const lvl = expiryLevel(i);
+        const isStock = i.cat !== '消耗品';
         const id = esc(i.id);
         const badge = st === 'empty' ? '<div class="inv-badge empty">用完了</div>'
                     : st === 'low' ? '<div class="inv-badge low">快用完了</div>' : '';
-        const mainBtn = st === 'empty'
-          ? `<button class="inv-restock" onclick="setInventoryQty('${id}', 1)">補貨</button>`
-          : `<button class="inv-lowbtn${i.low ? ' on' : ''}" onclick="toggleInventoryLow('${id}')">${i.low ? '取消快用完' : '快用完了'}</button>
+        let mainBtns;
+        if (st === 'empty') mainBtns = `<button class="inv-restock" onclick="setInventoryQty('${id}', 1)">補貨</button>`;
+        else if (isStock) mainBtns = '';
+        else mainBtns = `<button class="inv-lowbtn${i.low ? ' on' : ''}" onclick="toggleInventoryLow('${id}')">${i.low ? '取消快用完' : '快用完了'}</button>
              <button class="inv-used" onclick="setInventoryQty('${id}', 0)">用完了</button>`;
+        const expLine = lvl ? `<div class="inv-expiry ${lvl}">期限 ${esc(i.expiry)}｜${esc(expiryText(i))}</div>` : '';
+        const catLine = isStock ? `<div class="inv-cat">${esc(i.cat)}</div>` : '';
         return `
-      <div class="inv-card ${st}">
+      <div class="inv-card ${st}${lvl ? ' exp-' + lvl : ''}">
         ${badge}
+        ${catLine}
         <div class="inv-icon">${esc(i.icon)}</div>
         <div class="inv-name">${esc(i.name)}</div>
         <div class="inv-qty"><span>${i.qty}</span><small>剩餘</small></div>
+        ${expLine}
         <div class="inv-btns">
           <button onclick="changeInventoryQty('${id}', -1)" aria-label="減少 ${esc(i.name)}">−</button>
           <button onclick="changeInventoryQty('${id}', 1)" aria-label="增加 ${esc(i.name)}">＋</button>
-          ${mainBtn}
+          ${mainBtns}
           <button class="inv-del" onclick="deleteInventoryItemUi('${id}')" aria-label="刪除 ${esc(i.name)}">🗑</button>
         </div>
       </div>`;
@@ -2612,58 +2646,128 @@ async function deleteInventoryItemUi(id) {
 async function addInventoryFromForm() {
   const nameEl = document.getElementById('inv-name');
   const qtyEl = document.getElementById('inv-qty');
+  const catEl = document.getElementById('inv-cat');
+  const expEl = document.getElementById('inv-exp');
   const name = nameEl.value.trim();
   const qty = Math.max(0, parseInt(qtyEl.value, 10) || 0);
+  const cat = catEl ? catEl.value : '消耗品';
+  const expiry = cat === '消耗品' ? '' : (expEl ? expEl.value : '');
   if (!name) { showToast('請輸入品項名稱'); return; }
-  await addToInventory(name, qty);
+  if (cat !== '消耗品' && !expiry) { showToast('食品和藥品請填寫期限'); return; }
+  await addToInventory(name, qty, false, cat, expiry);
   nameEl.value = '';
   qtyEl.value = '1';
+  if (expEl) expEl.value = '';
 }
 
-// 從備註解析多個品項。規則：名稱後面接數字就是數量，空格或「、」分隔品項
-// 例：「衛生紙 2 洗衣精 1」「衛生紙×2、洗衣精」「衛生紙×2 洗衣精」都可以，沒寫數量就是 1
+// 把各種日期寫法轉成 yyyy-MM-dd：20261231、2026-12-31、2026.12.31、2026年12月31日、12/31（今年）
+function parseExpiryInput(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  const now = new Date();
+  const parts = s.replace(/[年月日.\-\/]/g, ' ').trim().split(/\s+/).filter(Boolean);
+  let y, m, d;
+  if (parts.length === 1 && parts[0].length === 8) {
+    y = +parts[0].slice(0, 4); m = +parts[0].slice(4, 6); d = +parts[0].slice(6, 8);
+  } else if (parts.length === 1 && parts[0].length === 4) {
+    y = now.getFullYear(); m = +parts[0].slice(0, 2); d = +parts[0].slice(2, 4);
+  } else if (parts.length === 3) {
+    y = +parts[0]; m = +parts[1]; d = +parts[2];
+  } else if (parts.length === 2) {
+    y = now.getFullYear(); m = +parts[0]; d = +parts[1];
+  } else {
+    return '';
+  }
+  if (!(y >= 2000 && y <= 2100 && m >= 1 && m <= 12 && d >= 1 && d <= 31)) return '';
+  const dt = new Date(y, m - 1, d);
+  if (dt.getMonth() !== m - 1) return '';
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+// 從備註解析品項。規則：
+//   名稱後面接數字是數量，空格或「、」分隔；沒寫數量就是 1
+//   「食:」「藥:」前綴指定分類（食品 / 藥品）
+//   「期限 日期」接在品項後面，設定有效期限
+// 例：「衛生紙 2 食:泡麵 3 期限 2027/03/15、藥:感冒藥 期限 20261231」
 function parseInventoryNote(note) {
   const out = [];
   String(note || '').split(/[、,，;；\n]+/).forEach(seg => {
-    let lastOpenName = false; // 上一個 token 是名稱（還沒接到數量）
+    let openName = false;   // 上一個 token 是名稱（還沒接到數量）
+    let expectExp = false;  // 下一個 token 是期限日期
+    let last = null;        // 目前這個品項
     seg.trim().split(/\s+/).filter(Boolean).forEach(tok => {
+      if (expectExp) {
+        expectExp = false;
+        const ex = parseExpiryInput(tok);
+        if (last && ex) last.expiry = ex;
+        openName = false;
+        return;
+      }
+      if (tok === '期限') { expectExp = true; openName = false; return; }
+      if (tok.startsWith('期限') && tok.length > 2) {
+        const ex = parseExpiryInput(tok.slice(2));
+        if (last && ex) last.expiry = ex;
+        openName = false;
+        return;
+      }
+      const pre = tok.match(/^(食|藥)[:：](.+)$/);
+      if (pre) {
+        const att = pre[2].match(/^(.+?)[×xX*＊](\d+)$/);
+        last = { name: att ? att[1] : pre[2], cat: pre[1] === '食' ? '食品' : '藥品', qty: att ? parseInt(att[2], 10) : null, expiry: '' };
+        out.push(last);
+        openName = !att;
+        return;
+      }
       const attached = tok.match(/^(.+?)[×xX*＊](\d+)$/);
       if (attached) {
-        out.push({ name: attached[1], qty: parseInt(attached[2], 10) });
-        lastOpenName = false;
-      } else if (/^\d+$/.test(tok)) {
-        const last = out[out.length - 1];
-        if (last && lastOpenName) last.qty = parseInt(tok, 10);
-        lastOpenName = false;
-      } else if (lastOpenName) {
-        out[out.length - 1].name += tok; // 名稱中間有空格（例：捲筒 衛生紙）
-      } else {
-        out.push({ name: tok, qty: null });
-        lastOpenName = true;
+        last = { name: attached[1], cat: null, qty: parseInt(attached[2], 10), expiry: '' };
+        out.push(last);
+        openName = false;
+        return;
       }
+      if (/^\d+$/.test(tok)) {
+        if (last && openName) last.qty = parseInt(tok, 10);
+        openName = false;
+        return;
+      }
+      if (openName && last) {
+        last.name += tok; // 名稱中間有空格（例：捲筒 衛生紙）
+        return;
+      }
+      last = { name: tok, cat: null, qty: null, expiry: '' };
+      out.push(last);
+      openName = true;
     });
   });
   return out
-    .map(i => ({ name: i.name.trim(), qty: i.qty && i.qty > 0 ? i.qty : 1 }))
+    .map(i => ({ name: i.name.trim(), qty: i.qty && i.qty > 0 ? i.qty : 1, cat: i.cat, expiry: i.expiry }))
     .filter(i => i.name);
 }
 
-// 記帳時加入庫存：用備註裡的多個品項；備註沒有時，項目名稱是消耗品才用項目名稱
+// 記帳時加入庫存：用備註的品項；備註沒有時，項目名稱是消耗品才用項目名稱
 async function addItemsFromNote(note, fallbackItem) {
   let items = parseInventoryNote(note);
-  // 備註沒有品項時，只有項目名稱本身是消耗品才加入（避免把「全聯」加進庫存）
-  if (items.length === 0 && isConsumableName(fallbackItem)) items = [{ name: fallbackItem, qty: 1 }];
-  for (const it of items) await addToInventory(it.name, it.qty, true);
+  if (items.length === 0 && isConsumableName(fallbackItem)) {
+    items = [{ name: fallbackItem, qty: 1, cat: null, expiry: '' }];
+  }
+  for (const it of items) await addToInventory(it.name, it.qty, true, it.cat, it.expiry);
   showToast(`已加入庫存：${items.map(i => i.name + (i.qty > 1 ? '×' + i.qty : '')).join('、')}`);
 }
 
-// 記帳連動或手動新增共用：同名直接加數量，沒有就新增
-async function addToInventory(name, qty, silent) {
+// 記帳連動或手動新增共用：同品項＋同分類＋同期限就加數量，否則新增一列
+// 分類：沒指定時，有期限視為食品，否則為消耗品
+async function addToInventory(name, qty, silent, cat, expiry) {
   const clean = String(name || '').trim();
   if (!clean) return;
+  const category = cat || (expiry ? '食品' : '消耗品');
+  let icon = guessInventoryIcon(clean);
+  if (icon === INV_DEFAULT_ICON) {
+    if (category === '藥品') icon = '💊';
+    else if (category === '食品') icon = '🥫';
+  }
   const d = await invApi({
     action: 'addInventory',
-    data: JSON.stringify({ name: clean, qty, icon: guessInventoryIcon(clean), mode: 'merge' })
+    data: JSON.stringify({ name: clean, qty, icon, cat: category, expiry: expiry || '', mode: 'merge' })
   });
   if (d.merged) {
     const it = inventory && inventory.find(i => i.id === d.id);

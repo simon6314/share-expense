@@ -2694,8 +2694,11 @@ function parseInventoryNote(note) {
   String(note || '').split(/[、,，;；\n]+/).forEach(seg => {
     let openName = false;   // 上一個 token 是名稱（還沒接到數量）
     let expectExp = false;  // 下一個 token 是期限日期
+    let pendingCat = null;  // 「藥:」「食:」後面空一格才接品項名稱
     let last = null;        // 目前這個品項
     seg.trim().split(/\s+/).filter(Boolean).forEach(tok => {
+      const lone = tok.match(/^(食|藥)[:：]$/);
+      if (lone) { pendingCat = lone[1] === '食' ? '食品' : '藥品'; openName = false; return; }
       if (expectExp) {
         expectExp = false;
         const ex = parseExpiryInput(tok);
@@ -2734,7 +2737,8 @@ function parseInventoryNote(note) {
         last.name += tok; // 名稱中間有空格（例：捲筒 衛生紙）
         return;
       }
-      last = { name: tok, cat: null, qty: null, expiry: '' };
+      last = { name: tok, cat: pendingCat, qty: null, expiry: '' };
+      pendingCat = null;
       out.push(last);
       openName = true;
     });

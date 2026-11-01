@@ -956,7 +956,7 @@ function openModal(rec) {
         <div class="field"><label>項目</label><input id="f-item" type="text" placeholder="例：竹南 全聯" value="${itemVal}" list="item-suggest" autocomplete="off"><datalist id="item-suggest">${buildItemSuggestions().map(n => `<option value="${esc(n)}"></option>`).join('')}</datalist></div>
         <div class="field"><label>金額</label><input id="f-amount" type="number" placeholder="0" min="0" inputmode="numeric" value="${amountVal}"></div>
         <div class="field"><label>備註</label><textarea id="f-note" placeholder="選填">${noteVal}</textarea></div>
-        ${isEdit ? '' : `<label class="inv-link"><input type="checkbox" id="f-inv" ${isConsumableName(itemVal) ? 'checked' : ''}> 同時加入家用品庫存（從備註抓取，例：衛生紙×2、洗衣精）</label>`}
+        ${isEdit ? '' : `<label class="inv-link"><input type="checkbox" id="f-inv" ${shouldLinkInventory(itemVal, noteVal) ? 'checked' : ''}> 同時加入家用品庫存（從備註抓取，例：衛生紙×2、洗衣精）</label>`}
         <div class="modal-actions">
           <button class="btn-cancel" onclick="closeModal()">取消</button>
           <button class="btn-save" id="saveBtn" onclick="submitRecord()">${isEdit ? '儲存變更' : '儲存'}</button>
@@ -964,11 +964,13 @@ function openModal(rec) {
       </div>
     </div>`;
   setType(amountType);
-  // 輸入項目時，自動判斷是否為家用品（可手動再改）
-  document.getElementById('f-item').addEventListener('input', e => {
+  // 項目或備註變動時，自動判斷是否要加入庫存（可手動再改）
+  const syncInvCheck = () => {
     const c = document.getElementById('f-inv');
-    if (c) c.checked = isConsumableName(e.target.value);
-  });
+    if (c) c.checked = shouldLinkInventory(document.getElementById('f-item').value, document.getElementById('f-note').value);
+  };
+  document.getElementById('f-item').addEventListener('input', syncInvCheck);
+  document.getElementById('f-note').addEventListener('input', syncInvCheck);
   document.getElementById('f-item').focus();
 }
 
@@ -2480,6 +2482,10 @@ function guessInventoryIcon(name) {
 function isConsumableName(name) {
   return guessInventoryIcon(name) !== INV_DEFAULT_ICON;
 }
+// 勾選框預設：項目名稱是消耗品，或備註裡有消耗品
+function shouldLinkInventory(item, note) {
+  return isConsumableName(item) || parseInventoryNote(note).some(i => isConsumableName(i.name));
+}
 
 async function invApi(params) {
   const d = await apiCall(params);
@@ -2585,10 +2591,11 @@ function parseInventoryNote(note) {
   }).filter(Boolean);
 }
 
-// 記帳時加入庫存：優先用備註裡的多個品項，備註沒有就用項目名稱
+// 記帳時加入庫存：用備註裡的多個品項；備註沒有時，項目名稱是消耗品才用項目名稱
 async function addItemsFromNote(note, fallbackItem) {
   let items = parseInventoryNote(note);
-  if (items.length === 0) items = [{ name: fallbackItem, qty: 1 }];
+  // 備註沒有品項時，只有項目名稱本身是消耗品才加入（避免把「全聯」加進庫存）
+  if (items.length === 0 && isConsumableName(fallbackItem)) items = [{ name: fallbackItem, qty: 1 }];
   for (const it of items) await addToInventory(it.name, it.qty, true);
   showToast(`已加入庫存：${items.map(i => i.name + (i.qty > 1 ? '×' + i.qty : '')).join('、')}`);
 }

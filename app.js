@@ -2469,7 +2469,7 @@ const INV_ICON_MAP = {
   '雞蛋': '🥚', '蛋': '🥚', '牛奶': '🥛', '豆漿': '🥛',
   '咖啡': '☕', '茶葉': '🍵', '茶包': '🍵',
   '白米': '🍚', '米': '🍚', '麵條': '🍜', '義大利麵': '🍝',
-  '餅乾': '🍪', '卡拉姆久': '🥔', '洋芋片': '🥔', '喜餅': '🥮',
+  '餅乾': '🍪', '卡拉姆久': '🥔', '洋芋片': '🥔', '喜餅': '🥮', '巧克力': '🍫',
   '冰棒': '🍭', '冰淇淋': '🍦',
 };
 // 名稱後面的「老公」「老婆」只用來分開品項（例：防曬乳（老公）），圖示仍用基本名稱判斷
@@ -2477,7 +2477,7 @@ const PERSON_SUFFIX_RE = /[（(]?\s*(老公|老婆)\s*[）)]?$/;
 const invKey = name => String(name || '').replace(PERSON_SUFFIX_RE, '').replace(/\s+/g, '').toLowerCase();
 const INV_DEFAULT_ICON = '🧺';
 // 字尾比對：名稱結尾是這些詞就用對應圖示（例：巧克力冰淇淋 → 🍦），其他品項仍需完整比對
-const INV_SUFFIX_ICON = { '冰棒': '🍭', '冰淇淋': '🍦', '咖啡': '☕', '茶': '🍵' };
+const INV_SUFFIX_ICON = { '冰棒': '🍭', '冰淇淋': '🍦', '咖啡': '☕', '茶': '🍵', '餅乾': '🍪', '巧克力': '🍫' };
 function guessInventoryIcon(name) {
   const key = invKey(name);
   if (Object.prototype.hasOwnProperty.call(INV_ICON_MAP, key)) return INV_ICON_MAP[key];

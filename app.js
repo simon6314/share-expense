@@ -199,6 +199,7 @@ function setSyncStatus(state, text) {
 function currentSheet() { return document.getElementById('monthSel').value; }
 
 async function loadData() {
+  loadIconRules(); // 讀取圖示對照（不等待）
   const loadHTML = '<div class="loading-state"><div class="spinner"></div>載入中…</div>';
   document.getElementById('recordBody').innerHTML = '<tr><td colspan="6">' + loadHTML + '</td></tr>';
   document.getElementById('recordCards').innerHTML = loadHTML;
@@ -2480,8 +2481,28 @@ const INV_DEFAULT_ICON = '🧺';
 const INV_SUFFIX_ICON = { '冰棒': '🍭', '冰淇淋': '🍦', '咖啡': '☕', '茶': '🍵', '餅乾': '🍪', '酒': '🍷', '泡菜': '🥬' };
 // 包含比對：名稱裡有這些詞就用對應圖示（例：巧克力棒、黑巧克力 → 🍫）
 const INV_CONTAIN_ICON = { '巧克力': '🍫' };
+// 圖示規則：優先使用試算表「圖示對照」的內容（讀取失敗才用下面內建的）
+let iconRules = null;
+async function loadIconRules() {
+  try {
+    const d = await invApi({ action: 'getIconMap' });
+    iconRules = Array.isArray(d.rows) ? d.rows : null;
+  } catch (e) {
+    iconRules = null;
+  }
+}
+
 function guessInventoryIcon(name) {
   const key = invKey(name);
+  if (iconRules) {
+    const exact = iconRules.find(r => r.mode === '完整' && invKey(r.key) === key);
+    if (exact) return exact.icon;
+    const suffix = iconRules.find(r => r.mode === '字尾' && key.length > invKey(r.key).length && key.endsWith(invKey(r.key)));
+    if (suffix) return suffix.icon;
+    const contain = iconRules.find(r => r.mode === '包含' && key.includes(invKey(r.key)));
+    if (contain) return contain.icon;
+    return INV_DEFAULT_ICON;
+  }
   if (Object.prototype.hasOwnProperty.call(INV_ICON_MAP, key)) return INV_ICON_MAP[key];
   for (const suffix of Object.keys(INV_SUFFIX_ICON)) {
     if (key.length > suffix.length && key.endsWith(suffix)) return INV_SUFFIX_ICON[suffix];

@@ -346,6 +346,16 @@ function formatDateShort(raw) {
 const SUMMARY_ITEMS = ['總收入/支出','支出部分轉回'];
 const isSummaryRow = r => SUMMARY_ITEMS.some(k => r.item.includes(k)) || r.owner === '帳戶餘額';
 
+// 目前餘額只計入「已到帳」的收入（日期已到今天或之前），未到日期的匯款先不算
+function arrivedIncomeOf(realRecs) {
+  const endOfToday = new Date();
+  endOfToday.setHours(23, 59, 59, 999);
+  return realRecs
+    .filter(r => r.owner !== '' && r.item !== '帳戶餘額')
+    .filter(r => { const d = new Date(r.date); return isNaN(d.getTime()) || d <= endOfToday; })
+    .reduce((s, r) => s + r.income, 0);
+}
+
 function renderAll() {
   const realRecs = records.filter(r => !isSummaryRow(r));
   const isPrepaid = r => r.note && r.note.includes('先付');
@@ -364,12 +374,12 @@ function renderAll() {
   const transferRecs = records.filter(r => r.item.includes('支出部分轉回'));
   const isSettled = transferRecs.some(r => r.expense > 0);
   
-  let balance = startingBalance + totalIncome - totalExpense;
+  let balance = startingBalance + arrivedIncomeOf(realRecs) - totalExpense;
   if (isSettled && transferRecs.length > 0) {
     const lastTransfer = transferRecs[transferRecs.length - 1];
     balance = (lastTransfer.income || 0) - (lastTransfer.expense || 0);
   }
-  
+
   const sel = document.getElementById('monthSel');
   const monthLabel = sel.options[sel.selectedIndex]?.text || '';
   
@@ -1165,7 +1175,7 @@ function getAccountBalance() {
   const transferRecs = records.filter(r => r.item.includes('支出部分轉回'));
   const isSettled = transferRecs.some(r => r.expense > 0);
   
-  let balance = startingBalance + totalIncome - totalExpense;
+  let balance = startingBalance + arrivedIncomeOf(realRecs) - totalExpense;
   if (isSettled && transferRecs.length > 0) {
     const lastTransfer = transferRecs[transferRecs.length - 1];
     balance = (lastTransfer.income || 0) - (lastTransfer.expense || 0);

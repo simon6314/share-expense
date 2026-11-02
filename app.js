@@ -2471,7 +2471,9 @@ const INV_ICON_MAP = {
   '白米': '🍚', '米': '🍚', '麵條': '🍜', '義大利麵': '🍝',
   '餅乾': '🍪', '卡拉姆久': '🥔', '洋芋片': '🥔', '喜餅': '🥮',
 };
-const invKey = name => String(name || '').replace(/\s+/g, '').toLowerCase();
+// 名稱後面的「老公」「老婆」只用來分開品項（例：防曬乳（老公）），圖示仍用基本名稱判斷
+const PERSON_SUFFIX_RE = /[（(]?\s*(老公|老婆)\s*[）)]?$/;
+const invKey = name => String(name || '').replace(PERSON_SUFFIX_RE, '').replace(/\s+/g, '').toLowerCase();
 const INV_DEFAULT_ICON = '🧺';
 function guessInventoryIcon(name) {
   return Object.prototype.hasOwnProperty.call(INV_ICON_MAP, invKey(name)) ? INV_ICON_MAP[invKey(name)] : INV_DEFAULT_ICON;

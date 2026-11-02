@@ -2477,7 +2477,7 @@ const PERSON_SUFFIX_RE = /[（(]?\s*(老公|老婆)\s*[）)]?$/;
 const invKey = name => String(name || '').replace(PERSON_SUFFIX_RE, '').replace(/\s+/g, '').toLowerCase();
 const INV_DEFAULT_ICON = '🧺';
 // 字尾比對：名稱結尾是這些詞就用對應圖示（例：巧克力冰淇淋 → 🍦），其他品項仍需完整比對
-const INV_SUFFIX_ICON = { '冰棒': '🍭', '冰淇淋': '🍦' };
+const INV_SUFFIX_ICON = { '冰棒': '🍭', '冰淇淋': '🍦', '咖啡': '☕' };
 function guessInventoryIcon(name) {
   const key = invKey(name);
   if (Object.prototype.hasOwnProperty.call(INV_ICON_MAP, key)) return INV_ICON_MAP[key];

@@ -2604,8 +2604,7 @@ function renderInventory() {
     ? `<div class="inv-shop-box">${shopHtml}</div>`
     : '<div class="inv-empty-ok">目前都夠用 ✨</div>';
 
-  grid.innerHTML = inventory.length
-    ? inventory.map(i => {
+  const invCardHtml = i => {
         const st = invStatus(i);
         const lvl = expiryLevel(i);
         const isStock = i.cat !== '消耗品';
@@ -2618,11 +2617,9 @@ function renderInventory() {
         else mainBtns = `<button class="inv-lowbtn${i.low ? ' on' : ''}" onclick="toggleInventoryLow('${id}')">${i.low ? '取消快用完' : '快用完了'}</button>
              <button class="inv-used" onclick="setInventoryQty('${id}', 0)">用完了</button>`;
         const expLine = lvl ? `<div class="inv-expiry ${lvl}">期限 ${esc(i.expiry)}｜${esc(expiryText(i))}</div>` : '';
-        const catLine = isStock ? `<div class="inv-cat">${esc(i.cat)}</div>` : '';
         return `
       <div class="inv-card ${st}${lvl ? ' exp-' + lvl : ''}">
         ${badge}
-        ${catLine}
         <div class="inv-icon">${esc(i.icon)}</div>
         <div class="inv-name">${esc(i.name)}</div>
         <div class="inv-qty"><span>${i.qty}</span><small>剩餘</small></div>
@@ -2634,6 +2631,20 @@ function renderInventory() {
           <button class="inv-del" onclick="deleteInventoryItemUi('${id}')" aria-label="刪除 ${esc(i.name)}">🗑</button>
         </div>
       </div>`;
+  };
+
+  // 依分類分組顯示：消耗品 → 食品 → 藥品（其他分類接在後面）
+  const CAT_ORDER = ['消耗品', '食品', '藥品'];
+  const catOf = i => i.cat || '消耗品';
+  const otherCats = [...new Set(inventory.map(catOf))].filter(c => !CAT_ORDER.includes(c));
+  grid.innerHTML = inventory.length
+    ? [...CAT_ORDER, ...otherCats].map(cat => {
+        const list = inventory.filter(i => catOf(i) === cat);
+        if (!list.length) return '';
+        return `<section class="inv-cat-section">
+      <h3 class="inv-cat-title">${esc(cat)}（${list.length}）</h3>
+      <div class="inv-cards">${list.map(invCardHtml).join('')}</div>
+    </section>`;
       }).join('')
     : '<div class="empty-state">還沒有品項，請在上方新增</div>';
 }

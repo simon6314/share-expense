@@ -832,7 +832,11 @@ async function renderAnnualChart() {
 
     const expVals = monthData.map(d => d.expense);
     const incVals = monthData.map(d => d.income);
-    const balVals = monthData.map(d => d.endingBalance);
+    // 未來月份沒有期末餘額：設為 null，水位線就不會畫到未來
+    const nowD = new Date();
+    const isFutureMonth = d => year > nowD.getFullYear() ||
+      (year === nowD.getFullYear() && d.month > nowD.getMonth() + 1);
+    const balVals = monthData.map(d => isFutureMonth(d) ? null : d.endingBalance);
     const labels = monthData.map(d => `${d.month}月`);
 
     document.getElementById('annual-chart-wrap').innerHTML = '<canvas id="annualChart"></canvas>';

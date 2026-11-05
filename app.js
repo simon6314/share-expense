@@ -785,9 +785,28 @@ function renderMembers() {
     // 預計月底轉回 = 本月支出合計 − 先付款項
     const back = expTotal - Math.abs(prep);
     const backSign = back < 0 ? '-' : '';
+
+    // 進帳：預期（依進帳設定）vs 實際（已到帳的匯款，日期未到的另列）
+    const expected = monthlyContribOf(p);
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+    const incRecs = records.filter(r => r.owner === p && r.income > 0 && r.item !== '帳戶餘額' && !isSummaryRow(r));
+    const isArrived = r => { const d = new Date(r.date); return isNaN(d.getTime()) || d <= endOfToday; };
+    const arrivedRecs = incRecs.filter(isArrived);
+    const pendingRecs = incRecs.filter(r => !isArrived(r));
+    const arrived = arrivedRecs.reduce((s, r) => s + r.income, 0);
+    const pending = pendingRecs.reduce((s, r) => s + r.income, 0);
+    const gap = arrived - expected;
+    const gapHtml = expected > 0
+      ? `<span style="color:${gap >= 0 ? 'var(--income)' : 'var(--expense)'}">${gap >= 0 ? '超過 ' : '差 '}${fmt(Math.abs(gap))}</span>`
+      : '';
+
     return `<div class="member-card">
       <div class="member-name">${emoji} ${p}</div>
-      <div class="member-stat"><span class="member-stat-label">每月進帳</span><span class="member-stat-value" style="color:var(--income)">+${fmt(monthlyContribOf(p))}</span></div>
+      <div class="member-stat"><span class="member-stat-label">預期進帳</span><span class="member-stat-value" style="color:var(--text3)">${fmt(expected)}</span></div>
+      <div class="member-stat"><span class="member-stat-label">實際進帳（${arrivedRecs.length} 筆）</span><span class="member-stat-value" style="color:var(--income)">+${fmt(arrived)}</span></div>
+      <div class="member-stat"><span class="member-stat-label">與預期相比</span><span class="member-stat-value">${gapHtml}</span></div>
+      ${pending > 0 ? `<div class="member-stat"><span class="member-stat-label">尚未到帳（${pendingRecs.length} 筆）</span><span class="member-stat-value" style="color:var(--warn)">+${fmt(pending)}</span></div>` : ''}
       ${prep<0?`<div class="member-stat"><span class="member-stat-label">先付款項</span><span class="member-stat-value" style="color:var(--expense)">-${fmt(Math.abs(prep))}</span></div>`:''}
       <div class="member-stat"><span class="member-stat-label">支出筆數</span><span class="member-stat-value">${count} 筆</span></div>
       <div class="member-stat"><span class="member-stat-label">支出合計</span><span class="member-stat-value" style="color:var(--expense)">-${fmt(expTotal)}</span></div>

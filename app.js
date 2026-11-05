@@ -1,5 +1,6 @@
 const API = 'https://script.google.com/macros/s/AKfycbzdnp_gvKGGELnzDA4ZNq25RQ3mPPOXqbuwINKUBXuobbBw_cLubt8Cn-oDrazLfgkk/exec';
 let records = [];
+let lastSummaryBalance = null; // { sheet, balance }：摘要卡片算出的目前帳戶餘額
 let catChartInst = null;
 let amountType = 'expense';
 let manualSeason = null;
@@ -392,6 +393,7 @@ function renderAll() {
   const balEl = document.getElementById('s-balance');
   balEl.textContent = fmt(balance);
   balEl.style.color = balance >= 0 ? 'var(--income)' : 'var(--expense)';
+  lastSummaryBalance = { sheet: currentSheet(), balance };
   
   // 計算總交易筆數 (不含帳戶餘額)
   const realCount = realRecs.filter(r => r.item !== '帳戶餘額').length;
@@ -836,7 +838,18 @@ async function renderAnnualChart() {
     const nowD = new Date();
     const isFutureMonth = d => year > nowD.getFullYear() ||
       (year === nowD.getFullYear() && d.month > nowD.getMonth() + 1);
-    const balVals = monthData.map(d => isFutureMonth(d) ? null : d.endingBalance);
+    // 本月尚未結算，期末餘額多半為 0：若目前選的是本月工作表，改用摘要卡片的「目前帳戶餘額」
+    const curMonthNo = nowD.getMonth() + 1;
+    const selMatch = currentSheet().match(/(\d{4})\/(\d{1,2})月/);
+    const liveCurBalance = (lastSummaryBalance && selMatch &&
+      lastSummaryBalance.sheet === currentSheet() &&
+      year === nowD.getFullYear() && parseInt(selMatch[2]) === curMonthNo)
+      ? lastSummaryBalance.balance : null;
+    const balVals = monthData.map(d => {
+      if (isFutureMonth(d)) return null;
+      if (liveCurBalance !== null && d.month === curMonthNo) return liveCurBalance;
+      return d.endingBalance;
+    });
     const labels = monthData.map(d => `${d.month}月`);
 
     document.getElementById('annual-chart-wrap').innerHTML = '<canvas id="annualChart"></canvas>';

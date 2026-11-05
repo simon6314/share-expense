@@ -923,6 +923,7 @@ async function renderAnnualAnalysis(year) {
 
     const monthTotals = Array(12).fill(0);
     const byCat = {}, byItem = {}, byOwner = {};
+    const byCatMonth = {}; // 每個分類各月的支出，點開分類時顯示
     let total = 0, biggest = null;
     cur.forEach(({ month, exp }) => {
       exp.forEach(r => {
@@ -930,6 +931,8 @@ async function renderAnnualAnalysis(year) {
         total += r.expense;
         const cat = categorize(r.item);
         byCat[cat] = (byCat[cat] || 0) + r.expense;
+        if (!byCatMonth[cat]) byCatMonth[cat] = Array(12).fill(0);
+        byCatMonth[cat][month - 1] += r.expense;
         byItem[r.item] = (byItem[r.item] || 0) + r.expense;
         byOwner[r.owner] = (byOwner[r.owner] || 0) + r.expense;
         if (!biggest || r.expense > biggest.expense) biggest = { ...r, month };
@@ -983,16 +986,32 @@ async function renderAnnualAnalysis(year) {
 
       <div class="card" style="margin-top:10px">
         <div class="card-label">分類佔比</div>
-        ${cats.map(([name, v]) => `
-          <div style="margin-top:8px">
-            <div style="display:flex;justify-content:space-between;font-size:14px">
-              <span>${CAT_EMOJI[name] || '📋'} ${esc(name)}</span>
-              <span style="font-family:'DM Mono',monospace">${fmt(v)} · ${Math.round(v / total * 100)}%</span>
+        ${cats.map(([name, v]) => {
+          const mm = byCatMonth[name] || Array(12).fill(0);
+          const mMax = Math.max(...mm, 1);
+          return `
+          <details style="margin-top:8px">
+            <summary style="list-style:none;cursor:pointer">
+              <div style="display:flex;justify-content:space-between;font-size:14px">
+                <span>${CAT_EMOJI[name] || '📋'} ${esc(name)} <span style="color:var(--text3);font-size:11px">▾ 每月</span></span>
+                <span style="font-family:'DM Mono',monospace">${fmt(v)} · ${Math.round(v / total * 100)}%</span>
+              </div>
+              <div style="height:6px;background:var(--border);border-radius:99px;margin-top:4px;overflow:hidden">
+                <div style="height:100%;width:${Math.round(v / maxCat * 100)}%;background:var(--accent, #6366f1)"></div>
+              </div>
+            </summary>
+            <div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:var(--border)">
+              ${mm.map((x, i) => x > 0 ? `
+                <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0">
+                  <span>${i + 1} 月</span>
+                  <span style="font-family:'DM Mono',monospace">${fmt(x)}</span>
+                </div>
+                <div style="height:4px;background:transparent;margin-bottom:4px">
+                  <div style="height:100%;width:${Math.round(x / mMax * 100)}%;background:var(--expense);border-radius:99px"></div>
+                </div>` : '').join('') || '<div style="font-size:13px;color:var(--text3)">沒有紀錄</div>'}
             </div>
-            <div style="height:6px;background:var(--border);border-radius:99px;margin-top:4px;overflow:hidden">
-              <div style="height:100%;width:${Math.round(v / maxCat * 100)}%;background:var(--accent, #6366f1)"></div>
-            </div>
-          </div>`).join('')}
+          </details>`;
+        }).join('')}
       </div>
 
       <div class="card" style="margin-top:10px">

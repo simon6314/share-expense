@@ -887,6 +887,142 @@ async function renderAnnualChart() {
     document.getElementById('annual-chart-wrap').innerHTML =
       '<div class="empty-state">⚠️ 載入失敗，請重試</div>';
   }
+
+  renderAnnualAnalysis(year);
+}
+
+// ── 年度消費分析：逐月讀取工作表，彙整支出（規則與 renderAll 一致：排除先付/代墊與彙總列）──
+async function loadYearExpenses(year) {
+  const listRes = await apiCall({ action: 'getSheets' });
+  const sheets = (listRes.sheets || []).filter(s => {
+    const m = s.match(/(\d{4})\/(\d{1,2})月/);
+    return m && parseInt(m[1]) === year;
+  });
+  const results = await Promise.all(sheets.map(async s => {
+    const month = parseInt(s.match(/\/(\d{1,2})月/)[1]);
+    const d = await apiCall({ action: 'getAll', sheet: s });
+    const exp = (d.records || []).filter(r =>
+      !isSummaryRow(r) && r.owner !== '' && r.expense > 0 && !(r.note && r.note.includes('先付')));
+    return { month, exp };
+  }));
+  return results;
+}
+
+async function renderAnnualAnalysis(year) {
+  const box = document.getElementById('annual-analysis');
+  box.innerHTML = '<div class="loading-state"><div class="spinner"></div>分析年度消費中…</div>';
+
+  try {
+    const cur = await loadYearExpenses(year);
+    if (!cur.length) { box.innerHTML = ''; return; }
+
+    // 去年同期比較（只比較今年已有資料的月份）
+    const prev = await loadYearExpenses(year - 1);
+    const monthsWithData = cur.map(c => c.month);
+    const lastMonth = Math.max(...monthsWithData);
+
+    const monthTotals = Array(12).fill(0);
+    const byCat = {}, byItem = {}, byOwner = {};
+    let total = 0, biggest = null;
+    cur.forEach(({ month, exp }) => {
+      exp.forEach(r => {
+        monthTotals[month - 1] += r.expense;
+        total += r.expense;
+        const cat = categorize(r.item);
+        byCat[cat] = (byCat[cat] || 0) + r.expense;
+        byItem[r.item] = (byItem[r.item] || 0) + r.expense;
+        byOwner[r.owner] = (byOwner[r.owner] || 0) + r.expense;
+        if (!biggest || r.expense > biggest.expense) biggest = { ...r, month };
+      });
+    });
+    if (total === 0) { box.innerHTML = '<div class="empty-state">這一年還沒有支出紀錄</div>'; return; }
+
+    const activeMonths = cur.filter(c => c.exp.length > 0).length;
+    const avg = total / activeMonths;
+    const peakIdx = monthTotals.indexOf(Math.max(...monthTotals));
+
+    const curSamePeriod = cur.reduce((s, c) => s + (c.month <= lastMonth ? c.exp.reduce((a, r) => a + r.expense, 0) : 0), 0);
+    const prevSamePeriod = prev.reduce((s, c) => s + (c.month <= lastMonth ? c.exp.reduce((a, r) => a + r.expense, 0) : 0), 0);
+    const yoy = prevSamePeriod > 0 ? Math.round((curSamePeriod - prevSamePeriod) / prevSamePeriod * 100) : null;
+
+    const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+    const items = Object.entries(byItem).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    const owners = Object.entries(byOwner).sort((a, b) => b[1] - a[1]);
+    const maxMonth = Math.max(...monthTotals, 1);
+    const maxCat = cats.length ? cats[0][1] : 1;
+    const maxItem = items.length ? items[0][1] : 1;
+
+    const yoyHtml = yoy === null ? '—'
+      : `<span style="color:${yoy > 0 ? 'var(--expense)' : 'var(--income)'}">${yoy > 0 ? '▲' : '▼'} ${Math.abs(yoy)}%</span>`;
+
+    box.innerHTML = `
+      <p class="section-title" style="margin-top:22px">${year} 年消費分析</p>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="card"><div class="card-label">年度總支出</div><div class="card-value expense">${fmt(total)}</div></div>
+        <div class="card"><div class="card-label">月平均（${activeMonths} 個月）</div><div class="card-value">${fmt(avg)}</div></div>
+        <div class="card"><div class="card-label">最高月份</div><div class="card-value" style="font-size:18px">${peakIdx + 1} 月 · ${fmt(monthTotals[peakIdx])}</div></div>
+        <div class="card"><div class="card-label">去年同期比較</div><div class="card-value" style="font-size:18px">${yoyHtml}</div></div>
+      </div>
+
+      <div class="card" style="margin-top:10px">
+        <div class="card-label">單筆最大支出</div>
+        <div style="font-size:15px;margin-top:4px">${esc(biggest.item)}　<strong style="font-family:'DM Mono',monospace">${fmt(biggest.expense)}</strong>　<span style="color:var(--text3);font-size:12px">${biggest.month} 月</span></div>
+      </div>
+
+      <div class="card" style="margin-top:10px">
+        <div class="card-label">每月支出</div>
+        <div style="display:flex;align-items:flex-end;gap:4px;height:120px;margin-top:10px">
+          ${monthTotals.map((v, i) => `
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%">
+              <div style="width:100%;height:${Math.round(v / maxMonth * 100)}%;min-height:${v > 0 ? 2 : 0}px;background:${i === peakIdx ? 'var(--expense)' : 'var(--accent, #6366f1)'};border-radius:4px 4px 0 0;opacity:${v > 0 ? 1 : 0.2}"></div>
+              <div style="font-size:10px;color:var(--text3);margin-top:4px">${i + 1}</div>
+            </div>`).join('')}
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:10px">
+        <div class="card-label">分類佔比</div>
+        ${cats.map(([name, v]) => `
+          <div style="margin-top:8px">
+            <div style="display:flex;justify-content:space-between;font-size:14px">
+              <span>${CAT_EMOJI[name] || '📋'} ${esc(name)}</span>
+              <span style="font-family:'DM Mono',monospace">${fmt(v)} · ${Math.round(v / total * 100)}%</span>
+            </div>
+            <div style="height:6px;background:var(--border);border-radius:99px;margin-top:4px;overflow:hidden">
+              <div style="height:100%;width:${Math.round(v / maxCat * 100)}%;background:var(--accent, #6366f1)"></div>
+            </div>
+          </div>`).join('')}
+      </div>
+
+      <div class="card" style="margin-top:10px">
+        <div class="card-label">花最多的項目 Top ${items.length}</div>
+        ${items.map(([name, v], i) => `
+          <div style="margin-top:8px">
+            <div style="display:flex;justify-content:space-between;font-size:14px">
+              <span>${i + 1}. ${esc(name)}</span>
+              <span style="font-family:'DM Mono',monospace">${fmt(v)}</span>
+            </div>
+            <div style="height:6px;background:var(--border);border-radius:99px;margin-top:4px;overflow:hidden">
+              <div style="height:100%;width:${Math.round(v / maxItem * 100)}%;background:var(--expense)"></div>
+            </div>
+          </div>`).join('')}
+      </div>
+
+      <div class="card" style="margin-top:10px">
+        <div class="card-label">兩人支出比例</div>
+        ${owners.map(([name, v]) => `
+          <div style="margin-top:8px">
+            <div style="display:flex;justify-content:space-between;font-size:14px">
+              <span>${esc(name)}</span>
+              <span style="font-family:'DM Mono',monospace">${fmt(v)} · ${Math.round(v / total * 100)}%</span>
+            </div>
+          </div>`).join('')}
+      </div>
+    `;
+  } catch (e) {
+    box.innerHTML = '<div class="empty-state">⚠️ 年度分析載入失敗</div>';
+  }
 }
 
 function switchTab(name, el) {

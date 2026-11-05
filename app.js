@@ -838,52 +838,99 @@ async function renderAnnualChart() {
     document.getElementById('annual-chart-wrap').innerHTML = '<canvas id="annualChart"></canvas>';
 
     if (annualChartInst) annualChartInst.destroy();
+    // 「水位」的漸層底色
+    const waterFill = c => {
+      const { ctx, chartArea } = c.chart;
+      if (!chartArea) return 'rgba(139,92,246,0.15)';
+      const g = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+      g.addColorStop(0, 'rgba(139,92,246,0.28)');
+      g.addColorStop(1, 'rgba(139,92,246,0)');
+      return g;
+    };
+    // 手機上 Y 軸用「萬」縮短，避免擠在一起
+    const shortMoney = v => {
+      const n = Number(v) || 0;
+      if (Math.abs(n) >= 10000) return (n / 10000).toFixed(n % 10000 === 0 ? 0 : 1) + '萬';
+      return n.toLocaleString();
+    };
+    const tickFont = { family: 'DM Mono', size: 11 };
+    const labelFont = { family: 'Noto Sans TC', size: 11 };
+
     annualChartInst = new Chart(document.getElementById('annualChart'), {
-      type: 'line',
+      type: 'bar',
       data: {
         labels,
         datasets: [
           {
-            label: '實質支出',
+            type: 'bar',
+            label: '支出',
             data: expVals,
-            borderColor: '#c45a2a',
-            backgroundColor: 'rgba(196,90,42,0.06)',
-            fill: false, tension: 0,
-            pointRadius: 4, pointBackgroundColor: '#c45a2a',
-            borderWidth: 2
+            backgroundColor: 'rgba(196,90,42,0.85)',
+            hoverBackgroundColor: '#c45a2a',
+            borderRadius: 6,
+            maxBarThickness: 18,
+            order: 3
           },
           {
-            label: '新增收入',
+            type: 'bar',
+            label: '收入',
             data: incVals,
-            borderColor: '#2d7a5f',
-            backgroundColor: 'rgba(45,122,95,0.06)',
-            fill: false, tension: 0,
-            pointRadius: 4, pointBackgroundColor: '#2d7a5f',
-            borderWidth: 2
+            backgroundColor: 'rgba(45,122,95,0.75)',
+            hoverBackgroundColor: '#2d7a5f',
+            borderRadius: 6,
+            maxBarThickness: 18,
+            order: 3
           },
           {
-            label: '帳戶總水位 (期末餘額)',
+            type: 'line',
+            label: '帳戶水位',
             data: balVals,
             borderColor: '#8b5cf6',
-            backgroundColor: 'rgba(139,92,246,0.04)',
-            fill: true, tension: 0,
-            pointRadius: 5, pointBackgroundColor: '#8b5cf6',
-            borderDash: [5, 5],
-            borderWidth: 2.5
+            backgroundColor: waterFill,
+            fill: true,
+            tension: 0.4,
+            cubicInterpolationMode: 'monotone',
+            pointRadius: 3,
+            pointHoverRadius: 6,
+            pointBackgroundColor: '#fff',
+            pointBorderColor: '#8b5cf6',
+            pointBorderWidth: 2,
+            borderWidth: 2.5,
+            order: 1
           }
         ]
       },
       options: {
-        responsive: true, maintainAspectRatio: false,
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
         plugins: {
-          legend: { display: true, labels: { font: { family: 'Noto Sans TC', size: 13 } } },
-          tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}：$${ctx.parsed.y.toLocaleString()}` } }
+          legend: {
+            display: true,
+            position: 'top',
+            align: 'end',
+            labels: { usePointStyle: true, boxWidth: 8, font: labelFont, color: '#64748b' }
+          },
+          tooltip: {
+            backgroundColor: 'rgba(15,23,42,0.92)',
+            padding: 10,
+            titleFont: { family: 'Noto Sans TC', size: 12, weight: '600' },
+            bodyFont: { family: 'DM Mono', size: 12 },
+            callbacks: {
+              label: ctx => ` ${ctx.dataset.label}：$${Math.round(ctx.parsed.y).toLocaleString()}`
+            }
+          }
         },
         scales: {
-          x: { ticks: { font: { family: 'Noto Sans TC', size: 12 } } },
+          x: {
+            grid: { display: false },
+            ticks: { font: labelFont, color: '#64748b', maxRotation: 0 }
+          },
           y: {
             beginAtZero: true,
-            ticks: { callback: v => '$' + v.toLocaleString(), font: { family: 'DM Mono', size: 12 } }
+            grid: { color: 'rgba(148,163,184,0.18)', drawBorder: false },
+            border: { display: false },
+            ticks: { callback: shortMoney, font: tickFont, color: '#64748b', maxTicksLimit: 5 }
           }
         }
       }
@@ -894,11 +941,11 @@ async function renderAnnualChart() {
     const totalInc = incVals.reduce((s, v) => s + v, 0);
     const balance = totalInc - totalExp;
     document.getElementById('annual-summary').innerHTML = `
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px">
-        <div class="card"><div class="card-label">年度收入</div><div class="card-value income">${fmt(totalInc)}</div></div>
-        <div class="card"><div class="card-label">年度支出</div><div class="card-value expense">${fmt(totalExp)}</div></div>
-        <div class="card"><div class="card-label">年度結餘</div>
-          <div class="card-value" style="color:${balance>=0?'var(--income)':'var(--expense)'}">${fmt(balance)}</div>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:12px">
+        <div class="card" style="min-width:0"><div class="card-label">年度收入</div><div class="card-value income" style="font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${fmt(totalInc)}</div></div>
+        <div class="card" style="min-width:0"><div class="card-label">年度支出</div><div class="card-value expense" style="font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${fmt(totalExp)}</div></div>
+        <div class="card" style="min-width:0;grid-column:1 / -1"><div class="card-label">年度結餘</div>
+          <div class="card-value" style="font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${balance>=0?'var(--income)':'var(--expense)'}">${fmt(balance)}</div>
         </div>
       </div>`;
 

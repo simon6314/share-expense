@@ -185,7 +185,14 @@ function setManualSeason(m) {
 }
 
 // ── API ───────────────────────────────────────────────────────
+const WRITE_ACTIONS = ['add', 'updateRecord', 'updateTransfer', 'delete', 'setSettings'];
 async function apiCall(params) {
+  // 寫入後清掉年度快取，避免年度頁顯示舊資料
+  if (WRITE_ACTIONS.includes(params.action)) {
+    sheetListCache = null;
+    yearExpenseCache.clear();
+    annualSummaryCache.clear();
+  }
   const qs = Object.entries(params)
     .map(([k,v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v)).join('&');
   const res = await fetch(API + '?' + qs);
@@ -828,8 +835,11 @@ async function renderAnnualChart() {
     '<div class="loading-state"><div class="spinner"></div>載入年度數據中…</div>';
   document.getElementById('annual-summary').innerHTML = '';
 
+  // 分析與圖表並行載入，不必等圖表完成
+  renderAnnualAnalysis(year);
+
   try {
-    const res = await apiCall({ action: 'getAnnualSummary', year });
+    const res = await getAnnualSummaryCached(year);
     const monthData = res.summary || [];
 
     const expVals = monthData.map(d => d.expense);
@@ -970,25 +980,63 @@ async function renderAnnualChart() {
     document.getElementById('annual-chart-wrap').innerHTML =
       '<div class="empty-state">⚠️ 載入失敗，請重試</div>';
   }
-
-  renderAnnualAnalysis(year);
 }
 
 // ── 年度消費分析：逐月讀取工作表，彙整支出（規則與 renderAll 一致：排除先付/代墊與彙總列）──
-async function loadYearExpenses(year) {
-  const listRes = await apiCall({ action: 'getSheets' });
-  const sheets = (listRes.sheets || []).filter(s => {
-    const m = s.match(/(\d{4})\/(\d{1,2})月/);
-    return m && parseInt(m[1]) === year;
+// 年度頁快取：短時間內重複切換不再重抓（2 分鐘內有效）
+const ANNUAL_CACHE_MS = 2 * 60 * 1000;
+let sheetListCache = null; // { at, promise }
+const yearExpenseCache = new Map(); // year -> { at, promise }
+const annualSummaryCache = new Map(); // year -> { at, promise }
+
+function getSheetListCached() {
+  if (!sheetListCache || Date.now() - sheetListCache.at > ANNUAL_CACHE_MS) {
+    const at = Date.now();
+    const promise = apiCall({ action: 'getSheets' }).catch(e => {
+      if (sheetListCache && sheetListCache.promise === promise) sheetListCache = null;
+      throw e;
+    });
+    sheetListCache = { at, promise };
+  }
+  return sheetListCache.promise;
+}
+
+function getAnnualSummaryCached(year) {
+  const hit = annualSummaryCache.get(year);
+  if (hit && Date.now() - hit.at < ANNUAL_CACHE_MS) return hit.promise;
+  const promise = apiCall({ action: 'getAnnualSummary', year }).catch(e => {
+    annualSummaryCache.delete(year);
+    throw e;
   });
-  const results = await Promise.all(sheets.map(async s => {
-    const month = parseInt(s.match(/\/(\d{1,2})月/)[1]);
-    const d = await apiCall({ action: 'getAll', sheet: s });
-    const exp = (d.records || []).filter(r =>
-      !isSummaryRow(r) && r.owner !== '' && r.expense > 0 && !(r.note && r.note.includes('先付')));
-    return { month, exp };
-  }));
-  return results;
+  annualSummaryCache.set(year, { at: Date.now(), promise });
+  return promise;
+}
+
+async function loadYearExpenses(year) {
+  const hit = yearExpenseCache.get(year);
+  if (hit && Date.now() - hit.at < ANNUAL_CACHE_MS) return hit.promise;
+
+  const promise = (async () => {
+    const listRes = await getSheetListCached();
+    const sheets = (listRes.sheets || []).filter(s => {
+      const m = s.match(/(\d{4})\/(\d{1,2})月/);
+      return m && parseInt(m[1]) === year;
+    });
+    const results = await Promise.all(sheets.map(async s => {
+      const month = parseInt(s.match(/\/(\d{1,2})月/)[1]);
+      const d = await apiCall({ action: 'getAll', sheet: s });
+      const exp = (d.records || []).filter(r =>
+        !isSummaryRow(r) && r.owner !== '' && r.expense > 0 && !(r.note && r.note.includes('先付')));
+      return { month, exp };
+    }));
+    return results;
+  })().catch(e => {
+    yearExpenseCache.delete(year);
+    throw e;
+  });
+
+  yearExpenseCache.set(year, { at: Date.now(), promise });
+  return promise;
 }
 
 async function renderAnnualAnalysis(year) {
@@ -996,11 +1044,11 @@ async function renderAnnualAnalysis(year) {
   box.innerHTML = '<div class="loading-state"><div class="spinner"></div>分析年度消費中…</div>';
 
   try {
-    const cur = await loadYearExpenses(year);
+    // 今年與去年同時讀取
+    const [cur, prev] = await Promise.all([loadYearExpenses(year), loadYearExpenses(year - 1)]);
     if (!cur.length) { box.innerHTML = ''; return; }
 
     // 去年同期比較（只比較今年已有資料的月份）
-    const prev = await loadYearExpenses(year - 1);
     const monthsWithData = cur.map(c => c.month);
     const lastMonth = Math.max(...monthsWithData);
 

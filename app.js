@@ -2806,7 +2806,25 @@ function updateIslandLegend(cats, balance) {
 }
 
 // ── 家用品庫存 ─────────────────────────────────────────────────
-let inventory = []; // null 代表載入失敗
+const INV_STORE_KEY = 'shareExpense.inventoryCache.v1';
+function loadInventoryStore() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(INV_STORE_KEY) || 'null');
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) { return []; }
+}
+function persistInventoryStore() {
+  try {
+    if (Array.isArray(inventory)) localStorage.setItem(INV_STORE_KEY, JSON.stringify(inventory));
+  } catch (e) { /* 無痕模式或空間不足時略過 */ }
+}
+// 上次的庫存（localStorage 保存，先顯示再背景更新）；null 代表載入失敗
+let inventory = loadInventoryStore();
+// 寫入中的請求數與「寫入世代」：背景更新若與寫入重疊，就放棄那次結果，寫入完成後再重新讀取
+let invPending = 0;
+let invWriteEpoch = 0;
+let invRefreshQueued = false;
+const INV_WRITE_ACTIONS = ['addInventory', 'updateInventory', 'deleteInventory'];
 // 庫存品：品項名稱必須與下列詞完全相同（忽略空白與大小寫）才算，圖示也由此決定
 const INV_ICON_MAP = {
   '衛生紙': '🧻', '捲筒衛生紙': '🧻', '面紙': '🧻', '廁紙': '🧻', '濕紙巾': '🧻', '紙巾': '🧻', '擦臉巾': '🧻',
@@ -2870,19 +2888,40 @@ function shouldLinkInventory(item, note) {
 }
 
 async function invApi(params) {
-  const d = await apiCall(params);
-  if (d.error) throw new Error(d.error);
-  return d;
+  const isWrite = INV_WRITE_ACTIONS.includes(params.action);
+  if (isWrite) { invPending++; invWriteEpoch++; }
+  try {
+    const d = await apiCall(params);
+    if (d.error) throw new Error(d.error);
+    return d;
+  } finally {
+    if (isWrite) {
+      invPending--;
+      if (invPending === 0 && invRefreshQueued) {
+        invRefreshQueued = false;
+        loadInventory();
+      }
+    }
+  }
 }
 
+// 先顯示上次的庫存，再背景讀取最新資料
 async function loadInventory() {
   const grid = document.getElementById('inv-grid');
   if (grid && !inventory.length) grid.innerHTML = '<div class="loading-state"><div class="spinner"></div>載入中…</div>';
+  if (inventory && inventory.length) renderInventory(); // 有上次的資料就先畫
+
+  // 寫入中就先排隊，等寫入完成再讀，避免把舊值蓋回去
+  if (invPending > 0) { invRefreshQueued = true; return; }
+  const epoch = invWriteEpoch;
   try {
     const d = await invApi({ action: 'getInventory' });
+    if (invPending > 0 || epoch !== invWriteEpoch) { invRefreshQueued = true; return; }
     inventory = d.items || [];
+    persistInventoryStore();
   } catch (e) {
-    inventory = null;
+    // 讀取失敗：有上次的資料就保留；沒有才顯示錯誤
+    if (!inventory || inventory.length === 0) inventory = null;
   }
   renderInventory();
 }
@@ -2919,6 +2958,7 @@ function renderInventory() {
   const grid = document.getElementById('inv-grid');
   const shop = document.getElementById('inv-shop');
   if (!grid || !shop) return;
+  persistInventoryStore();
   if (inventory === null) {
     shop.innerHTML = '';
     grid.innerHTML = '<div class="empty-state">⚠️ 無法載入庫存，請稍後再試</div>';

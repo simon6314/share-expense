@@ -20,43 +20,43 @@ const hoverProgress = {
 
 // 立體地標圖檔載入器與去背引擎
 const ASSET_FILES = {
-  island_base: 'assets/island_base.png?v=3',
-  campfire: 'assets/campfire.png?v=2',
-  tent: 'assets/tent.png?v=2',
-  simple_hotel: 'assets/simple_hotel.png?v=2',
-  luxury_hotel: 'assets/luxury_hotel.png?v=2',
-  cafe: 'assets/cafe.png?v=3',
-  farm: 'assets/farm.png?v=2',
-  hydrangea_garden: 'assets/hydrangea_garden.png?v=2',
-  ferris_wheel: 'assets/ferris_wheel.png?v=3',
-  amusement_park: 'assets/amusement_park.png?v=2',
-  luxury_hotel_universal: 'assets/luxury_hotel_universal.png?v=2',
-  station: 'assets/station.png?v=2',
-  apartment: 'assets/apartment.png?v=2',
-  utilities_windmill: 'assets/utilities_windmill.png?v=1',
-  utilities_solar_water: 'assets/utilities_solar_water.png?v=1',
-  utilities_substation: 'assets/utilities_substation.png?v=1',
-  utilities_reactor: 'assets/utilities_reactor.png?v=1',
-  balloon: 'assets/balloon.png?v=7',
-  bicycle: 'assets/bicycle.png?v=2',
-  car: 'assets/car.png?v=2',
-  train: 'assets/train.png?v=2',
-  airplane: 'assets/airplane.png?v=2',
-  beverage: 'assets/beverage.png?v=2',
-  bento: 'assets/bento.png?v=2',
-  restaurant: 'assets/restaurant.png?v=3',
-  rent_apartment: 'assets/rent_apartment.png?v=3',
-  rent_villa: 'assets/rent_villa.png?v=3',
-  rent_luxury_building: 'assets/rent_luxury_building.png?v=3',
-  rent_palace: 'assets/rent_palace.png?v=3',
-  grocery_garden: 'assets/grocery_garden.png?v=1',
-  grocery_greenhouse: 'assets/grocery_greenhouse.png?v=1',
-  grocery_supermarket: 'assets/grocery_supermarket.png?v=1',
-  grocery_large_supermarket: 'assets/grocery_large_supermarket.png?v=1',
-  shopping_boxes: 'assets/shopping_boxes.png?v=1',
-  shopping_general_store: 'assets/shopping_general_store.png?v=1',
-  shopping_department_store: 'assets/shopping_department_store.png?v=1',
-  shopping_logistics: 'assets/shopping_logistics.png?v=1'
+  island_base: 'assets/island_base.webp?v=3',
+  campfire: 'assets/campfire.webp?v=2',
+  tent: 'assets/tent.webp?v=2',
+  simple_hotel: 'assets/simple_hotel.webp?v=2',
+  luxury_hotel: 'assets/luxury_hotel.webp?v=2',
+  cafe: 'assets/cafe.webp?v=3',
+  farm: 'assets/farm.webp?v=2',
+  hydrangea_garden: 'assets/hydrangea_garden.webp?v=2',
+  ferris_wheel: 'assets/ferris_wheel.webp?v=3',
+  amusement_park: 'assets/amusement_park.webp?v=2',
+  luxury_hotel_universal: 'assets/luxury_hotel_universal.webp?v=2',
+  station: 'assets/station.webp?v=2',
+  apartment: 'assets/apartment.webp?v=2',
+  utilities_windmill: 'assets/utilities_windmill.webp?v=1',
+  utilities_solar_water: 'assets/utilities_solar_water.webp?v=1',
+  utilities_substation: 'assets/utilities_substation.webp?v=1',
+  utilities_reactor: 'assets/utilities_reactor.webp?v=1',
+  balloon: 'assets/balloon.webp?v=7',
+  bicycle: 'assets/bicycle.webp?v=2',
+  car: 'assets/car.webp?v=2',
+  train: 'assets/train.webp?v=2',
+  airplane: 'assets/airplane.webp?v=2',
+  beverage: 'assets/beverage.webp?v=2',
+  bento: 'assets/bento.webp?v=2',
+  restaurant: 'assets/restaurant.webp?v=3',
+  rent_apartment: 'assets/rent_apartment.webp?v=3',
+  rent_villa: 'assets/rent_villa.webp?v=3',
+  rent_luxury_building: 'assets/rent_luxury_building.webp?v=3',
+  rent_palace: 'assets/rent_palace.webp?v=3',
+  grocery_garden: 'assets/grocery_garden.webp?v=1',
+  grocery_greenhouse: 'assets/grocery_greenhouse.webp?v=1',
+  grocery_supermarket: 'assets/grocery_supermarket.webp?v=1',
+  grocery_large_supermarket: 'assets/grocery_large_supermarket.webp?v=1',
+  shopping_boxes: 'assets/shopping_boxes.webp?v=1',
+  shopping_general_store: 'assets/shopping_general_store.webp?v=1',
+  shopping_department_store: 'assets/shopping_department_store.webp?v=1',
+  shopping_logistics: 'assets/shopping_logistics.webp?v=1'
 };
 
 const ASSETS = {};
@@ -1451,6 +1451,12 @@ function preloadAssets(callback) {
       }
     };
     img.onerror = () => {
+      if (!img._retried) {
+        // 失敗先重試一次（避免偶發的網路問題讓整棟建築永遠畫成線條）
+        img._retried = true;
+        setTimeout(() => { img.src = ASSET_FILES[key] + '&r=1'; }, 1500);
+        return;
+      }
       console.warn("Failed to load asset: " + key);
       loadedCount++;
       if (loadedCount === total) {
@@ -1791,7 +1797,7 @@ function drawCloud(ctx, x, y, r) {
 
 // 繪製島嶼基座 (草地及岩土層)
 function drawBaseIsland(ctx, cx, cy, tileW, tileH) {
-  if (assetsLoaded && ASSETS.island_base) {
+  if (ASSETS.island_base) {
     try {
       const img = ASSETS.island_base;
       const w = 900;
@@ -2080,7 +2086,7 @@ function drawIsoFlower(ctx, cx, cy, col) {
 }
 
 function drawIsoBuilding(ctx, cx, cy, type, value, angle, floatY) {
-  if (assetsLoaded) {
+  {
     const assetMap = {
       dining: { img: ASSETS.cafe, zeroColor: "#fef08a", th1: 1500, th2: 6000 },
       grocery: { img: ASSETS.grocery_garden, zeroColor: "#bbf7d0", th1: 1500, th2: 3500 },

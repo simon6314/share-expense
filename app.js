@@ -199,17 +199,42 @@ function setSyncStatus(state, text) {
 
 function currentSheet() { return document.getElementById('monthSel').value; }
 
+// 各月份的明細快取（記憶體內）：切換月份時先顯示，再背景更新
+const monthRecordsCache = new Map(); // sheet -> records
+// 目前畫面上的 records 是否已是最新（快取顯示中為 false；此時不允許修改，避免列號對到錯的資料）
+let recordsFresh = true;
+
+function guardRecordsFresh() {
+  if (recordsFresh) return true;
+  showToast('資料更新中，請稍候再試');
+  return false;
+}
+
 async function loadData() {
   loadIconRules(); // 讀取圖示對照（不等待）
+  const sheet = currentSheet();
   const loadHTML = '<div class="loading-state"><div class="spinner"></div>載入中…</div>';
-  document.getElementById('recordBody').innerHTML = '<tr><td colspan="6">' + loadHTML + '</td></tr>';
-  document.getElementById('recordCards').innerHTML = loadHTML;
+  const cached = monthRecordsCache.get(sheet);
+  if (cached) {
+    records = cached;
+    recordsFresh = false;
+    renderAll();
+  } else {
+    document.getElementById('recordBody').innerHTML = '<tr><td colspan="6">' + loadHTML + '</td></tr>';
+    document.getElementById('recordCards').innerHTML = loadHTML;
+    records = [];
+    recordsFresh = false;
+  }
   setSyncStatus('loading', '同步中…');
   try {
     loadIncomeSettings(); // 同步試算表的進帳設定（不等待）
-    const data = await apiCall({ action: 'getAll', sheet: currentSheet() });
+    const data = await apiCall({ action: 'getAll', sheet });
     if (data.error) throw new Error(data.error);
-    records = data.records || [];
+    const fresh = data.records || [];
+    monthRecordsCache.set(sheet, fresh);
+    if (sheet !== currentSheet()) return; // 使用者已切到其他月份，這筆只存快取
+    records = fresh;
+    recordsFresh = true;
     setSyncStatus('ok', '已同步 · ' + new Date().toLocaleTimeString('zh-TW'));
     
     // 自動更新為目前月份主題
@@ -220,14 +245,30 @@ async function loadData() {
     
     renderAll();
   } catch(e) {
+    if (sheet !== currentSheet()) return;
     setSyncStatus('err', '連線失敗');
-    const errHTML = '<div class="empty-state">⚠️ 無法連線到 Google 試算表</div>';
-    document.getElementById('recordBody').innerHTML = '<tr><td colspan="6">' + errHTML + '</td></tr>';
-    document.getElementById('recordCards').innerHTML = errHTML;
+    if (!cached) {
+      const errHTML = '<div class="empty-state">⚠️ 無法連線到 Google 試算表</div>';
+      document.getElementById('recordBody').innerHTML = '<tr><td colspan="6">' + errHTML + '</td></tr>';
+      document.getElementById('recordCards').innerHTML = errHTML;
+    }
+  }
+}
+
+// 背景預先讀取其他月份（一次一個，避免同時打太多請求）
+async function prefetchOtherMonths() {
+  const sel = document.getElementById('monthSel');
+  const others = Array.from(sel.options).map(o => o.value).filter(v => v && v !== currentSheet() && !monthRecordsCache.has(v));
+  for (const sheet of others) {
+    try {
+      const data = await apiCall({ action: 'getAll', sheet });
+      if (!data.error) monthRecordsCache.set(sheet, data.records || []);
+    } catch (e) { /* 失敗就略過，切換時會再讀 */ }
   }
 }
 
 async function addRecord(data) {
+  if (!guardRecordsFresh()) return;
   setSyncStatus('loading', '儲存中…');
   try {
     const summaryRow = records.find(r => r.item && r.item.includes('總收入/支出'));
@@ -243,6 +284,7 @@ async function addRecord(data) {
 
 // 編輯既有記錄：以列號寫入，並帶入原本的項目名稱讓後端確認是同一筆
 async function updateRecordApi(rec, data) {
+  if (!guardRecordsFresh()) return;
   setSyncStatus('loading', '儲存中…');
   try {
     const res = await apiCall({
@@ -260,6 +302,7 @@ async function updateRecordApi(rec, data) {
 }
 
 async function updateTransfer(row, field, value) {
+  if (!guardRecordsFresh()) return;
   setSyncStatus('loading', '更新中…');
   const rec = records.find(r => r.row === row);
   let foxSync = null; // 需要同步到小狐狸「支出部分轉回」列的金額
@@ -308,6 +351,7 @@ async function updateTransfer(row, field, value) {
 }
 
 async function deleteRecord(row) {
+  if (!guardRecordsFresh()) return;
   if (!confirm('確定刪除這筆記錄？')) return;
   const rec = records.find(r => r.row === row);
   setSyncStatus('loading', '刪除中…');
@@ -1361,6 +1405,8 @@ async function initSheets() {
     else if (sheets.length>0) sel.value=sheets[0];
   } catch(e) { console.error('無法載入工作表清單',e); }
   await loadData();
+  // 當月載入完成後，背景再抓其他月份
+  setTimeout(() => { prefetchOtherMonths(); }, 500);
 }
 
 // ── INIT ─────────────────────────────────────────────────────

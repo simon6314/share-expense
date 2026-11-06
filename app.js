@@ -213,6 +213,8 @@ function guardRecordsFresh() {
 async function loadData() {
   loadIconRules(); // 讀取圖示對照（不等待）
   const sheet = currentSheet();
+  // 主題跟著所選月份立即切換（不必等同步完成）
+  if (!manualSeason) applyMonthTheme(getAutoMonth());
   const loadHTML = '<div class="loading-state"><div class="spinner"></div>載入中…</div>';
   const cached = monthRecordsCache.get(sheet);
   if (cached) {

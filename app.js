@@ -841,6 +841,7 @@ async function renderAnnualChart() {
     const entry = annualLastData.get(year) || {};
     if (entry.summaryJson === json) return; // 資料沒變，不重畫
     annualLastData.set(year, { ...entry, summaryJson: json, summary: res });
+    persistAnnualStore();
     drawAnnualChart(year, res);
   } catch (e) {
     if (!last || !last.summary) {
@@ -1012,7 +1013,19 @@ async function loadYearExpenses(year, listRes) {
 }
 
 // 上次成功載入的資料（記憶體內）：先顯示它，再背景更新
-const annualLastData = new Map(); // year -> { summaryJson, summary, analysisJson, analysis }
+const ANNUAL_STORE_KEY = 'shareExpense.annualCache.v1';
+function loadAnnualStore() {
+  try {
+    const obj = JSON.parse(localStorage.getItem(ANNUAL_STORE_KEY) || '{}');
+    return new Map(Object.entries(obj).map(([k, v]) => [Number(k), v]));
+  } catch (e) { return new Map(); }
+}
+const annualLastData = loadAnnualStore(); // year -> { summaryJson, summary, analysisJson, analysis }
+function persistAnnualStore() {
+  try {
+    localStorage.setItem(ANNUAL_STORE_KEY, JSON.stringify(Object.fromEntries(annualLastData)));
+  } catch (e) { /* 無痕模式或空間不足時略過，不影響正常使用 */ }
+}
 
 async function renderAnnualAnalysis(year) {
   const box = document.getElementById('annual-analysis');
@@ -1030,6 +1043,7 @@ async function renderAnnualAnalysis(year) {
     const entry = annualLastData.get(year) || {};
     if (entry.analysisJson === json) return; // 資料沒變，不重畫
     annualLastData.set(year, { ...entry, analysisJson: json, analysis: { cur, prev } });
+    persistAnnualStore();
     showAnnualAnalysis(year, cur, prev);
   } catch (e) {
     if (!last || !last.analysis) box.innerHTML = '<div class="empty-state">⚠️ 年度分析載入失敗</div>';

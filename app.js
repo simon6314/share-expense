@@ -185,14 +185,7 @@ function setManualSeason(m) {
 }
 
 // ── API ───────────────────────────────────────────────────────
-const WRITE_ACTIONS = ['add', 'updateRecord', 'updateTransfer', 'delete', 'setSettings'];
 async function apiCall(params) {
-  // 寫入後清掉年度快取，避免年度頁顯示舊資料
-  if (WRITE_ACTIONS.includes(params.action)) {
-    sheetListCache = null;
-    yearExpenseCache.clear();
-    annualSummaryCache.clear();
-  }
   const qs = Object.entries(params)
     .map(([k,v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v)).join('&');
   const res = await fetch(API + '?' + qs);
@@ -831,15 +824,34 @@ async function renderAnnualChart() {
   const year = yearMatch ? parseInt(yearMatch[1]) : new Date().getFullYear();
 
   document.getElementById('annual-title').textContent = `${year} 年度月份收支`;
-  document.getElementById('annual-chart-wrap').innerHTML =
-    '<div class="loading-state"><div class="spinner"></div>載入年度數據中…</div>';
-  document.getElementById('annual-summary').innerHTML = '';
+  const last = annualLastData.get(year);
+  if (last && last.summary) {
+    drawAnnualChart(year, last.summary); // 先用上次的資料畫
+  } else {
+    document.getElementById('annual-chart-wrap').innerHTML =
+      '<div class="loading-state"><div class="spinner"></div>載入年度數據中…</div>';
+    document.getElementById('annual-summary').innerHTML = '';
+  }
 
-  // 分析與圖表並行載入，不必等圖表完成
-  renderAnnualAnalysis(year);
+  renderAnnualAnalysis(year); // 分析與圖表並行
 
   try {
-    const res = await getAnnualSummaryCached(year);
+    const res = await apiCall({ action: 'getAnnualSummary', year });
+    const json = JSON.stringify(res);
+    const entry = annualLastData.get(year) || {};
+    if (entry.summaryJson === json) return; // 資料沒變，不重畫
+    annualLastData.set(year, { ...entry, summaryJson: json, summary: res });
+    drawAnnualChart(year, res);
+  } catch (e) {
+    if (!last || !last.summary) {
+      document.getElementById('annual-chart-wrap').innerHTML =
+        '<div class="empty-state">⚠️ 載入失敗，請重試</div>';
+    }
+  }
+}
+
+function drawAnnualChart(year, res) {
+  try {
     const monthData = res.summary || [];
 
     const expVals = monthData.map(d => d.expense);
@@ -978,74 +990,55 @@ async function renderAnnualChart() {
 
   } catch(e) {
     document.getElementById('annual-chart-wrap').innerHTML =
-      '<div class="empty-state">⚠️ 載入失敗，請重試</div>';
+      '<div class="empty-state">⚠️ 圖表繪製失敗</div>';
   }
 }
 
 // ── 年度消費分析：逐月讀取工作表，彙整支出（規則與 renderAll 一致：排除先付/代墊與彙總列）──
-// 年度頁快取：短時間內重複切換不再重抓（2 分鐘內有效）
-const ANNUAL_CACHE_MS = 2 * 60 * 1000;
-let sheetListCache = null; // { at, promise }
-const yearExpenseCache = new Map(); // year -> { at, promise }
-const annualSummaryCache = new Map(); // year -> { at, promise }
-
-function getSheetListCached() {
-  if (!sheetListCache || Date.now() - sheetListCache.at > ANNUAL_CACHE_MS) {
-    const at = Date.now();
-    const promise = apiCall({ action: 'getSheets' }).catch(e => {
-      if (sheetListCache && sheetListCache.promise === promise) sheetListCache = null;
-      throw e;
-    });
-    sheetListCache = { at, promise };
-  }
-  return sheetListCache.promise;
-}
-
-function getAnnualSummaryCached(year) {
-  const hit = annualSummaryCache.get(year);
-  if (hit && Date.now() - hit.at < ANNUAL_CACHE_MS) return hit.promise;
-  const promise = apiCall({ action: 'getAnnualSummary', year }).catch(e => {
-    annualSummaryCache.delete(year);
-    throw e;
+// 逐月讀取某年的支出（不做時間快取；每次都向試算表取最新資料）
+async function loadYearExpenses(year, listRes) {
+  const sheets = (listRes.sheets || []).filter(s => {
+    const m = s.match(/(\d{4})\/(\d{1,2})月/);
+    return m && parseInt(m[1]) === year;
   });
-  annualSummaryCache.set(year, { at: Date.now(), promise });
-  return promise;
+  const results = await Promise.all(sheets.map(async s => {
+    const month = parseInt(s.match(/\/(\d{1,2})月/)[1]);
+    const d = await apiCall({ action: 'getAll', sheet: s });
+    const exp = (d.records || []).filter(r =>
+      !isSummaryRow(r) && r.owner !== '' && r.expense > 0 && !(r.note && r.note.includes('先付')));
+    return { month, exp };
+  }));
+  return results;
 }
 
-async function loadYearExpenses(year) {
-  const hit = yearExpenseCache.get(year);
-  if (hit && Date.now() - hit.at < ANNUAL_CACHE_MS) return hit.promise;
-
-  const promise = (async () => {
-    const listRes = await getSheetListCached();
-    const sheets = (listRes.sheets || []).filter(s => {
-      const m = s.match(/(\d{4})\/(\d{1,2})月/);
-      return m && parseInt(m[1]) === year;
-    });
-    const results = await Promise.all(sheets.map(async s => {
-      const month = parseInt(s.match(/\/(\d{1,2})月/)[1]);
-      const d = await apiCall({ action: 'getAll', sheet: s });
-      const exp = (d.records || []).filter(r =>
-        !isSummaryRow(r) && r.owner !== '' && r.expense > 0 && !(r.note && r.note.includes('先付')));
-      return { month, exp };
-    }));
-    return results;
-  })().catch(e => {
-    yearExpenseCache.delete(year);
-    throw e;
-  });
-
-  yearExpenseCache.set(year, { at: Date.now(), promise });
-  return promise;
-}
+// 上次成功載入的資料（記憶體內）：先顯示它，再背景更新
+const annualLastData = new Map(); // year -> { summaryJson, summary, analysisJson, analysis }
 
 async function renderAnnualAnalysis(year) {
   const box = document.getElementById('annual-analysis');
-  box.innerHTML = '<div class="loading-state"><div class="spinner"></div>分析年度消費中…</div>';
+  const last = annualLastData.get(year);
+  if (last && last.analysis) {
+    showAnnualAnalysis(year, last.analysis.cur, last.analysis.prev);
+  } else {
+    box.innerHTML = '<div class="loading-state"><div class="spinner"></div>分析年度消費中…</div>';
+  }
 
   try {
-    // 今年與去年同時讀取
-    const [cur, prev] = await Promise.all([loadYearExpenses(year), loadYearExpenses(year - 1)]);
+    const listRes = await apiCall({ action: 'getSheets' });
+    const [cur, prev] = await Promise.all([loadYearExpenses(year, listRes), loadYearExpenses(year - 1, listRes)]);
+    const json = JSON.stringify([cur, prev]);
+    const entry = annualLastData.get(year) || {};
+    if (entry.analysisJson === json) return; // 資料沒變，不重畫
+    annualLastData.set(year, { ...entry, analysisJson: json, analysis: { cur, prev } });
+    showAnnualAnalysis(year, cur, prev);
+  } catch (e) {
+    if (!last || !last.analysis) box.innerHTML = '<div class="empty-state">⚠️ 年度分析載入失敗</div>';
+  }
+}
+
+function showAnnualAnalysis(year, cur, prev) {
+  const box = document.getElementById('annual-analysis');
+  try {
     if (!cur.length) { box.innerHTML = ''; return; }
 
     // 去年同期比較（只比較今年已有資料的月份）

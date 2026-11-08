@@ -627,7 +627,7 @@ function categorize(item) {
   if (/每月的愛/.test(item)) return '固定轉帳';
   if (/momo|蝦皮|酷澎|淘寶|網購|眼鏡|佳瑪|金玉堂|外套/.test(item)) return '網購';
   if (/演唱會|展覽|音樂會|舞台劇/.test(item)) return '表演展覽';
-  if (/隧道|打彈珠|門票|影城|小島(?!咖啡)/.test(item)) return '景點';
+  if (/隧道|打彈珠|門票|影城/.test(item)) return '景點';
   if (/原攝/.test(item)) return '相片';
   return '餐飲';
 }
@@ -1495,7 +1495,7 @@ function getCategoryExpenses() {
       catExpenses.dining += r.expense;
     } else if (cat === '超市採購' || cat === '便利商店') {
       catExpenses.grocery += r.expense;
-    } else if (cat === '住宿旅遊' || cat === '景點') {
+    } else if (cat === '住宿旅遊' || cat === '景點' || cat === '表演展覽') {
       catExpenses.travel += r.expense;
     } else if (cat === '交通') {
       catExpenses.transport += r.expense;

@@ -626,7 +626,7 @@ function categorize(item) {
   if (/修繕|水電工/.test(item)) return '水電雜支';
   if (/每月的愛/.test(item)) return '固定轉帳';
   if (/momo|蝦皮|酷澎|淘寶|網購|眼鏡|佳瑪|金玉堂|外套/.test(item)) return '網購';
-  if (/隧道|打彈珠|門票|影城/.test(item)) return '景點';
+  if (/隧道|打彈珠|門票|影城|小島(?!咖啡)/.test(item)) return '景點';
   if (/演唱會|展覽|音樂會|舞台劇/.test(item)) return '表演展覽';
   if (/原攝/.test(item)) return '相片';
   return '餐飲';

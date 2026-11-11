@@ -201,6 +201,41 @@ function currentSheet() { return document.getElementById('monthSel').value; }
 
 // 各月份的明細快取（記憶體內）：切換月份時先顯示，再背景更新
 const monthRecordsCache = new Map(); // sheet -> records
+// 本機快取（每個月一份，附後端版本號）：版本沒變就不重抓，重新整理後也能立刻顯示
+const MONTH_STORE_PREFIX = 'shareExpense.month.v1:';
+const MONTH_TTL_MS = 24 * 3600 * 1000;   // 超過一天就重抓，防止直接在試算表改的資料沒被發現
+function readMonthStore(sheet) {
+  try {
+    const c = JSON.parse(localStorage.getItem(MONTH_STORE_PREFIX + sheet) || 'null');
+    return c && Array.isArray(c.records) ? c : null;
+  } catch (e) { return null; }
+}
+function writeMonthStore(sheet, records, ver) {
+  try { localStorage.setItem(MONTH_STORE_PREFIX + sheet, JSON.stringify({ ts: Date.now(), ver, records })); }
+  catch (e) { /* 空間不足或無痕模式時略過 */ }
+}
+// 取得各月份版本號；後端尚未更新時回傳 null（退回每次都重抓）
+async function getVersions() {
+  try {
+    const d = await apiCall({ action: 'getVersions' });
+    return d && !d.error ? (d.versions || {}) : null;
+  } catch (e) { return null; }
+}
+// 取得某月明細：force 為 true 時一定重抓；否則版本相同且快取未過期就直接用快取
+async function fetchMonth(sheet, vers, force) {
+  const sv = vers ? String(vers[sheet] || '0') : null;
+  const c = readMonthStore(sheet);
+  if (!force && c && sv !== null && String(c.ver) === sv && Date.now() - c.ts < MONTH_TTL_MS) {
+    monthRecordsCache.set(sheet, c.records);
+    return c.records;
+  }
+  const data = await apiCall({ action: 'getAll', sheet });
+  if (data.error) throw new Error(data.error);
+  const recs = data.records || [];
+  monthRecordsCache.set(sheet, recs);
+  writeMonthStore(sheet, recs, sv);
+  return recs;
+}
 // 目前畫面上的 records 是否已是最新（快取顯示中為 false；此時不允許修改，避免列號對到錯的資料）
 let recordsFresh = true;
 
@@ -216,6 +251,8 @@ async function loadData() {
   // 主題跟著所選月份立即切換（不必等同步完成）
   if (!manualSeason) applyMonthTheme(getAutoMonth());
   const loadHTML = '<div class="loading-state"><div class="spinner"></div>載入中…</div>';
+  const stored = readMonthStore(sheet);
+  if (stored && !monthRecordsCache.has(sheet)) monthRecordsCache.set(sheet, stored.records);
   const cached = monthRecordsCache.get(sheet);
   if (cached) {
     records = cached;
@@ -230,10 +267,8 @@ async function loadData() {
   setSyncStatus('loading', '同步中…');
   try {
     loadIncomeSettings(); // 同步試算表的進帳設定（不等待）
-    const data = await apiCall({ action: 'getAll', sheet });
-    if (data.error) throw new Error(data.error);
-    const fresh = data.records || [];
-    monthRecordsCache.set(sheet, fresh);
+    const vers = await getVersions();
+    const fresh = await fetchMonth(sheet, vers, true);   // 目前月份一律重抓
     if (sheet !== currentSheet()) return; // 使用者已切到其他月份，這筆只存快取
     records = fresh;
     recordsFresh = true;
@@ -260,12 +295,11 @@ async function loadData() {
 // 背景預先讀取其他月份（一次一個，避免同時打太多請求）
 async function prefetchOtherMonths() {
   const sel = document.getElementById('monthSel');
-  const others = Array.from(sel.options).map(o => o.value).filter(v => v && v !== currentSheet() && !monthRecordsCache.has(v));
+  const others = Array.from(sel.options).map(o => o.value).filter(v => v && v !== currentSheet());
+  const vers = await getVersions();
   for (const sheet of others) {
-    try {
-      const data = await apiCall({ action: 'getAll', sheet });
-      if (!data.error) monthRecordsCache.set(sheet, data.records || []);
-    } catch (e) { /* 失敗就略過，切換時會再讀 */ }
+    try { await fetchMonth(sheet, vers, false); }   // 版本沒變就只用快取
+    catch (e) { /* 失敗就略過，切換時會再讀 */ }
   }
 }
 
@@ -1049,10 +1083,11 @@ async function loadYearExpenses(year, listRes) {
     const m = s.match(/(\d{4})\/(\d{1,2})月/);
     return m && parseInt(m[1]) === year;
   });
+  const vers = await getVersions();
   const results = await Promise.all(sheets.map(async s => {
     const month = parseInt(s.match(/\/(\d{1,2})月/)[1]);
-    const d = await apiCall({ action: 'getAll', sheet: s });
-    const exp = (d.records || []).filter(r =>
+    const recs = await fetchMonth(s, vers, false);
+    const exp = recs.filter(r =>
       !isSummaryRow(r) && r.owner !== '' && r.expense > 0 && !(r.note && r.note.includes('先付')));
     return { month, exp };
   }));

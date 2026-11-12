@@ -1,8 +1,5 @@
 function doGet(e) { return handleRequest(e); }
-function doPost(e) {
-  if (e.parameter && e.parameter.action === 'recognizeLabel') return recognizeLabel_(e);
-  return handleRequest(e);
-}
+function doPost(e) { return handleRequest(e); }
 
 // ════════════════════════════════════════════════════════════════
 // 請用以下內容取代原本的 handleRequest 函式，並在檔案最後加入新增的函式。
@@ -619,63 +616,4 @@ function getVersions() {
   const versions = {};
   Object.keys(props).forEach(k => { if (k.indexOf('ver:') === 0) versions[k.slice(4)] = props[k]; });
   return { versions: versions };
-}
-
-
-// ── 拍照辨識：用 Claude 視覺模型判讀包裝的品名與期限 ─────────────
-// 金鑰放在「專案設定 → 指令碼屬性」，名稱 ANTHROPIC_API_KEY，不寫在程式碼裡
-const RECOGNIZE_MODEL = 'claude-sonnet-5-5';
-const RECOGNIZE_DAILY_LIMIT = 200;   // 每天最多辨識次數，防止網址被濫用
-
-function recognizeLabel_(e) {
-  const props = PropertiesService.getScriptProperties();
-  const key = props.getProperty('ANTHROPIC_API_KEY');
-  if (!key) return jsonOut_({ error: '後端尚未設定 ANTHROPIC_API_KEY' });
-
-  const dayKey = 'rec:' + Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyyMMdd');
-  const used = parseInt(props.getProperty(dayKey) || '0', 10);
-  if (used >= RECOGNIZE_DAILY_LIMIT) return jsonOut_({ error: '今天的辨識次數已達上限' });
-  props.setProperty(dayKey, String(used + 1));
-
-  const body = JSON.parse((e.postData && e.postData.contents) || '{}');
-  if (!body.image) return jsonOut_({ error: '沒有收到圖片' });
-
-  const prompt = '這是食品或藥品包裝的照片。請判讀：\n' +
-    '1) name：商品名稱（簡短，去掉容量、重量、規格與促銷字樣）。看不到就填 null。\n' +
-    '2) expiry：有效期限或保存期限（格式 yyyy-MM-dd）。只取「有效期限」「保存期限」「賞味期限」「到期」「EXP」旁的日期，不要取「製造日期」。看不到就填 null。\n' +
-    '只回傳 JSON，不要其他文字，格式：{"name": "...", "expiry": "yyyy-MM-dd" 或 null}';
-
-  const payload = {
-    model: RECOGNIZE_MODEL,
-    max_tokens: 200,
-    messages: [{
-      role: 'user',
-      content: [
-        { type: 'image', source: { type: 'base64', media_type: body.mime || 'image/jpeg', data: body.image } },
-        { type: 'text', text: prompt }
-      ]
-    }]
-  };
-
-  const res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
-    method: 'post',
-    contentType: 'application/json',
-    headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
-  });
-  if (res.getResponseCode() !== 200) return jsonOut_({ error: 'AI 辨識失敗（' + res.getResponseCode() + '）' });
-
-  const text = (JSON.parse(res.getContentText()).content || []).map(c => c.text || '').join('');
-  const m = text.match(/\{[\s\S]*\}/);
-  if (!m) return jsonOut_({ error: '無法解析辨識結果' });
-  const r = JSON.parse(m[0]);
-  return jsonOut_({
-    name: r.name && r.name !== 'null' ? String(r.name).trim() : null,
-    expiry: r.expiry && /^\d{4}-\d{2}-\d{2}$/.test(r.expiry) ? r.expiry : null
-  });
-}
-
-function jsonOut_(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }

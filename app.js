@@ -3264,15 +3264,37 @@ async function addToInventory(name, qty, silent, cat, expiry) {
   if (!silent) showToast(`已加入庫存：${clean}`);
 }
 
-// ── 庫存拍照辨識：照片縮小後交給後端，由 Claude 視覺模型判讀品名與期限 ──
-// 多張照片的結果會累積：品名和期限可以來自不同照片（例：品名在正面、期限在側面）
+// ── 庫存 AI 辨識：複製 Prompt 給 Gemini / Claude，把回覆貼回來解析（不需要 API 金鑰）──
+// 多次貼上的結果會累積：品名和期限可以來自不同照片
 let ocrNames = [];
 let ocrDates = [];
+
+const INV_AI_PROMPT = `請看附圖（食品或藥品的包裝）。判讀以下兩項，只回傳一行 JSON，不要其他文字，也不要 Markdown 標記：
+{"name": "商品名稱", "expiry": "yyyy-MM-dd"}
+
+規則：
+- name：商品名稱，簡短，去掉容量、重量、規格與促銷字樣。看不到就填 null。
+- expiry：只取「有效期限」「保存期限」「賞味期限」「到期」「EXP」旁邊的日期，格式 yyyy-MM-dd。不要取「製造日期」。只有年月時，填該月的最後一天。看不到就填 null。`;
+
+async function copyInvPrompt() {
+  try {
+    await navigator.clipboard.writeText(INV_AI_PROMPT);
+    showToast('Prompt 已複製，貼到 Gemini 或 Claude 時記得附上照片');
+  } catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = INV_AI_PROMPT;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); showToast('Prompt 已複製'); }
+    catch (err) { showToast('複製失敗，請手動複製'); }
+    document.body.removeChild(ta);
+  }
+}
 
 function setOcrPanel(html) {
   const panel = document.getElementById('inv-ocr');
   panel.hidden = false;
-  panel.innerHTML = html + '<button type="button" class="inv-ocr-close" data-ocr-close>關閉</button>';
+  panel.innerHTML = html + '<button type="button" class="inv-ocr-close" data-ocr-close>清空</button>';
 }
 
 function renderOcrPanel(statusHtml = '') {
@@ -3281,73 +3303,41 @@ function renderOcrPanel(statusHtml = '') {
   html += `<div class="inv-ocr-head">品名（點選帶入）</div><div class="inv-ocr-chips">`;
   html += ocrNames.length
     ? ocrNames.map(n => `<button type="button" data-ocr-name="${esc(n)}">${esc(n)}</button>`).join('')
-    : '<span class="inv-ocr-msg">還沒有品名，可以再拍正面</span>';
+    : '<span class="inv-ocr-msg">還沒有品名</span>';
   html += '</div>';
   html += `<div class="inv-ocr-head">期限（點選帶入）</div><div class="inv-ocr-chips">`;
   html += ocrDates.length
     ? ocrDates.map(d => `<button type="button" class="exp" data-ocr-exp="${d.iso}">${d.iso}</button>`).join('')
-    : '<span class="inv-ocr-msg">還沒有期限，可以再拍印有日期的那一面</span>';
+    : '<span class="inv-ocr-msg">還沒有期限</span>';
   html += '</div>';
-  if (hasAny) html += '<div class="inv-ocr-msg" style="margin-top:8px">品名和期限可以來自不同照片，點選後再按「新增」。AI 判讀可能有誤，請確認後再新增。</div>';
+  if (hasAny) html += '<div class="inv-ocr-msg" style="margin-top:8px">點選後會帶入上方表單，確認後再按「新增」。</div>';
   setOcrPanel(html);
 }
 
-// 縮小並轉成 JPEG（約 1024px、品質 0.8），減少上傳量與費用
-function imageToJpegBase64(file, maxSide = 1024) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
-      const c = document.createElement('canvas');
-      c.width = Math.round(img.width * scale);
-      c.height = Math.round(img.height * scale);
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-      URL.revokeObjectURL(url);
-      resolve(c.toDataURL('image/jpeg', 0.8).split(',')[1]);
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('無法讀取這張圖片')); };
-    img.src = url;
+// 解析 AI 回覆：可以是單一 JSON，也可以多筆 JSON；忽略前後的文字與 ``` 標記
+function parseInvAiReply() {
+  const raw = document.getElementById('inv-ai-reply').value || '';
+  const objs = [];
+  (raw.match(/\{[^{}]*\}/g) || []).forEach(chunk => {
+    try { objs.push(JSON.parse(chunk)); } catch (e) { /* 忽略無法解析的片段 */ }
   });
-}
-
-async function recognizeLabelRemote(imageBase64) {
-  const res = await fetch(API + '?action=recognizeLabel', {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },   // 避免 CORS 預檢，Apps Script 可直接收
-    body: JSON.stringify({ image: imageBase64, mime: 'image/jpeg' }),
+  if (!objs.length) { showToast('找不到 JSON，請確認貼上的是 AI 的回覆'); return; }
+  let added = 0;
+  objs.forEach(o => {
+    const name = o.name && o.name !== 'null' ? String(o.name).trim() : '';
+    const expiry = typeof o.expiry === 'string' ? o.expiry.trim() : '';
+    if (name && !ocrNames.includes(name)) { ocrNames.push(name); added++; }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(expiry) && !ocrDates.some(x => x.iso === expiry)) { ocrDates.push({ iso: expiry }); added++; }
   });
-  const d = await res.json();
-  if (d.error) throw new Error(d.error);
-  return d;
-}
-
-async function onInvPhoto(input) {
-  const file = input.files && input.files[0];
-  input.value = '';
-  if (!file) return;
-  const wasOpen = !document.getElementById('inv-ocr').hidden;
-  renderOcrPanel('<div class="inv-ocr-msg">📷 辨識中…（約 3–10 秒）</div>');
-  if (!wasOpen) { ocrNames = []; ocrDates = []; }
-  try {
-    const b64 = await imageToJpegBase64(file);
-    const r = await recognizeLabelRemote(b64);
-    if (r.name && !ocrNames.includes(r.name)) ocrNames.push(r.name);
-    if (r.expiry && /^\d{4}-\d{2}-\d{2}$/.test(r.expiry) && !ocrDates.some(x => x.iso === r.expiry)) {
-      ocrDates.push({ iso: r.expiry });
-    }
-    const note = (!r.name && !r.expiry) ? '<div class="inv-ocr-msg">這張看不出品名或期限，請拍清楚一點再試</div>' : '';
-    renderOcrPanel(note);
-  } catch (e) {
-    renderOcrPanel(`<div class="inv-ocr-msg">⚠️ ${esc(e.message || '辨識失敗')}，請重拍或手動輸入</div>`);
-  }
+  document.getElementById('inv-ai-reply').value = '';
+  renderOcrPanel(added ? '' : '<div class="inv-ocr-msg">這次沒有新的品名或期限</div>');
 }
 
 // 點選候選：品名、期限帶入表單（不會自動新增，仍需按「新增」）
 document.addEventListener('click', e => {
   const panel = document.getElementById('inv-ocr');
   if (!panel) return;
-  if (e.target.closest('[data-ocr-close]')) { panel.hidden = true; panel.innerHTML = ''; ocrNames = []; ocrDates = []; return; }
+  if (e.target.closest('[data-ocr-close]')) { ocrNames = []; ocrDates = []; panel.hidden = true; panel.innerHTML = ''; return; }
   const nameBtn = e.target.closest('[data-ocr-name]');
   if (nameBtn) {
     document.getElementById('inv-name').value = nameBtn.dataset.ocrName;

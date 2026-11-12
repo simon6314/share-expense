@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
   
   <!-- 導入外部樣式表 (附帶版本號防止快取) -->
-  <link rel="stylesheet" href="style.css?v=20261112_1130">
+  <link rel="stylesheet" href="style.css?v=20261112_1200">
 </head>
 <body data-season="spring">
 
@@ -175,9 +175,13 @@
     <input id="inv-exp" type="date" style="display:none" aria-label="有效期限">
     <button onclick="addInventoryFromForm()">新增</button>
   </div>
-  <div class="inv-photo-row">
-    <button type="button" class="inv-photo-btn" onclick="document.getElementById('inv-photo').click()">📷 拍照辨識（可多拍幾張）</button>
-    <input id="inv-photo" type="file" accept="image/*" capture="environment" hidden onchange="onInvPhoto(this)">
+  <div class="inv-ai">
+    <div class="inv-ai-row">
+      <button type="button" class="inv-photo-btn" onclick="copyInvPrompt()">📋 複製辨識 Prompt</button>
+      <span class="inv-ai-hint">把照片和 Prompt 一起傳給 Gemini 或 Claude，再把回覆貼回來</span>
+    </div>
+    <textarea id="inv-ai-reply" rows="2" placeholder='AI 回覆，例：{"name": "統一鮮奶", "expiry": "2026-12-20"}'></textarea>
+    <button type="button" class="inv-photo-btn" onclick="parseInvAiReply()">解析並帶入</button>
   </div>
   <div id="inv-ocr" class="inv-ocr" hidden></div>
   <div id="inv-grid" class="inv-grid"></div>
@@ -189,6 +193,6 @@
 <!-- Chart.js 庫 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <!-- 導入外部邏輯腳本 (附帶版本號防止快取) -->
-<script src="app.js?v=20261112_1150"></script>
+<script src="app.js?v=20261112_1200"></script>
 </body>
 </html>

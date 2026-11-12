@@ -3263,3 +3263,165 @@ async function addToInventory(name, qty, silent, cat, expiry) {
   }
   if (!silent) showToast(`已加入庫存：${clean}`);
 }
+
+// ── 庫存拍照辨識：瀏覽器內 OCR（Tesseract.js），照片不會上傳 ──
+const OCR_LIB_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+let ocrWorker = null;
+let ocrLibPromise = null;
+
+function loadTesseract() {
+  if (window.Tesseract) return Promise.resolve(window.Tesseract);
+  if (!ocrLibPromise) {
+    ocrLibPromise = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = OCR_LIB_URL;
+      s.onload = () => resolve(window.Tesseract);
+      s.onerror = () => { ocrLibPromise = null; reject(new Error('辨識套件載入失敗，請確認網路')); };
+      document.head.appendChild(s);
+    });
+  }
+  return ocrLibPromise;
+}
+
+async function getOcrWorker() {
+  if (ocrWorker) return ocrWorker;
+  const T = await loadTesseract();
+  ocrWorker = await T.createWorker('chi_tra+eng');
+  return ocrWorker;
+}
+
+// 縮小圖片再辨識，手機上比較快
+function imageToCanvas(file, maxSide = 1600) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      resolve(c);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('無法讀取這張圖片')); };
+    img.src = url;
+  });
+}
+
+// 從文字找日期：支援 2026/12/20、2026.12.20、2026年12月20日、26-12-20、20261220
+function findDates(text) {
+  const now = new Date();
+  const minY = now.getFullYear() - 1, maxY = now.getFullYear() + 10;
+  const found = [];
+  const add = (y, m, d, index) => {
+    if (y < minY || y > maxY || m < 1 || m > 12 || d < 1 || d > 31) return;
+    const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    if (!found.some(f => f.iso === iso)) found.push({ iso, index });
+  };
+  const sepRe = /(\d{4}|\d{2})\s*[./\-年]\s*(\d{1,2})\s*[./\-月]\s*(\d{1,2})/g;
+  let m;
+  while ((m = sepRe.exec(text))) {
+    const y = m[1].length === 2 ? 2000 + +m[1] : +m[1];
+    add(y, +m[2], +m[3], m.index);
+  }
+  const compactRe = /(20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])/g;
+  while ((m = compactRe.exec(text))) add(+m[1], +m[2], +m[3], m.index);
+  return found;
+}
+
+const OCR_EXP_KEYWORD = /有效|保存|期限|到期|賞味|效期|EXP|BEST\s*BEFORE|BB/i;
+const OCR_SKIP_RE = /營養|成分|淨重|內容量|公克|毫升|製造|進口|電話|地址|條碼|網址|www|http|規格|注意|警語|過敏|份量|熱量|\d{4,}/i;
+
+// 品名候選：2–16 個中文字、不含說明文字的行
+function nameCandidates(lines) {
+  const seen = new Set();
+  const out = [];
+  lines.forEach(raw => {
+    const l = raw.replace(/\s+/g, ' ').trim();
+    const cjk = (l.match(/[一-鿿]/g) || []).length;
+    if (cjk < 2 || cjk > 16 || OCR_SKIP_RE.test(l)) return;
+    if (seen.has(l)) return;
+    seen.add(l);
+    out.push(l);
+  });
+  return out.slice(0, 8);
+}
+
+// 多張照片的結果會累積：品名和期限可以來自不同照片（例：品名在正面、期限在側面）
+let ocrNames = [];
+let ocrDates = [];
+
+function setOcrPanel(html) {
+  const panel = document.getElementById('inv-ocr');
+  panel.hidden = false;
+  panel.innerHTML = html + '<button type="button" class="inv-ocr-close" data-ocr-close>關閉</button>';
+}
+
+function renderOcrPanel(statusHtml = '') {
+  const hasAny = ocrNames.length || ocrDates.length;
+  let html = statusHtml;
+  html += `<div class="inv-ocr-head">品名（點選帶入）</div><div class="inv-ocr-chips">`;
+  html += ocrNames.length
+    ? ocrNames.map(n => `<button type="button" data-ocr-name="${esc(n)}">${esc(n)}</button>`).join('')
+    : '<span class="inv-ocr-msg">還沒有品名，可以再拍正面</span>';
+  html += '</div>';
+  html += `<div class="inv-ocr-head">期限（點選帶入）</div><div class="inv-ocr-chips">`;
+  html += ocrDates.length
+    ? ocrDates.map(d => `<button type="button" class="exp" data-ocr-exp="${d.iso}">${d.iso}${d.key ? ' ✓' : ''}</button>`).join('')
+    : '<span class="inv-ocr-msg">還沒有期限，可以再拍印有日期的那一面</span>';
+  html += '</div>';
+  if (hasAny) html += '<div class="inv-ocr-msg" style="margin-top:8px">品名和期限可以來自不同照片，點選後再按「新增」。</div>';
+  setOcrPanel(html);
+}
+
+async function onInvPhoto(input) {
+  const file = input.files && input.files[0];
+  input.value = '';
+  if (!file) return;
+  const wasOpen = !document.getElementById('inv-ocr').hidden;
+  renderOcrPanel('<div class="inv-ocr-msg">📷 辨識中…第一次會下載辨識模型，請稍候</div>');
+  if (!wasOpen) { ocrNames = []; ocrDates = []; }
+  try {
+    const canvas = await imageToCanvas(file);
+    const worker = await getOcrWorker();
+    const { data } = await worker.recognize(canvas);
+    const text = data.text || '';
+    const lines = text.split(/\n+/).filter(l => l.trim());
+    const dates = findDates(text);
+    const names = nameCandidates(lines);
+    // 期限：含關鍵字的那一行優先排在前面
+    const isKey = d => {
+      const lineStart = text.lastIndexOf('\n', d.index) + 1;
+      const lineEnd = text.indexOf('\n', d.index);
+      return OCR_EXP_KEYWORD.test(text.slice(lineStart, lineEnd === -1 ? undefined : lineEnd));
+    };
+    dates.sort((a, b) => (isKey(b) ? 1 : 0) - (isKey(a) ? 1 : 0));
+    names.forEach(n => { if (!ocrNames.includes(n)) ocrNames.push(n); });
+    dates.forEach(d => { if (!ocrDates.some(x => x.iso === d.iso)) ocrDates.push({ iso: d.iso, key: isKey(d) }); });
+    const note = (names.length || dates.length) ? '' : '<div class="inv-ocr-msg">這張沒辨識到文字，請拍清楚一點再試</div>';
+    renderOcrPanel(note);
+  } catch (e) {
+    renderOcrPanel(`<div class="inv-ocr-msg">⚠️ ${esc(e.message || '辨識失敗')}，請重拍或手動輸入</div>`);
+  }
+}
+
+// 點選候選：品名、期限帶入表單（不會自動新增，仍需按「新增」）
+document.addEventListener('click', e => {
+  const panel = document.getElementById('inv-ocr');
+  if (!panel) return;
+  if (e.target.closest('[data-ocr-close]')) { panel.hidden = true; panel.innerHTML = ''; ocrNames = []; ocrDates = []; return; }
+  const nameBtn = e.target.closest('[data-ocr-name]');
+  if (nameBtn) {
+    document.getElementById('inv-name').value = nameBtn.dataset.ocrName;
+    return;
+  }
+  const expBtn = e.target.closest('[data-ocr-exp]');
+  if (expBtn) {
+    const cat = document.getElementById('inv-cat');
+    const exp = document.getElementById('inv-exp');
+    if (cat.value === '消耗品') cat.value = '食品';
+    exp.style.display = '';
+    exp.value = expBtn.dataset.ocrExp;
+  }
+});

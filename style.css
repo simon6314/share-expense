@@ -450,3 +450,16 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 .inv-card.exp-expired { border: 2px solid #7f1d1d; box-shadow: 0 0 0 3px rgba(127,29,29,0.25), 0 8px 22px -8px rgba(127,29,29,0.7); }
 .inv-card.exp-red { border: 2px solid #dc2626; box-shadow: 0 0 0 3px rgba(220,38,38,0.15), 0 8px 22px -8px rgba(220,38,38,0.55); }
 .inv-card.exp-warn { border: 1px solid #d97706; box-shadow: 0 0 0 1px rgba(217,119,6,0.35), 0 6px 18px -10px rgba(217,119,6,0.6); }
+
+/* ── 拍照辨識（庫存） ── */
+.inv-photo-row { margin: -6px 0 14px; }
+.inv-photo-btn { padding: 8px 14px; border: 1px dashed var(--border); border-radius: 12px; background: var(--surface); color: var(--text2); font-size: 14px; cursor: pointer; }
+.inv-ocr { margin: 0 0 14px; padding: 12px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); }
+.inv-ocr[hidden] { display: none; }
+.inv-ocr-msg { font-size: 14px; color: var(--text2); }
+.inv-ocr-head { font-size: 13px; font-weight: 600; color: var(--text2); margin: 8px 0 6px; }
+.inv-ocr-head:first-child { margin-top: 0; }
+.inv-ocr-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.inv-ocr-chips button { padding: 6px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); font-size: 14px; cursor: pointer; max-width: 100%; text-align: left; }
+.inv-ocr-chips button.exp { font-family: 'DM Mono', monospace; }
+.inv-ocr-close { margin-top: 10px; padding: 4px 10px; border: none; background: transparent; color: var(--text3); font-size: 13px; cursor: pointer; }

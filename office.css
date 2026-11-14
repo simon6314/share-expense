@@ -24,7 +24,7 @@
 .of-actor.selected .of-fig, .of-pigbtn.selected svg { filter: drop-shadow(0 0 1.4cqw rgba(247,154,174,1)); }
 .of-actor:focus-visible, .of-pigbtn:focus-visible { outline: 2px solid #22d3ee; outline-offset: 2px; border-radius: 8px; }
 .of-actor.saying { z-index: 3000 !important; }
-.of-pigbtn { left: 5%; top: 54.5%; width: 25%; z-index: 720; }
+.of-pigbtn { left: 3%; top: 54.5%; width: 31%; z-index: 720; }
 
 .of-name {
   position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); margin-bottom: -0.6cqw;
@@ -107,16 +107,15 @@
 .of-env.arrived { transform-origin: 50% 50%; animation: of-pulse 2.2s ease-in-out infinite; }
 .of-alert { transform-origin: 50% 50%; animation: of-wiggle 1.6s ease-in-out infinite; }
 .of-coin-drop { animation: of-drop 3.4s ease-in infinite; }
-.of-pig { transform-origin: 50% 100%; }
+.of-pig { transform-origin: 50% 100%; animation: of-squish 3.4s ease-in-out infinite; }
 .of-wave { animation: of-wave 3s linear infinite; }
 .of-pigtail { transform-origin: 100% 100%; animation: of-wag 2.2s ease-in-out infinite; }
 .of-leaf { transform-origin: 50% 100%; animation: of-sway 4s ease-in-out infinite; }
 .of-sweat, .of-tear { animation: of-drip 1.6s ease-in infinite; }
 .of-spark { transform-box: fill-box; transform-origin: 50% 50%; animation: of-twinkle 1.8s ease-in-out infinite; }
 .of-spark.s2 { animation-delay: 0.9s; }
-.of-lamp.mood-worry, .of-lamp.mood-cry { animation: of-blink 1.2s steps(2, jump-none) infinite; }
 @keyframes of-twinkle { 0%, 100% { transform: scale(0.4); opacity: 0; } 50% { transform: scale(1.1); opacity: 1; } }
-@keyframes of-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+.of-pigbtn.mood-cry .of-coin-drop { display: none; }
 .office-scene.paused * { animation-play-state: paused !important; }
 
 @keyframes of-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.6px); } }
@@ -142,7 +141,7 @@
 .of-quick { max-width: 640px; margin: 0 auto 8px; display: flex; gap: 8px; }
 .of-quick button { flex: 1; min-width: 0; padding: 9px 8px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 14px; font-weight: 600; cursor: pointer; }
 .of-quick button:active { transform: scale(0.98); }
-.of-float { position: absolute; left: 17.5%; top: 66%; z-index: 4000; pointer-events: none; white-space: nowrap; font-family: 'DM Mono', monospace; font-weight: 700; font-size: 5cqw; text-shadow: 0 0 0.6cqw #fff, 0 0 0.6cqw #fff, 0 0 1cqw #fff; animation: of-float-up 1.9s ease-out forwards; }
+.of-float { position: absolute; left: 17.5%; top: 64%; z-index: 4000; pointer-events: none; white-space: nowrap; font-family: 'DM Mono', monospace; font-weight: 700; font-size: 5cqw; text-shadow: 0 0 0.6cqw #fff, 0 0 0.6cqw #fff, 0 0 1cqw #fff; animation: of-float-up 1.9s ease-out forwards; }
 .of-float.exp { color: var(--expense); }
 .of-float.inc { color: var(--income); animation-name: of-float-down; }
 .of-pigbtn.poke svg { animation: of-poke 0.6s ease-in-out; transform-origin: 50% 100%; }

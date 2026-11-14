@@ -1,5 +1,5 @@
 // ── 辦公室：俯視的小辦公室，員工會依這個月的紀錄、餘額與庫存走動、工作 ──
-// 員工：小帳（記帳）、阿庫（出納）、阿貨（倉管）、小析（分析）、保險庫，以及兩位成員精靈與小狐狸
+// 員工：小帳（記帳）、阿庫（出納）、阿貨（倉管）、小析（分析）、小豬（存錢筒），以及兩位成員精靈與小狐狸
 // 這個檔案只讀取 app.js 的資料與函式，不會寫入任何東西。
 // 記帳後（app.js 的 addRecord 會呼叫 officeNoteRecord），記帳的成員會走去記帳區登記，再到金庫領錢或存錢。
 
@@ -83,7 +83,7 @@ function officeData() {
   });
   alerts.sort((a, b) => (a.level === b.level ? 0 : (a.level === 'red' ? -1 : 1)));
 
-  // 保險庫水位：餘額占「期初＋已入帳收入」的比例（和餘額的算法一致，未到日期的匯款不算）
+  // 存錢筒水位：餘額占「期初＋已入帳收入」的比例（和餘額的算法一致，未到日期的匯款不算）
   const arrived = arrivedIncomeOf(realRecs);
   const pool = starting + arrived;
   const ratio = pool > 0 ? Math.max(0, Math.min(1, balance / pool)) : (balance > 0 ? 1 : 0);
@@ -210,39 +210,55 @@ function officeActorSvg(id) {
   return `<svg viewBox="0 0 80 90" aria-hidden="true"><ellipse cx="40" cy="86" rx="20" ry="4" fill="rgba(90,70,50,0.18)"/>${inner}</svg>`;
 }
 
-// 保險庫：金塊堆的高度就是餘額比例；偏低亮黃燈，變負數亮紅燈、金塊清空
+// 小豬存錢筒：肚子裡的金幣堆到哪，就是餘額比例；餘額偏低會冒汗，變負數會哭、肚子空空
 function officePiggySvg(d) {
-  const n = d.balance <= 0 ? 0 : Math.max(1, Math.round(d.ratio * 10));
-  const rows = [4, 3, 2, 1];
-  let bars = '', left = n;
-  rows.forEach((cap, r) => {
-    const k = Math.min(cap, left); left -= k;
-    const y = 142 - r * 23, x0 = 95 - cap * 17;
-    for (let i = 0; i < k; i++) {
-      const x = x0 + i * 34 + (cap - k) * 17;
-      bars += `<g><path d="M${x + 6} ${y} h21 l6 20 h-33 Z" fill="#ffd66b" stroke="#d99a1e" stroke-width="1.8" stroke-linejoin="round"/><path d="M${x + 9} ${y + 4} h14" stroke="#fff3c4" stroke-width="2.4" stroke-linecap="round"/><path d="M${x + 4} ${y + 17} h25" stroke="#f2b632" stroke-width="1.6"/></g>`;
+  // 肚子上的透明窗（不蓋到臉）：窗內從底部往上堆金幣
+  const top = 44, bottom = 101;
+  const level = d.balance <= 0 ? bottom + 2 : bottom - (bottom - top) * Math.max(0.06, d.ratio);
+  // 金幣：一層一層往上疊，每層錯開半顆；最上面一層會閃光
+  let coins = '';
+  const rowsN = Math.max(0, Math.ceil((bottom - level) / 7));
+  for (let r = 0; r < rowsN; r++) {
+    const y = bottom - 3 - r * 7, off = r % 2 ? 8 : 0;
+    const topRow = r === rowsN - 1;
+    for (let x = 40 + off; x < 134; x += 16) {
+      coins += `<ellipse cx="${x}" cy="${y}" rx="8" ry="4.4" fill="${(x + r) % 3 ? '#ffd66b' : '#ffe08a'}" stroke="#e0a82e" stroke-width="1.2"/>`;
+      if (topRow && (x / 16 + r) % 3 < 1) coins += `<path d="M${x - 3.5} ${y - 0.8} h7" stroke="#fff6c9" stroke-width="1.4" stroke-linecap="round"/>`;
     }
-  });
-  const topY = 142 - (rows.findIndex((c, r) => rows.slice(0, r + 1).reduce((a2, b2) => a2 + b2, 0) >= n)) * 23;
-  const lamp = d.mood === 'happy' ? '#7ed9a3' : (d.mood === 'worry' ? '#ffc94d' : '#ef5f7a');
-  const sparks = d.mood === 'happy' && n ? `
-      <path class="of-spark" d="M60 ${topY - 10} l2.5 -7 2.5 7 7 2.5 -7 2.5 -2.5 7 -2.5 -7 -7 -2.5 Z" fill="#fff6c9"/>
-      <path class="of-spark s2" d="M128 ${topY - 4} l2 -5.5 2 5.5 5.5 2 -5.5 2 -2 5.5 -2 -5.5 -5.5 -2 Z" fill="#fff6c9"/>` : '';
-  const empty = n ? '' : `<text x="95" y="104" font-size="22" font-weight="700" text-anchor="middle" fill="#8a96a8">${d.balance < 0 ? '透支中' : '空空的'}</text>`;
+  }
+  const sparks = d.mood === 'happy' && rowsN ? `
+        <path class="of-spark" d="M66 ${(level - 6).toFixed(1)} l2 -6 2 6 6 2 -6 2 -2 6 -2 -6 -6 -2 Z" fill="#fff6c9"/>
+        <path class="of-spark s2" d="M122 ${(level - 2).toFixed(1)} l1.6 -5 1.6 5 5 1.6 -5 1.6 -1.6 5 -1.6 -5 -5 -1.6 Z" fill="#fff6c9"/>` : '';
+  const mouth = d.mood === 'happy'
+    ? '<path d="M150 74 Q155 79 160 74" fill="none" stroke="#b9728a" stroke-width="1.8" stroke-linecap="round"/>'
+    : (d.mood === 'worry'
+      ? '<path d="M150 77 L160 77" fill="none" stroke="#b9728a" stroke-width="1.8" stroke-linecap="round"/>'
+      : '<path d="M150 79 Q155 74 160 79" fill="none" stroke="#b9728a" stroke-width="1.8" stroke-linecap="round"/>');
+  const extra = d.mood === 'worry'
+    ? '<path class="of-sweat" d="M118 36 q-4 7 0 9 q4 -2 0 -9 Z" fill="#8fd3f4"/>'
+    : (d.mood === 'cry' ? '<path class="of-tear" d="M146 60 q-3 6 0 8 q3 -2 0 -8 Z" fill="#8fd3f4"/>' : '');
   return `
-  <svg viewBox="0 0 220 190" aria-hidden="true">
-    <ellipse cx="104" cy="182" rx="96" ry="7" fill="rgba(90,70,50,0.14)"/>
+  <svg viewBox="0 0 200 130" aria-hidden="true">
+    <defs><clipPath id="ofPigClip"><ellipse cx="86" cy="72" rx="45" ry="30"/></clipPath></defs>
+    <ellipse cx="98" cy="122" rx="70" ry="6" fill="rgba(90,70,50,0.13)"/>
+    <path class="of-pigtail" d="M34 62 q-12 -2 -10 -10 q2 -7 8 -3 q4 3 -1 6" fill="none" stroke="#f08fb0" stroke-width="3.2" stroke-linecap="round"/>
+    <rect x="58" y="100" width="16" height="20" rx="6" fill="#f7a8c0"/><rect x="118" y="100" width="16" height="20" rx="6" fill="#f7a8c0"/>
     <g class="of-pig">
-      <rect x="8" y="14" width="174" height="162" rx="16" fill="#9fb4c4"/>
-      <rect x="8" y="14" width="174" height="10" rx="5" fill="#b9cad6"/>
-      <rect x="20" y="30" width="150" height="134" rx="10" fill="#3e4a5a"/>
-      ${bars}${empty}${sparks}
-      <circle class="of-lamp mood-${d.mood}" cx="95" cy="19" r="5.5" fill="${lamp}" stroke="#fff" stroke-width="1.6"/>
-      <path d="M182 22 L214 36 L214 158 L182 170 Z" fill="#b9cad6" stroke="#8ea3b3" stroke-width="2.4" stroke-linejoin="round"/>
-      <circle cx="199" cy="96" r="11" fill="#e8eef3" stroke="#8ea3b3" stroke-width="2.4"/>
-      <g class="of-dial"><path d="M199 88 L199 104 M191 96 L207 96" stroke="#8ea3b3" stroke-width="2.6" stroke-linecap="round"/></g>
-      <rect x="16" y="168" width="20" height="10" rx="3" fill="#7d93a5"/><rect x="154" y="168" width="20" height="10" rx="3" fill="#7d93a5"/>
+      <ellipse cx="96" cy="68" rx="62" ry="44" fill="#ffe3ea"/>
+      <ellipse cx="86" cy="72" rx="45" ry="30" fill="#fff7f9"/>
+      <g clip-path="url(#ofPigClip)">${coins}${sparks}</g>
+      <ellipse cx="86" cy="72" rx="45" ry="30" fill="none" stroke="#f6bccb" stroke-width="2"/>
+      <path d="M58 54 q10 -9 24 -10" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
+      <ellipse cx="96" cy="68" rx="62" ry="44" fill="none" stroke="#f3a0b8" stroke-width="2.5"/>
+      <rect x="82" y="25.5" width="28" height="5" rx="2.5" fill="#d9788f"/>
+      <path d="M128 30 L140 14 L146 34 Z" fill="#f7a8c0"/>
+      <ellipse cx="160" cy="66" rx="13" ry="10.5" fill="#f7a8c0"/>
+      <ellipse cx="156" cy="66" rx="2" ry="3" fill="#d9788f"/><ellipse cx="164" cy="66" rx="2" ry="3" fill="#d9788f"/>
+      <circle cx="140" cy="52" r="3.4" fill="#3b2f2f"/><circle cx="141.2" cy="50.8" r="1.2" fill="#fff"/>
+      <ellipse cx="132" cy="62" rx="5" ry="3" fill="#ff9fb0" opacity="0.6"/>
+      ${mouth}${extra}
     </g>
+    <g class="of-coin-drop"><ellipse cx="96" cy="6" rx="7" ry="7" fill="#ffd66b" stroke="#f2b632" stroke-width="1.4"/><text x="96" y="9.6" font-size="8" font-weight="700" text-anchor="middle" fill="#b9831c">$</text></g>
   </svg>`;
 }
 
@@ -321,7 +337,7 @@ function officeBgSvg(d) {
     ${mv(73, `<rect x="656" y="156" width="300" height="92" rx="14" fill="#f8e3c6" stroke="#e3b98a" stroke-width="5"/>${lowBoxes}`)}
     ${mv(115, `${desk(846, 268, 108, ['#d9efe6', '#b5dccd'])}
     <rect x="866" y="276" width="44" height="32" rx="6" fill="#ecd3ae" stroke="#d9bb8f" stroke-width="3"/><path d="M866 292 h44" stroke="#d9bb8f" stroke-width="3"/>`)}
-    <!-- 金庫：保險庫（另外畫成按鈕）、兩個信封（每月的愛）、櫃台 -->
+    <!-- 金庫：小豬存錢筒（另外畫成按鈕）、兩個信封（每月的愛）、櫃台 -->
     ${env(64, 968, d.love[0], '#7fd6e6')}${env(146, 968, d.love[1], '#f7a8c0')}
     ${mv(308, `${desk(58, 752, 196, lilac)}
     <g><ellipse cx="96" cy="776" rx="15" ry="6" fill="#f2b632"/><ellipse cx="96" cy="770" rx="15" ry="6" fill="#ffd66b"/><ellipse cx="96" cy="764" rx="15" ry="6" fill="#f2b632"/><ellipse cx="96" cy="758" rx="15" ry="6" fill="#ffd66b"/></g>
@@ -365,11 +381,11 @@ function officeDetailHtml(key, d) {
       <div class="of-actions">${d.back.some(b => b.row) ? `<button type="button" class="of-go" data-office-settle>${d.settled ? '修改結算' : '去結算'}</button>` : ''}${go('members', '看成員')}</div>`;
   }
   if (key === 'piggy') {
-    const tip = d.mood === 'cry' ? '餘額是負的，金塊都搬空了，亮紅燈。' : (d.mood === 'worry' ? '餘額剩不到兩成，金塊不多了，亮黃燈。' : '金塊堆得穩穩的，亮綠燈。');
-    return `<h4>💰 保險庫 <small>金塊</small></h4>
+    const tip = d.mood === 'cry' ? '餘額是負的，小豬肚子空空，哭了。' : (d.mood === 'worry' ? '餘額剩不到兩成，金幣不多，小豬有點緊張。' : '金幣堆得滿滿的，小豬心情不錯。');
+    return `<h4>🐷 存錢筒 <small>小豬</small></h4>
       ${row('期初餘額', fmt(d.starting))}${row('已入帳收入', '+' + fmt(d.arrived), 'of-inc')}${row('本月支出', '−' + fmt(d.expense), 'of-exp')}
-      ${row('目前餘額', fmt(d.balance), d.balance < 0 ? 'of-exp' : 'of-inc')}${row('存量', Math.round(d.ratio * 100) + '%')}
-      <p class="of-note">${tip}（存量＝目前餘額 ÷（期初＋已入帳收入），滿格是 10 條金塊）</p>`;
+      ${row('目前餘額', fmt(d.balance), d.balance < 0 ? 'of-exp' : 'of-inc')}${row('金幣', Math.round(d.ratio * 100) + '%')}
+      <p class="of-note">${tip}（金幣堆的高度＝目前餘額 ÷（期初＋已入帳收入））</p>`;
   }
   if (key === 'shelf') {
     const list = d.alerts.slice(0, 8).map(a => row(esc(a.name), a.text, a.level === 'red' ? 'of-exp' : 'of-warn')).join('');
@@ -402,7 +418,7 @@ const OFFICE_SPOTS = {
   board: { x: 325, y: 315, zone: 'A', go: '走去看白板', at: '看白板上的分類' },
   desk:  { x: 262, y: 350, zone: 'A', go: '走去記帳桌', at: '跟小帳對帳' },
   shelf: { x: 700, y: 380, zone: 'B', go: '走去貨架', at: '看看貨架' },
-  piggy: { x: 345, y: 905, zone: 'C', go: '走去保險庫', at: '看看保險庫' },
+  piggy: { x: 372, y: 905, zone: 'C', go: '走去存錢筒', at: '看看存錢筒' },
 };
 const OFFICE_STAFF = [
   { id: 'book',  name: '小帳',   role: '記帳', tag: 'book',  seat: { x: 170, y: 335, zone: 'A' }, visits: ['tea', 'board'] },
@@ -443,13 +459,13 @@ function officeActivity(id, d) {
   }
   if (id === 'dog') {
     if (a && a.state === 'walk') return a.back ? '跑回窩裡' : '在辦公室巡邏';
-    if (a && a.state === 'visit') return a.spot === 'piggy' ? '聞聞保險庫' : (a.spot === 'shelf' ? '聞聞貨架上的箱子' : (a.spot === 'board' ? '歪頭看白板' : '在茶水間討零食'));
+    if (a && a.state === 'visit') return a.spot === 'piggy' ? '聞聞小豬' : (a.spot === 'shelf' ? '聞聞貨架上的箱子' : (a.spot === 'board' ? '歪頭看白板' : '在茶水間討零食'));
     return '趴在窩裡打瞌睡 💤';
   }
   if (a && a.state === 'walk') return a.back ? '走回座位' : OFFICE_SPOTS[a.spot].go;
   if (a && a.state === 'visit') {
     if (a.spot === 'shelf') return d.alerts.length ? `例行盤點：${d.alerts[0].name}${d.alerts[0].text}` : '例行檢查貨架';
-    if (a.spot === 'piggy') return id === 'cash' ? '例行清點金塊' : `例行檢查保險庫：${fmt(d.balance)}`;
+    if (a.spot === 'piggy') return id === 'cash' ? '把零錢投進存錢筒' : `例行檢查存錢筒：${fmt(d.balance)}`;
     if (a.spot === 'board') return d.cats.length ? `例行檢查白板：${d.cats[0].name}最多` : '例行檢查白板';
     return OFFICE_SPOTS[a.spot].at;
   }
@@ -476,7 +492,7 @@ function officeActivity(id, d) {
 function officeJobSteps(j) {
   if (j.type === 'skit') return j.steps;
   if (j.type === 'settle') {
-    // 月底結算：阿庫到保險庫領錢，再送到沙發交給兩人（金額以目前資料為準）
+    // 月底結算：阿庫到存錢筒領錢，再送到沙發交給兩人（金額以目前資料為準）
     const back = officeData_ ? officeData_.back.filter(b => b.amount > 0) : [];
     if (!back.length) return [];
     const total = back.reduce((sum, b) => sum + b.amount, 0);
@@ -531,7 +547,7 @@ function officeSkits(d) {
     add('cash-' + m, ['cash', m], () => ({ cash: [talk(spot, `去找${name}報告金庫狀況`, `跟${name}報告金庫狀況`, love && love.has && !love.arrived ? [
       { who: 'cash', text: `${name}的每月的愛 ${love.date} 入帳喔` },
       { who: m, text: '記得了！' }] : [
-      { who: 'cash', text: `保險庫存量 ${pct}%，餘額 ${fmt(d.balance)}` },
+      { who: 'cash', text: `小豬的金幣 ${pct}%，餘額 ${fmt(d.balance)}` },
       { who: m, text: moodLine }])] }));
 
     add(m + '-book', [m, 'book'], () => ({ [m]: [talk('desk', '去問小帳這個月花多少', '問小帳這個月花多少', [
@@ -568,7 +584,7 @@ function officeSkits(d) {
   const staffLine = id => id === 'book' ? (d.todayCount ? `今天記了 ${d.todayCount} 筆` : '今天還沒有新的帳')
     : id === 'chart' ? (top ? `${top.name}還是占最多` : '還沒有資料可以畫圖')
     : id === 'stock' ? (d.alerts.length ? `還有 ${d.alerts.length} 項要補貨` : '貨架都整理好了')
-    : `保險庫存量 ${pct}%`;
+    : `小豬的金幣 ${pct}%`;
   [pick([['book', 'cash'], ['chart', 'stock'], ['book', 'stock'], ['chart', 'cash']])].forEach(([a, b]) => {
     add('tea-' + a + '-' + b, [a, b], () => ({
       [a]: [talk('tea', '約同事去茶水間', '在茶水間聊天', [
@@ -587,7 +603,7 @@ function officeSkits(d) {
       { who: 'elf', text: `我這個月花了 ${fmt(oe.expense)}` },
       { who: 'fox', text: oe.expense >= of.expense ? `我 ${fmt(of.expense)}，你比較多耶` : `我 ${fmt(of.expense)}，這次我比較多` },
       { who: 'elf', text: '一起省一點 💪', heart: true }], [
-      { who: 'fox', text: `保險庫的金塊有 ${pct}% 了` },
+      { who: 'fox', text: `小豬的金幣有 ${pct}% 了` },
       { who: 'elf', text: moodLine, heart: d.mood === 'happy' }]];
     if (latest) chats.push([
       { who: 'fox', text: `「${latest.item}」記了嗎？` },
@@ -657,7 +673,7 @@ function officeNoteSettle() {
   if (!officeJobs.cash.some(j => j.type === 'settle')) officeJobs.cash.push({ type: 'settle' });
 }
 
-// 金額從保險庫飄出來（支出）或飄進去（收入）；at 有給座標時改飄在那個位置
+// 金額從存錢筒飄出來（支出）或飄進去（收入）；at 有給座標時改飄在那個位置
 function officeFloat(text, income, at) {
   const scene = document.getElementById('office-scene');
   if (!scene) return;
@@ -713,7 +729,7 @@ function officeMetric(id, d) {
   if (id === 'chart') return ['支出分類', d.cats.length];
   if (id === 'stock') return ['待補貨', d.alerts.length];
   if (id === 'cash') return ['已入帳', d.love.filter(p => p.has && p.arrived).length + '/2'];
-  if (id === 'piggy') return ['存量', Math.round(d.ratio * 100) + '%'];
+  if (id === 'piggy') return ['金幣', Math.round(d.ratio * 100) + '%'];
   if (id === 'dog') return ['被摸', officeDogPets + ' 次'];
   return ['今日筆數', d.owners[id === 'elf' ? '精靈' : '小狐狸'].today];
 }
@@ -757,7 +773,7 @@ function officeStatusText(d) {
   const walk = all.filter(a => a.state === 'walk').length;
   const rest = all.filter(a => a.state === 'visit').length;
   const job = all.filter(a => a.job && a.job.rec.type !== 'skit').length;
-  return `${job ? `記帳跑腿 ${job} 人・` : ''}座位上 ${seat} 人・走動中 ${walk} 人・巡視休息 ${rest} 人・待補貨 ${d.alerts.length} 項・保險庫 ${Math.round(d.ratio * 100)}%`;
+  return `${job ? `記帳跑腿 ${job} 人・` : ''}座位上 ${seat} 人・走動中 ${walk} 人・巡視休息 ${rest} 人・待補貨 ${d.alerts.length} 項・存錢筒 ${Math.round(d.ratio * 100)}%`;
 }
 
 function drawOffice() {
@@ -778,8 +794,8 @@ function drawOffice() {
   }).join('');
 
   scene.innerHTML = `${officeBgSvg(d)}
-    <button type="button" class="of-pigbtn mood-${d.mood}${officeSelected === 'piggy' ? ' selected' : ''}" data-office-id="piggy" aria-label="保險庫">
-      <span class="of-name">保險庫</span>${officePiggySvg(d)}
+    <button type="button" class="of-pigbtn mood-${d.mood}${officeSelected === 'piggy' ? ' selected' : ''}" data-office-id="piggy" aria-label="小豬（存錢筒）">
+      <span class="of-name">小豬</span>${officePiggySvg(d)}
     </button>
     ${actorsHtml}`;
 
@@ -801,13 +817,13 @@ function drawOffice() {
 
   const list = document.getElementById('office-list');
   if (list) {
-    const cards = [...OFFICE_STAFF.slice(0, 4), { id: 'piggy', name: '保險庫', role: '存錢', tag: 'piggy' }, ...OFFICE_STAFF.slice(4)];
+    const cards = [...OFFICE_STAFF.slice(0, 4), { id: 'piggy', name: '小豬', role: '存錢', tag: 'piggy' }, ...OFFICE_STAFF.slice(4)];
     list.innerHTML = cards.map(s => {
       const [label, num] = officeMetric(s.id, d);
       const act = s.id === 'piggy'
-        ? (d.mood === 'cry' ? `透支 ${fmt(-d.balance)}，金塊搬空了` : (d.mood === 'worry' ? `餘額 ${fmt(d.balance)}，金塊不多了` : `餘額 ${fmt(d.balance)}，金塊堆得穩穩的`))
+        ? (d.mood === 'cry' ? `透支 ${fmt(-d.balance)}，肚子空空哭哭` : (d.mood === 'worry' ? `餘額 ${fmt(d.balance)}，金幣不多有點緊張` : `餘額 ${fmt(d.balance)}，金幣滿滿心情好`))
         : officeActivity(s.id, d);
-      const ava = s.id === 'piggy' ? '<span class="of-ava of-ava-pig">💰</span>' : `<span class="of-ava">${officeActorSvg(s.id)}</span>`;
+      const ava = s.id === 'piggy' ? '<span class="of-ava of-ava-pig">🐷</span>' : `<span class="of-ava">${officeActorSvg(s.id)}</span>`;
       return `<button type="button" class="of-card${officeSelected === s.id ? ' selected' : ''}" data-office-id="${s.id}">
         ${ava}
         <span class="of-card-main"><span class="of-card-top"><b>${s.name}</b><em class="of-tag tag-${s.tag}">${s.role}</em></span><small data-office-act="${s.id}">${esc(act)}</small></span>
@@ -960,7 +976,7 @@ function officeTick(ts) {
         // 有事要忙的員工比較常待在座位上
         const busy = d && ((s.id === 'book' && d.todayCount > 0) || (s.id === 'stock' && !d.alerts.length));
         if (busy && Math.random() < 0.45) { a.until = ts + 6000 + Math.random() * 6000; return; }
-        // 有人在跑腿或互動時，其他人先不去記帳桌、保險庫和茶水間，免得擠在一起
+        // 有人在跑腿或互動時，其他人先不去記帳桌、存錢筒和茶水間，免得擠在一起
         const jobBusy = Object.values(officeActors).some(o => o.job) || Object.values(officeJobs).some(q => q.length);
         const picks = jobBusy ? s.visits.filter(v => v !== 'desk' && v !== 'piggy' && v !== 'tea') : s.visits;
         if (!picks.length) { a.until = ts + 4000; return; }

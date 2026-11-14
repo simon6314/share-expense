@@ -1,27 +1,20 @@
-// ── 辦公室：把共同帳戶的幾種「工作」畫成一個小場景（資料全部來自目前月份的紀錄與庫存）──
-// 角色：記帳員（記帳桌）、出納（金庫）、存錢筒、倉管貨架、分析白板
+// ── 辦公室：俯視的小辦公室，員工會依這個月的紀錄、餘額與庫存走動、工作 ──
+// 員工：小帳（記帳）、阿庫（出納）、阿貨（倉管）、小析（分析）、小豬（存錢筒），以及兩位成員精靈與小狐狸
 // 這個檔案只讀取 app.js 的資料與函式，不會寫入任何東西。
 
-const OFFICE_ROLE_KEY = 'shareExpense.office.roles';      // 'elf'：精靈當記帳員；'fox'：小狐狸當記帳員
 const OFFICE_SEEN_PREFIX = 'shareExpense.office.seen:';   // 每個月份上次來訪時的紀錄筆數
-let officeBubbleTimer = null;
-let officeBubbleIndex = 0;
-let officeSelected = null;          // 目前點開的站別
-let officeInvRequested = false;     // 這次開啟是否已經更新過庫存
 const officeNewCount = {};          // sheet -> 這次來訪時比上次多了幾筆
+let officeSelected = null;          // 目前點開的員工 id
+let officeInvRequested = false;     // 這次開啟是否已經更新過庫存
+let officePaused = false;
+let officeRaf = null;
+let officeLastTs = 0;
+let officeSayAt = 0;                // 下一次冒出對話框的時間
+let officeData_ = null;             // 最近一次整理好的資料
 
 function officeVisible() {
   const tab = document.getElementById('tab-office');
   return !!tab && tab.style.display !== 'none';
-}
-
-function officeBookkeeper() {
-  try { return localStorage.getItem(OFFICE_ROLE_KEY) === 'fox' ? 'fox' : 'elf'; } catch (e) { return 'elf'; }
-}
-
-function officeSwapRoles() {
-  try { localStorage.setItem(OFFICE_ROLE_KEY, officeBookkeeper() === 'elf' ? 'fox' : 'elf'); } catch (e) { /* 存不了就只換這一次 */ }
-  drawOffice();
 }
 
 // 整理這個月的資料，供場景與下方說明共用
@@ -136,88 +129,41 @@ function officeCharSvg(kind) {
     </g>`;
 }
 
-const OFFICE_FUR = { elf: '#eef9f6', fox: '#f4a261' };
-
-// 記帳桌：角色坐在桌子後面；今天有記帳就寫字，沒有就喝茶
-function officeDeskSvg(kind, writing) {
-  const fur = OFFICE_FUR[kind];
+// 員工（人形）：髮色、制服顏色與小配件依職務不同
+const OFFICE_LOOK = {
+  book:  { hair: '#7a523c', suit: '#9fd8cb', extra: 'pencil' },
+  cash:  { hair: '#34404d', suit: '#f7c4d8', extra: 'bun' },
+  stock: { hair: '#c98b5e', suit: '#f6c58a', extra: 'cap' },
+  chart: { hair: '#4d4a6e', suit: '#bcd4f6', extra: 'glasses' },
+};
+function officeStaffSvg(id) {
+  const k = OFFICE_LOOK[id];
+  const extra = k.extra === 'pencil'
+    ? '<path d="M60 30 L70 14" stroke="#ffb74d" stroke-width="3.4" stroke-linecap="round"/><path d="M60 30 L58.6 32.4" stroke="#5b3a29" stroke-width="2.4" stroke-linecap="round"/>'
+    : k.extra === 'bun'
+      ? `<circle cx="40" cy="11" r="8" fill="${k.hair}"/><circle cx="40" cy="11" r="2.4" fill="#ffd66b"/>`
+      : k.extra === 'cap'
+        ? '<path d="M17 27 Q18 9 40 9 Q62 9 63 27 Z" fill="#f2a03d"/><path d="M40 24 Q62 22 72 30 Q58 31 40 30 Z" fill="#e58a1f"/>'
+        : '<circle cx="31" cy="38" r="6.2" fill="rgba(255,255,255,0.45)" stroke="#4d4a6e" stroke-width="1.6"/><circle cx="49" cy="38" r="6.2" fill="rgba(255,255,255,0.45)" stroke="#4d4a6e" stroke-width="1.6"/><path d="M37.2 38 h5.6" stroke="#4d4a6e" stroke-width="1.6"/>';
   return `
-  <svg viewBox="0 0 200 150" aria-hidden="true">
-    <ellipse cx="100" cy="146" rx="88" ry="5" fill="rgba(90,70,50,0.12)"/>
-    <g transform="translate(50 -14) scale(1.25)">${officeCharSvg(kind)}</g>
-    <rect x="24" y="100" width="152" height="44" rx="9" fill="#e3b98a"/>
-    <rect x="34" y="110" width="56" height="26" rx="5" fill="#d6a875"/>
-    <circle cx="62" cy="123" r="2.6" fill="#f6dcbb"/>
-    <rect x="10" y="88" width="180" height="17" rx="8.5" fill="#f4d9b6"/>
-    <rect x="10" y="98" width="180" height="7" rx="3.5" fill="#e8c69c"/>
-    <!-- 帳本 -->
-    <path d="M70 87 Q85 80 100 86 Q115 80 130 87 L130 73 Q115 67 100 73 Q85 67 70 73 Z" fill="#ffffff" stroke="#d9c7b0" stroke-width="1"/>
-    <path d="M100 73 L100 86" stroke="#d9c7b0" stroke-width="1"/>
-    <path d="M76 75.5 Q85 72.5 95 75.5 M76 79 Q85 76 95 79 M105 75.5 Q114 72.5 124 75.5" stroke="#9fd8cb" stroke-width="1.2" fill="none" stroke-linecap="round"/>
-    <path class="${writing ? 'of-ink' : ''}" d="M105 79 Q111 76.6 117 78.4" stroke="#f08fb0" stroke-width="1.4" fill="none" stroke-linecap="round"/>
-    <!-- 筆筒與計算機 -->
-    <rect x="150" y="72" width="16" height="17" rx="3" fill="#9fd8cb"/>
-    <path d="M154 72 L152 61 M158 72 L158 59 M162 72 L165 62" stroke="#f08fb0" stroke-width="2.2" stroke-linecap="round"/>
-    <rect x="26" y="74" width="24" height="15" rx="3" fill="#bfe3f0"/>
-    <rect x="29" y="77" width="18" height="4" rx="1.5" fill="#f7fdfb"/>
-    <circle cx="31.5" cy="85" r="1.4" fill="#f7fdfb"/><circle cx="37.5" cy="85" r="1.4" fill="#f7fdfb"/><circle cx="43.5" cy="85" r="1.4" fill="#f7fdfb"/>
-    ${writing ? `
-    <g class="of-arm-write">
-      <ellipse cx="118" cy="80" rx="7" ry="5.5" fill="${fur}" stroke="rgba(90,70,50,0.18)" stroke-width="0.8"/>
-      <path d="M121 78 L132 62" stroke="#ffb74d" stroke-width="3" stroke-linecap="round"/>
-      <path d="M121 78 L119.6 80.2" stroke="#5b3a29" stroke-width="2" stroke-linecap="round"/>
-    </g>
-    <ellipse cx="82" cy="82" rx="7" ry="5.5" fill="${fur}" stroke="rgba(90,70,50,0.18)" stroke-width="0.8"/>` : `
-    <g class="of-sip">
-      <rect x="111" y="70" width="15" height="13" rx="3.5" fill="#ffffff" stroke="#d9c7b0" stroke-width="1"/>
-      <path d="M126 73 q6 0.5 5 5 q-1 3 -5 2.6" fill="none" stroke="#d9c7b0" stroke-width="1.6"/>
-      <rect x="113" y="72" width="11" height="3.4" rx="1.7" fill="#c98b5e"/>
-      <path class="of-steam" d="M116 66 q-3 -4 0 -8 M121 66 q3 -4 0 -8" fill="none" stroke="#c9b8a6" stroke-width="1.3" stroke-linecap="round"/>
-    </g>
-    <ellipse cx="82" cy="82" rx="7" ry="5.5" fill="${fur}" stroke="rgba(90,70,50,0.18)" stroke-width="0.8"/>
-    <ellipse cx="118" cy="84" rx="7" ry="5.5" fill="${fur}" stroke="rgba(90,70,50,0.18)" stroke-width="0.8"/>`}
-  </svg>`;
+    <g class="of-char">
+      <ellipse cx="40" cy="72" rx="17" ry="15" fill="${k.suit}"/>
+      <path d="M33 60 L40 68 L47 60 Z" fill="#ffffff"/>
+      <g class="of-head">
+        <ellipse cx="40" cy="38" rx="22" ry="21" fill="#ffe4d0"/>
+        <path d="M17.5 38 Q15 13 40 13 Q65 13 62.5 38 Q57 24 40 24 Q23 24 17.5 38 Z" fill="${k.hair}"/>
+        <circle cx="31" cy="39" r="3" fill="#3b2f2f"/><circle cx="32" cy="38" r="1" fill="#fff"/>
+        <circle cx="49" cy="39" r="3" fill="#3b2f2f"/><circle cx="50" cy="38" r="1" fill="#fff"/>
+        <path d="M36 48 Q40 51.5 44 48" fill="none" stroke="#b9728a" stroke-width="1.5" stroke-linecap="round"/>
+        <ellipse cx="24.5" cy="45" rx="3.8" ry="2.3" fill="#ff9fb0" opacity="0.6"/>
+        <ellipse cx="55.5" cy="45" rx="3.8" ry="2.3" fill="#ff9fb0" opacity="0.6"/>
+        ${extra}
+      </g>
+    </g>`;
 }
-
-// 金庫：出納站在櫃台後面；信封代表兩人的「每月的愛」（已入帳會亮起來）
-function officeVaultSvg(kind, d) {
-  const fur = OFFICE_FUR[kind];
-  const env = (x, person, color) => `
-    <g transform="translate(${x} 28)"><g class="of-env ${person.arrived ? 'arrived' : ''}">
-      <rect x="0" y="0" width="24" height="17" rx="3" fill="${person.arrived ? color : '#f1ece6'}" stroke="rgba(90,70,50,0.2)" stroke-width="0.8"/>
-      <path d="M1 2 L12 10 L23 2" fill="none" stroke="rgba(90,70,50,0.25)" stroke-width="1"/>
-      <path d="M12 8.2 c-2.4 -3.4 -6 -0.4 -3.4 2.2 l3.4 3 3.4 -3 c2.6 -2.6 -1 -5.6 -3.4 -2.2 Z" fill="${person.arrived ? '#ffffff' : '#d8cfc5'}"/>
-    </g></g>`;
-  return `
-  <svg viewBox="0 0 200 150" aria-hidden="true">
-    <ellipse cx="100" cy="146" rx="88" ry="5" fill="rgba(90,70,50,0.12)"/>
-    <!-- 金庫 -->
-    <rect x="8" y="46" width="84" height="96" rx="12" fill="#a8d8cc"/>
-    <rect x="16" y="54" width="68" height="80" rx="8" fill="#c4e8de"/>
-    <circle cx="50" cy="94" r="19" fill="#f7fdfb" stroke="#8cc7b9" stroke-width="2"/>
-    <g class="of-dial"><path d="M50 79 L50 109 M35 94 L65 94" stroke="#8cc7b9" stroke-width="3" stroke-linecap="round"/><circle cx="50" cy="94" r="4.5" fill="#ffd66b"/></g>
-    <rect x="72" y="66" width="6" height="14" rx="3" fill="#8cc7b9"/>
-    <rect x="16" y="140" width="14" height="6" rx="2" fill="#8cc7b9"/><rect x="70" y="140" width="14" height="6" rx="2" fill="#8cc7b9"/>
-    ${env(14, d.love[0], '#7fd6e6')}${env(54, d.love[1], '#f7a8c0')}
-    <!-- 出納 -->
-    <g transform="translate(94 -14) scale(1.25)">${officeCharSvg(kind)}</g>
-    <rect x="98" y="100" width="98" height="44" rx="9" fill="#e9c9e0"/>
-    <rect x="92" y="89" width="110" height="16" rx="8" fill="#f8e1f0"/>
-    <rect x="92" y="98" width="110" height="7" rx="3.5" fill="#efcfe4"/>
-    <!-- 錢袋與零錢 -->
-    <g class="${d.settled ? 'of-bag-done' : 'of-bag'}">
-      <path d="M170 88 q-12 -1 -11 -13 q1 -9 8 -12 l-3 -5 h12 l-3 5 q7 3 8 12 q1 12 -11 13 Z" fill="#e3b98a"/>
-      <path d="M163 58 h12" stroke="#b98a57" stroke-width="2" stroke-linecap="round"/>
-      <text x="169.5" y="80" font-size="11" font-weight="700" text-anchor="middle" fill="#8a5a2b">$</text>
-    </g>
-    <g>
-      <ellipse cx="112" cy="87" rx="7" ry="2.6" fill="#f2b632"/><ellipse cx="112" cy="84" rx="7" ry="2.6" fill="#ffd66b"/>
-      <ellipse cx="112" cy="81" rx="7" ry="2.6" fill="#f2b632"/><ellipse cx="112" cy="78" rx="7" ry="2.6" fill="#ffd66b"/>
-    </g>
-    <g class="of-toss"><ellipse cx="144" cy="70" rx="5.5" ry="5.5" fill="#ffd66b" stroke="#f2b632" stroke-width="1.2"/></g>
-    <ellipse cx="128" cy="84" rx="7" ry="5.5" fill="${fur}" stroke="rgba(90,70,50,0.18)" stroke-width="0.8"/>
-    <ellipse cx="146" cy="84" rx="7" ry="5.5" fill="${fur}" stroke="rgba(90,70,50,0.18)" stroke-width="0.8"/>
-  </svg>`;
+function officeActorSvg(id) {
+  const inner = (id === 'elf' || id === 'fox') ? officeCharSvg(id) : officeStaffSvg(id);
+  return `<svg viewBox="0 0 80 90" aria-hidden="true"><ellipse cx="40" cy="86" rx="20" ry="4" fill="rgba(90,70,50,0.18)"/>${inner}</svg>`;
 }
 
 // 存錢筒：肚子裡的水位就是餘額比例；餘額偏低會冒汗，變負數會哭
@@ -257,46 +203,108 @@ function officePiggySvg(d) {
   </svg>`;
 }
 
-function officePlantSvg() {
-  return `
-  <svg viewBox="0 0 60 90" aria-hidden="true">
-    <g class="of-leaf">
-      <path d="M30 56 Q12 44 14 18 Q28 28 30 56 Z" fill="#8fd3b0"/>
-      <path d="M30 56 Q48 42 48 14 Q32 26 30 56 Z" fill="#a8e0c0"/>
-      <path d="M30 58 Q30 30 30 8 Q20 30 30 58 Z" fill="#7cc9a2"/>
-    </g>
-    <path d="M14 56 h32 l-4 28 q-12 4 -24 0 Z" fill="#f4b99a"/>
-    <rect x="11" y="52" width="38" height="9" rx="4.5" fill="#f8cdb4"/>
-  </svg>`;
-}
 
-// ── 畫面 ──────────────────────────────────────────────────────
-function officeBubbles(d, sheet) {
-  const newN = officeNewCount[sheet] || 0;
-  const latest = d.sorted[0];
-  const lovePending = d.love.filter(p => p.has && !p.arrived);
-  const loveArrived = d.love.filter(p => p.has && p.arrived);
-  return {
-    desk: newN > 0 ? `新增了 ${newN} 筆！`
-      : (latest ? `${latest.item} ${fmt(latest.expense || latest.income)}` : '這個月還沒有紀錄'),
-    vault: d.settled ? '月底結算完成 ✓'
-      : (lovePending.length ? `等 ${lovePending[0].date} 入帳…`
-        : (loveArrived.length ? `每月的愛 ${loveArrived.length}/2 已入帳 💛` : '還沒有每月的愛')),
-    piggy: `餘額 ${fmt(d.balance)}`,
-    shelf: d.alerts.length ? `${d.alerts[0].name} ${d.alerts[0].text}` : (d.items.length ? '庫存都夠 ✓' : '還沒有庫存'),
-    board: d.cats.length ? `最大支出：${d.cats[0].name}` : '還沒有支出',
+// ── 平面圖（座標系 1000 × 940）：記帳區、倉庫、走道、金庫、休息區 ──
+function officeBgSvg(d) {
+  const t = (s, n) => { const a = [...String(s)]; return esc(a.length > n ? a.slice(0, n).join('') : a.join('')); };
+  // 白板：前三大支出
+  const max = d.cats.length ? d.cats[0].value : 1;
+  const barColor = ['#f79aae', '#7fd6e6', '#ffd66b'];
+  const board = d.cats.slice(0, 3).map((c, i) => `
+    <text x="318" y="${76 + i * 34}" font-size="27" fill="#6b5a4c">${t(c.name, 4)}</text>
+    <rect x="436" y="${56 + i * 34}" width="136" height="20" rx="10" fill="#f3ece3"/>
+    <rect x="436" y="${56 + i * 34}" width="${Math.max(14, 136 * c.value / max).toFixed(0)}" height="20" rx="10" fill="${barColor[i]}"/>`).join('')
+    || '<text x="445" y="104" font-size="27" text-anchor="middle" fill="#a8978a">還沒有支出</text>';
+  // 貨架：上排放需要注意的品項，下排是一般貨
+  const box = (x, y, a) => {
+    const fill = !a ? '#ecd3ae' : (a.level === 'red' ? '#ffd3d9' : (a.level === 'warn' ? '#ffe8bd' : '#cdeee3'));
+    const stroke = !a ? '#d9bb8f' : (a.level === 'red' ? '#f08f9f' : (a.level === 'warn' ? '#f2b85c' : '#8fd3b0'));
+    return `<g${a && a.level === 'red' ? ' class="of-alert"' : ''}><rect x="${x}" y="${y}" width="86" height="58" rx="10" fill="${fill}" stroke="${stroke}" stroke-width="3"/>
+      ${a ? `<text x="${x + 43}" y="${y + 39}" font-size="26" text-anchor="middle" fill="#5b4636">${a.name ? t(a.name, 3) : '✓'}</text>` : ''}</g>`;
   };
+  const top3 = d.alerts.slice(0, 3);
+  const topBoxes = [0, 1, 2].map(i => {
+    if (top3[i]) return box(672 + i * 96, 62, top3[i]);
+    return d.items.length && !d.alerts.length ? box(672 + i * 96, 62, { level: 'ok', name: i === 0 ? '' : ' ' }) : box(672 + i * 96, 62, null);
+  }).join('');
+  const env = (x, p, color) => `
+    <g transform="translate(${x} 532)"><g class="of-env ${p.arrived ? 'arrived' : ''}">
+      <rect width="66" height="46" rx="8" fill="${p.arrived ? color : '#f1ece6'}" stroke="rgba(90,70,50,0.22)" stroke-width="2"/>
+      <path d="M3 6 L33 27 L63 6" fill="none" stroke="rgba(90,70,50,0.25)" stroke-width="2.4"/>
+      <path d="M33 22 c-6 -9 -16 -1 -9 6 l9 8 9 -8 c7 -7 -3 -15 -9 -6 Z" fill="${p.arrived ? '#ffffff' : '#d8cfc5'}"/>
+    </g></g>`;
+  const desk = (x, y, w, tone) => `
+    <rect x="${x}" y="${y + 12}" width="${w}" height="66" rx="14" fill="${tone[1]}"/>
+    <rect x="${x}" y="${y}" width="${w}" height="62" rx="14" fill="${tone[0]}"/>`;
+  const wood = ['#f4d9b6', '#e3b98a'], lilac = ['#f8e1f0', '#e9c9e0'];
+  return `
+  <svg class="of-bg" viewBox="0 0 1000 940" aria-hidden="true">
+    <rect width="1000" height="940" fill="#f6ead8"/>
+    <!-- 四個區域 -->
+    <rect x="20" y="20" width="590" height="375" rx="26" fill="#fff4e2" stroke="#f0dcc0" stroke-width="4"/>
+    <rect x="630" y="20" width="350" height="375" rx="26" fill="#e9f6f0" stroke="#cfe9de" stroke-width="4"/>
+    <rect x="20" y="495" width="450" height="425" rx="26" fill="#fdebf1" stroke="#f6d3de" stroke-width="4"/>
+    <rect x="490" y="495" width="490" height="425" rx="26" fill="#e9f2fc" stroke="#d2e2f6" stroke-width="4"/>
+    <!-- 門口 -->
+    <rect x="285" y="388" width="80" height="14" fill="#fff4e2"/><rect x="660" y="388" width="80" height="14" fill="#e9f6f0"/>
+    <rect x="380" y="488" width="80" height="14" fill="#fdebf1"/><rect x="580" y="488" width="80" height="14" fill="#e9f2fc"/>
+    <g font-size="27" font-weight="700" fill="rgba(110,90,70,0.5)">
+      <text x="108" y="372">記帳區</text><text x="652" y="372">倉庫</text>
+      <text x="386" y="900">金庫</text><text x="512" y="900">休息區</text>
+    </g>
+    <!-- 記帳區：白板、兩張桌子、盆栽 -->
+    <rect x="296" y="34" width="296" height="124" rx="16" fill="#ffffff" stroke="#9fd8cb" stroke-width="8"/>
+    ${board}
+    ${desk(60, 108, 215, wood)}
+    <path d="M118 150 Q140 138 162 148 Q184 138 206 150 L206 126 Q184 115 162 124 Q140 115 118 126 Z" fill="#ffffff" stroke="#d9c7b0" stroke-width="2"/>
+    <path d="M162 124 L162 148 M128 132 Q140 127 154 132 M170 132 Q184 127 198 132" fill="none" stroke="#9fd8cb" stroke-width="2.4" stroke-linecap="round"/>
+    <rect x="74" y="120" width="34" height="26" rx="5" fill="#bfe3f0"/><rect x="79" y="125" width="24" height="7" rx="2" fill="#f7fdfb"/>
+    <rect x="232" y="116" width="26" height="30" rx="6" fill="#9fd8cb"/><path d="M239 116 L236 100 M246 116 L246 97 M252 116 L256 101" stroke="#f08fb0" stroke-width="4" stroke-linecap="round"/>
+    ${desk(380, 178, 195, wood)}
+    <rect x="436" y="186" width="84" height="42" rx="8" fill="#5b6475"/><rect x="442" y="191" width="72" height="31" rx="5" fill="#cfe7ff"/>
+    <path d="M450 216 l10 -9 9 5 12 -13 12 8 10 -10" fill="none" stroke="#f79aae" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+    <g class="of-leaf"><path d="M70 330 Q44 312 48 276 Q68 290 70 330 Z" fill="#8fd3b0"/><path d="M70 330 Q96 310 96 272 Q74 288 70 330 Z" fill="#a8e0c0"/></g>
+    <path d="M50 330 h40 l-5 34 q-15 5 -30 0 Z" fill="#f4b99a"/>
+    <!-- 倉庫：兩排貨架、小推車桌 -->
+    <rect x="656" y="46" width="300" height="92" rx="14" fill="#f8e3c6" stroke="#e3b98a" stroke-width="5"/>
+    ${topBoxes}
+    <rect x="656" y="156" width="300" height="92" rx="14" fill="#f8e3c6" stroke="#e3b98a" stroke-width="5"/>
+    ${[0, 1, 2].map(i => box(672 + i * 96, 172, null)).join('')}
+    ${d.alerts.length ? `<circle cx="952" cy="50" r="24" fill="#ef5f7a"/><text x="952" y="60" font-size="28" font-weight="700" text-anchor="middle" fill="#fff">${d.alerts.length}</text>` : ''}
+    ${desk(846, 268, 108, ['#d9efe6', '#b5dccd'])}
+    <rect x="866" y="276" width="44" height="32" rx="6" fill="#ecd3ae" stroke="#d9bb8f" stroke-width="3"/><path d="M866 292 h44" stroke="#d9bb8f" stroke-width="3"/>
+    <!-- 金庫：保險箱、兩個信封（每月的愛）、櫃台 -->
+    <rect x="45" y="525" width="132" height="140" rx="18" fill="#a8d8cc"/><rect x="57" y="537" width="108" height="116" rx="12" fill="#c4e8de"/>
+    <circle cx="111" cy="595" r="30" fill="#f7fdfb" stroke="#8cc7b9" stroke-width="4"/>
+    <g class="of-dial"><path d="M111 571 L111 619 M87 595 L135 595" stroke="#8cc7b9" stroke-width="5" stroke-linecap="round"/><circle cx="111" cy="595" r="7" fill="#ffd66b"/></g>
+    ${env(204, d.love[0], '#7fd6e6')}${env(284, d.love[1], '#f7a8c0')}
+    ${desk(58, 752, 196, lilac)}
+    <g><ellipse cx="96" cy="776" rx="15" ry="6" fill="#f2b632"/><ellipse cx="96" cy="770" rx="15" ry="6" fill="#ffd66b"/><ellipse cx="96" cy="764" rx="15" ry="6" fill="#f2b632"/><ellipse cx="96" cy="758" rx="15" ry="6" fill="#ffd66b"/></g>
+    <g class="${d.love.some(p => p.arrivedToday) ? 'of-hop' : ''}">
+      <path d="M200 790 q-22 -2 -20 -24 q2 -16 14 -22 l-5 -9 h22 l-5 9 q12 6 14 22 q2 22 -20 24 Z" fill="#e3b98a"/>
+      <text x="200" y="778" font-size="22" font-weight="700" text-anchor="middle" fill="#8a5a2b">$</text>
+    </g>
+    <!-- 休息區：茶水機、茶几、沙發、盆栽 -->
+    <rect x="510" y="518" width="74" height="104" rx="14" fill="#cfe0f2"/><rect x="520" y="528" width="54" height="40" rx="8" fill="#f7fbff"/>
+    <rect x="534" y="582" width="26" height="24" rx="5" fill="#ffffff" stroke="#b9cde4" stroke-width="3"/>
+    <path class="of-steam" d="M541 574 q-5 -8 0 -15 M553 574 q5 -8 0 -15" fill="none" stroke="#a9bfd8" stroke-width="3" stroke-linecap="round"/>
+    <ellipse cx="812" cy="704" rx="72" ry="38" fill="#e3b98a"/><ellipse cx="812" cy="694" rx="72" ry="38" fill="#f4d9b6"/>
+    <rect x="792" y="676" width="24" height="20" rx="5" fill="#ffffff" stroke="#d9c7b0" stroke-width="2.5"/><circle cx="838" cy="694" r="10" fill="#f79aae"/>
+    <rect x="672" y="792" width="276" height="96" rx="34" fill="#f3a9bf"/>
+    <rect x="690" y="806" width="240" height="70" rx="24" fill="#f9c6d5"/>
+    <rect x="700" y="812" width="106" height="48" rx="18" fill="#fde0e9"/><rect x="814" y="812" width="106" height="48" rx="18" fill="#fde0e9"/>
+    <g class="of-leaf"><path d="M934 580 Q908 562 912 526 Q932 540 934 580 Z" fill="#8fd3b0"/><path d="M934 580 Q960 560 960 522 Q938 538 934 580 Z" fill="#a8e0c0"/></g>
+    <path d="M914 580 h40 l-5 34 q-15 5 -30 0 Z" fill="#f4b99a"/>
+  </svg>`;
 }
 
 function officeDetailHtml(key, d) {
   const row = (label, value, cls = '') => `<div class="of-row"><span>${label}</span><b class="${cls}">${value}</b></div>`;
   const go = (tab, text) => `<button type="button" class="of-go" data-office-go="${tab}">${text}</button>`;
-  const bk = officeBookkeeper() === 'elf' ? '精靈' : '小狐狸';
-  const cashier = officeBookkeeper() === 'elf' ? '小狐狸' : '精靈';
   if (key === 'desk') {
     const list = d.sorted.slice(0, 4).map(r =>
       row(`${toMMDD(r.date)} ${esc(r.item)}`, (r.expense ? '−' : '+') + fmt(r.expense || r.income), r.expense ? 'of-exp' : 'of-inc')).join('');
-    return `<h4>📒 記帳桌 <small>${bk}值班</small></h4>
+    return `<h4>📒 記帳桌 <small>小帳負責</small></h4>
       ${row('今天', d.todayCount + ' 筆')}${row('這個月', d.entries.length + ' 筆')}
       ${list ? `<div class="of-sub">最新紀錄</div>${list}` : '<p class="of-note">這個月還沒有紀錄。</p>'}
       <div class="of-actions"><button type="button" class="of-go" data-office-add>記一筆</button>${go('records', '看明細')}</div>`;
@@ -304,96 +312,317 @@ function officeDetailHtml(key, d) {
   if (key === 'vault') {
     const love = d.love.map(p => row(`${p.name === '精靈' ? '🐎' : '🦊'} ${p.name} 每月的愛`,
       p.has ? `${fmt(p.amount)}（${p.arrived ? '已入帳' : p.date + ' 入帳'}）` : '尚未登記', p.has && p.arrived ? 'of-inc' : '')).join('');
-    return `<h4>🏦 金庫 <small>${cashier}值班</small></h4>
+    return `<h4>🏦 金庫 <small>阿庫負責</small></h4>
       ${love}${row('月底結算', d.settled ? '已完成' : '尚未結算')}
       <div class="of-actions">${go('members', '看成員')}</div>`;
   }
   if (key === 'piggy') {
     const tip = d.mood === 'cry' ? '餘額是負的，存錢筒哭了。' : (d.mood === 'worry' ? '餘額剩不到兩成，存錢筒有點緊張。' : '存錢筒心情不錯。');
-    return `<h4>🐷 存錢筒</h4>
+    return `<h4>🐷 存錢筒 <small>小豬</small></h4>
       ${row('期初餘額', fmt(d.starting))}${row('已入帳收入', '+' + fmt(d.arrived), 'of-inc')}${row('本月支出', '−' + fmt(d.expense), 'of-exp')}
       ${row('目前餘額', fmt(d.balance), d.balance < 0 ? 'of-exp' : 'of-inc')}${row('水位', Math.round(d.ratio * 100) + '%')}
       <p class="of-note">${tip}（水位＝目前餘額 ÷（期初＋已入帳收入））</p>`;
   }
   if (key === 'shelf') {
     const list = d.alerts.slice(0, 8).map(a => row(esc(a.name), a.text, a.level === 'red' ? 'of-exp' : 'of-warn')).join('');
-    return `<h4>📦 貨架</h4>
+    return `<h4>📦 貨架 <small>阿貨負責</small></h4>
       ${row('庫存品項', d.items.length + ' 項')}${row('需要注意', d.alerts.length + ' 項', d.alerts.length ? 'of-exp' : 'of-inc')}
       ${list || '<p class="of-note">沒有要補貨或快到期的東西。</p>'}
       <div class="of-actions">${go('inventory', '看庫存')}</div>`;
   }
   const max = d.cats.length ? d.cats[0].value : 1;
   const bars = d.cats.slice(0, 6).map(c => `<div class="of-bar-row"><span>${esc(c.name)}</span><i><em style="width:${Math.max(4, c.value / max * 100).toFixed(0)}%"></em></i><b>${fmt(c.value)}</b></div>`).join('');
-  return `<h4>📊 白板</h4>
+  return `<h4>📊 白板 <small>小析負責</small></h4>
     ${bars || '<p class="of-note">這個月還沒有支出。</p>'}
     <div class="of-actions">${go('analysis', '看分析')}</div>`;
+}
+
+
+// ── 員工、座位與走動路線 ──────────────────────────────────────
+// 每一區有一條淨空的直走道（col），員工先橫向走到走道，再經中間走廊到另一區，不會穿過家具
+const OFFICE_COL = { A: 325, B: 700, C: 420, D: 620 };
+const OFFICE_HALL_Y = 445;
+const OFFICE_SPOTS = {
+  tea:   { x: 620, y: 583, zone: 'D', go: '走去茶水間', at: '倒杯茶休息一下', rest: true },
+  board: { x: 325, y: 285, zone: 'A', go: '走去看白板', at: '看白板上的分類' },
+  desk:  { x: 262, y: 300, zone: 'A', go: '走去記帳桌', at: '跟小帳對帳' },
+  shelf: { x: 700, y: 300, zone: 'B', go: '走去貨架', at: '看看貨架' },
+  piggy: { x: 420, y: 690, zone: 'C', go: '走去存錢筒', at: '看看存錢筒' },
+};
+const OFFICE_STAFF = [
+  { id: 'book',  name: '小帳',   role: '記帳', tag: 'book',  seat: { x: 170, y: 245, zone: 'A' }, visits: ['tea', 'board'] },
+  { id: 'chart', name: '小析',   role: '分析', tag: 'chart', seat: { x: 478, y: 318, zone: 'A' }, visits: ['board', 'desk', 'tea'] },
+  { id: 'stock', name: '阿貨',   role: '倉管', tag: 'stock', seat: { x: 900, y: 362, zone: 'B' }, visits: ['shelf', 'shelf', 'tea'] },
+  { id: 'cash',  name: '阿庫',   role: '出納', tag: 'cash',  seat: { x: 156, y: 878, zone: 'C' }, visits: ['piggy', 'desk', 'tea'] },
+  { id: 'elf',   name: '精靈',   role: '成員', tag: 'elf',   seat: { x: 752, y: 862, zone: 'D' }, visits: ['piggy', 'shelf', 'tea', 'board'] },
+  { id: 'fox',   name: '小狐狸', role: '成員', tag: 'fox',   seat: { x: 868, y: 862, zone: 'D' }, visits: ['piggy', 'tea', 'shelf', 'desk'] },
+];
+const officeActors = {};   // id -> { x, y, zone, state: 'seat'|'walk'|'visit', path, until, spot, back, face }
+
+function officeInitActors() {
+  OFFICE_STAFF.forEach((s, i) => {
+    if (officeActors[s.id]) return;
+    officeActors[s.id] = { x: s.seat.x, y: s.seat.y, zone: s.seat.zone, state: 'seat', path: [], until: 2500 + i * 1700 + Math.random() * 3000, spot: null, back: false, face: 1 };
+  });
+}
+
+function officePath(from, fz, to, tz) {
+  const pts = [];
+  const cf = OFFICE_COL[fz], ct = OFFICE_COL[tz];
+  if (fz === tz) {
+    if (Math.abs(from.y - to.y) > 1) pts.push({ x: cf, y: from.y }, { x: cf, y: to.y });
+  } else {
+    pts.push({ x: cf, y: from.y }, { x: cf, y: OFFICE_HALL_Y }, { x: ct, y: OFFICE_HALL_Y }, { x: ct, y: to.y });
+  }
+  pts.push({ x: to.x, y: to.y });
+  return pts;
+}
+
+// 每位員工、每種狀態正在做的事（文字來自真實資料）
+function officeActivity(id, d) {
+  const a = officeActors[id];
+  if (a && a.state === 'walk') return a.back ? '走回座位' : OFFICE_SPOTS[a.spot].go;
+  if (a && a.state === 'visit') {
+    if (a.spot === 'shelf') return d.alerts.length ? `盤點：${d.alerts[0].name}${d.alerts[0].text}` : '看看貨架';
+    if (a.spot === 'piggy') return id === 'cash' ? '把零錢投進存錢筒' : `看存錢筒：${fmt(d.balance)}`;
+    if (a.spot === 'board') return d.cats.length ? `看白板：${d.cats[0].name}最多` : '看白板';
+    return OFFICE_SPOTS[a.spot].at;
+  }
+  const latest = d.sorted[0];
+  const pending = d.love.filter(p => p.has && !p.arrived);
+  const arrived = d.love.filter(p => p.has && p.arrived);
+  if (id === 'book') {
+    const n = officeNewCount[currentSheet()] || 0;
+    if (n > 0) return `專心：新增了 ${n} 筆`;
+    return d.todayCount > 0 && latest ? `專心：登記 ${latest.item}` : (latest ? `整理帳本：${latest.item}` : '等第一筆紀錄');
+  }
+  if (id === 'chart') return d.cats.length ? `專心：${d.cats[0].name}占最多` : '等資料畫圖';
+  if (id === 'stock') return d.alerts.length ? `專心：${d.alerts[0].name}${d.alerts[0].text}` : (d.items.length ? '貨架都整理好了' : '貨架還是空的');
+  if (id === 'cash') {
+    if (d.settled) return '月底結算完成';
+    if (pending.length) return `等 ${pending[0].date} 每月的愛入帳`;
+    return arrived.length ? `專心：清點每月的愛 ${arrived.length}/2` : '顧金庫';
+  }
+  const o = d.owners[id === 'elf' ? '精靈' : '小狐狸'];
+  return o.count ? `本月花了 ${fmt(o.expense)}` : '這個月還沒有支出';
+}
+
+function officeMetric(id, d) {
+  if (id === 'book') return ['今日記帳', d.todayCount];
+  if (id === 'chart') return ['支出分類', d.cats.length];
+  if (id === 'stock') return ['待補貨', d.alerts.length];
+  if (id === 'cash') return ['已入帳', d.love.filter(p => p.has && p.arrived).length + '/2'];
+  if (id === 'piggy') return ['水位', Math.round(d.ratio * 100) + '%'];
+  return ['今日筆數', d.owners[id === 'elf' ? '精靈' : '小狐狸'].today];
+}
+
+// 成員的本月統計
+function officeOwners(d) {
+  const now = new Date();
+  const todayKey = String(now.getMonth() + 1).padStart(2, '0') + '/' + String(now.getDate()).padStart(2, '0');
+  const out = {};
+  ['精靈', '小狐狸'].forEach(name => {
+    const mine = d.entries.filter(r => r.owner === name);
+    const spend = mine.filter(r => r.expense > 0 && !(r.note && r.note.includes('先付')));
+    out[name] = {
+      expense: spend.reduce((s, r) => s + r.expense, 0),
+      count: spend.length,
+      today: mine.filter(r => toMMDD(r.date) === todayKey).length,
+    };
+  });
+  return out;
+}
+
+function officeMemberDetail(id, d) {
+  const name = id === 'elf' ? '精靈' : '小狐狸';
+  const o = d.owners[name];
+  const love = d.love.find(p => p.name === name);
+  const row = (label, value, cls = '') => `<div class="of-row"><span>${label}</span><b class="${cls}">${value}</b></div>`;
+  return `<h4>${id === 'elf' ? '🐎' : '🦊'} ${name} <small>成員</small></h4>
+    ${row('本月支出', fmt(o.expense), 'of-exp')}${row('支出筆數', o.count + ' 筆')}${row('今天', o.today + ' 筆')}
+    ${row('每月的愛', love.has ? `${fmt(love.amount)}（${love.arrived ? '已入帳' : love.date + ' 入帳'}）` : '尚未登記', love.has && love.arrived ? 'of-inc' : '')}
+    <div class="of-actions"><button type="button" class="of-go" data-office-go="members">看成員</button></div>`;
+}
+
+const OFFICE_DETAIL_KEY = { book: 'desk', cash: 'vault', stock: 'shelf', chart: 'board', piggy: 'piggy' };
+
+// ── 畫面 ──────────────────────────────────────────────────────
+function officePos(a) { return `left:${(a.x / 10).toFixed(2)}%;top:${(a.y / 9.4).toFixed(2)}%;z-index:${Math.round(a.y)}`; }
+
+function officeStatusText(d) {
+  const all = Object.values(officeActors);
+  const seat = all.filter(a => a.state === 'seat').length;
+  const walk = all.filter(a => a.state === 'walk').length;
+  const rest = all.filter(a => a.state === 'visit').length;
+  return `座位上 ${seat} 人・走動中 ${walk} 人・串門子 ${rest} 人・待補貨 ${d.alerts.length} 項・存錢筒 ${Math.round(d.ratio * 100)}%`;
 }
 
 function drawOffice() {
   const scene = document.getElementById('office-scene');
   if (!scene) return;
   let d;
-  try { d = officeData(); }
+  try { d = officeData(); d.owners = officeOwners(d); }
   catch (e) { scene.innerHTML = '<div class="empty-state">⚠️ 辦公室載入失敗</div>'; return; }
-  const sheet = currentSheet();
-  const bkKind = officeBookkeeper();
-  const cashierKind = bkKind === 'elf' ? 'fox' : 'elf';
-  const b = officeBubbles(d, sheet);
-  const now = new Date();
-  const boardMax = d.cats.length ? d.cats[0].value : 1;
-  const boardRows = d.cats.slice(0, 3).map((c, i) =>
-    `<div class="of-board-row"><span>${esc(c.name)}</span><i><em class="c${i}" style="width:${Math.max(8, c.value / boardMax * 100).toFixed(0)}%"></em></i></div>`).join('');
-  const boxes = d.items.length
-    ? (d.alerts.length ? d.alerts.slice(0, 4).map(a => `<span class="of-box ${a.level}">${esc(a.name)}</span>`).join('')
-      : '<span class="of-box ok">✓</span><span class="of-box ok"></span><span class="of-box ok"></span>')
-    : '<span class="of-box none"></span><span class="of-box none"></span>';
-  const loveToday = d.love.some(p => p.arrivedToday);
-  const station = (key, cls, inner, label) => `
-    <button type="button" class="of-station ${cls}${officeSelected === key ? ' selected' : ''}" data-office-station="${key}" aria-label="${label}">
-      <span class="of-bubble" data-office-bubble="${key}">${esc(b[key])}</span>${inner}
-    </button>`;
+  officeData_ = d;
+  officeInitActors();
 
-  scene.innerHTML = `
-    <div class="of-wall"></div><div class="of-floor"></div><div class="of-rug"></div>
-    <div class="of-calendar" aria-hidden="true"><b>${now.getMonth() + 1}月</b><span>${now.getDate()}</span><small>星期${DAY_NAMES[now.getDay()]}</small></div>
-    ${station('board', 'of-board', `<div class="of-board-in"><div class="of-board-title">本月支出</div>${boardRows || '<div class="of-board-empty">還沒有支出</div>'}</div>`, '白板：本月支出分類')}
-    ${station('shelf', 'of-shelf', `<div class="of-shelf-in"><div class="of-shelf-row">${boxes}</div><div class="of-shelf-row"><span class="of-box plain"></span><span class="of-box plain"></span><span class="of-box plain"></span></div>${d.alerts.length ? `<em class="of-badge">${d.alerts.length}</em>` : ''}</div>`, '貨架：庫存狀況')}
-    ${station('desk', 'of-desk', officeDeskSvg(bkKind, d.todayCount > 0), '記帳桌')}
-    ${station('vault', 'of-vault' + (loveToday ? ' busy' : ''), officeVaultSvg(cashierKind, d), '金庫')}
-    ${station('piggy', 'of-piggy mood-' + d.mood, officePiggySvg(d), '存錢筒')}
-    <div class="of-plant" aria-hidden="true">${officePlantSvg()}</div>
-    <button type="button" class="of-swap" data-office-swap title="交換記帳員與出納">⇄ 換班</button>`;
+  const actorsHtml = OFFICE_STAFF.map(s => {
+    const a = officeActors[s.id];
+    return `<button type="button" class="of-actor tag-${s.tag}${a.state === 'walk' ? ' walking' : ''}${officeSelected === s.id ? ' selected' : ''}" data-office-id="${s.id}" style="${officePos(a)}" aria-label="${s.name}（${s.role}）">
+      <span class="of-say"></span><span class="of-name">${s.name}</span>
+      <span class="of-fig" style="transform:scaleX(${a.face})">${officeActorSvg(s.id)}</span>
+    </button>`;
+  }).join('');
+
+  scene.innerHTML = `${officeBgSvg(d)}
+    <button type="button" class="of-pigbtn mood-${d.mood}${officeSelected === 'piggy' ? ' selected' : ''}" data-office-id="piggy" aria-label="小豬（存錢筒）">
+      <span class="of-name">小豬</span>${officePiggySvg(d)}
+    </button>
+    ${actorsHtml}`;
+
+  const status = document.getElementById('office-status');
+  if (status) status.textContent = officeStatusText(d);
+  const pause = document.getElementById('office-pause');
+  if (pause) pause.textContent = officePaused ? '繼續' : '暫停';
 
   const detail = document.getElementById('office-detail');
   if (detail) {
-    detail.innerHTML = officeSelected
-      ? officeDetailHtml(officeSelected, d)
-      : `<p class="of-note of-hint">點一下角色或物品看細節。目前由 <b>${bkKind === 'elf' ? '🐎 精靈' : '🦊 小狐狸'}</b> 記帳、<b>${bkKind === 'elf' ? '🦊 小狐狸' : '🐎 精靈'}</b> 管金庫。</p>`;
+    detail.hidden = !officeSelected;
+    detail.innerHTML = !officeSelected ? ''
+      : (officeSelected === 'elf' || officeSelected === 'fox' ? officeMemberDetail(officeSelected, d) : officeDetailHtml(OFFICE_DETAIL_KEY[officeSelected], d));
   }
-  officeShowBubble();
+
+  const list = document.getElementById('office-list');
+  if (list) {
+    const cards = [...OFFICE_STAFF.slice(0, 4), { id: 'piggy', name: '小豬', role: '存錢', tag: 'piggy' }, ...OFFICE_STAFF.slice(4)];
+    list.innerHTML = cards.map(s => {
+      const [label, num] = officeMetric(s.id, d);
+      const act = s.id === 'piggy'
+        ? (d.mood === 'cry' ? '餘額變負的，哭哭' : (d.mood === 'worry' ? `餘額 ${fmt(d.balance)}，有點緊張` : `餘額 ${fmt(d.balance)}，心情不錯`))
+        : officeActivity(s.id, d);
+      const ava = s.id === 'piggy' ? '<span class="of-ava of-ava-pig">🐷</span>' : `<span class="of-ava">${officeActorSvg(s.id)}</span>`;
+      return `<button type="button" class="of-card${officeSelected === s.id ? ' selected' : ''}" data-office-id="${s.id}">
+        ${ava}
+        <span class="of-card-main"><span class="of-card-top"><b>${s.name}</b><em class="of-tag tag-${s.tag}">${s.role}</em></span><small data-office-act="${s.id}">${esc(act)}</small></span>
+        <span class="of-card-num"><small>${label}</small><b>${num}</b></span>
+      </button>`;
+    }).join('');
+  }
 }
 
-// 對話框輪流出現（點開某一站時，固定顯示那一站）
-const OFFICE_BUBBLE_ORDER = ['desk', 'vault', 'piggy', 'shelf', 'board'];
-function officeShowBubble() {
-  const key = officeSelected || OFFICE_BUBBLE_ORDER[officeBubbleIndex % OFFICE_BUBBLE_ORDER.length];
-  document.querySelectorAll('#office-scene .of-bubble').forEach(el => {
-    el.classList.toggle('show', el.dataset.officeBubble === key);
+// 只更新會變的文字（員工正在做的事、上方狀態列），不重畫整個場景
+function officeRefreshTexts() {
+  const d = officeData_;
+  if (!d) return;
+  OFFICE_STAFF.forEach(s => {
+    const el = document.querySelector(`[data-office-act="${s.id}"]`);
+    if (el) el.textContent = officeActivity(s.id, d);
   });
-}
-function officeStartBubbles() {
-  officeStopBubbles();
-  officeBubbleTimer = setInterval(() => {
-    if (!officeVisible()) { officeStopBubbles(); return; }
-    officeBubbleIndex++;
-    officeShowBubble();
-  }, 3500);
-}
-function officeStopBubbles() {
-  if (officeBubbleTimer) { clearInterval(officeBubbleTimer); officeBubbleTimer = null; }
+  const status = document.getElementById('office-status');
+  if (status) status.textContent = officeStatusText(d);
 }
 
-// 進入分頁時呼叫：記下這次比上次多幾筆、更新庫存、開始輪播
+function officeSay(id, text) {
+  const el = document.querySelector(`.of-actor[data-office-id="${id}"] .of-say`);
+  if (!el) return;
+  const actor = el.parentElement;
+  const x = officeActors[id].x;
+  actor.classList.toggle('edge-l', x < 240);
+  actor.classList.toggle('edge-r', x > 760);
+  actor.classList.add('saying');
+  el.textContent = text;
+  el.classList.add('show');
+  setTimeout(() => { el.classList.remove('show'); actor.classList.remove('saying'); }, 3200);
+}
+
+// ── 動畫迴圈：依時間移動員工 ──────────────────────────────────
+const OFFICE_SPEED = 150;   // 每秒走多少單位（場景寬 1000）
+function officeTick(ts) {
+  officeRaf = null;
+  if (!officeVisible() || officePaused) return;
+  const dt = Math.min(0.1, (ts - (officeLastTs || ts)) / 1000);
+  officeLastTs = ts;
+  const d = officeData_;
+  let changed = false;
+  const walking = Object.values(officeActors).filter(a => a.state === 'walk').length;
+  let canStart = walking < 3;
+
+  OFFICE_STAFF.forEach(s => {
+    const a = officeActors[s.id];
+    const el = document.querySelector(`.of-actor[data-office-id="${s.id}"]`);
+    if (a.state === 'walk') {
+      let step = OFFICE_SPEED * dt;
+      while (step > 0 && a.path.length) {
+        const p = a.path[0];
+        const dx = p.x - a.x, dy = p.y - a.y;
+        const dist = Math.hypot(dx, dy);
+        if (Math.abs(dx) > 1) a.face = dx < 0 ? -1 : 1;
+        if (dist <= step) { a.x = p.x; a.y = p.y; a.path.shift(); step -= dist; }
+        else { a.x += dx / dist * step; a.y += dy / dist * step; step = 0; }
+      }
+      if (!a.path.length) {
+        if (a.back) { a.state = 'seat'; a.zone = s.seat.zone; a.spot = null; a.back = false; a.face = 1; a.until = ts + 9000 + Math.random() * 12000; }
+        else { a.state = 'visit'; a.zone = OFFICE_SPOTS[a.spot].zone; a.until = ts + 3500 + Math.random() * 3000; }
+        changed = true;
+        if (el) el.classList.remove('walking');
+        if (d && a.state === 'visit') officeSay(s.id, officeActivity(s.id, d));
+      }
+      if (el) {
+        el.style.left = (a.x / 10).toFixed(2) + '%';
+        el.style.top = (a.y / 9.4).toFixed(2) + '%';
+        el.style.zIndex = Math.round(a.y);
+        const fig = el.querySelector('.of-fig');
+        if (fig) fig.style.transform = `scaleX(${a.face})`;
+      }
+    } else if (ts >= a.until) {
+      if (a.state === 'seat') {
+        if (!canStart) { a.until = ts + 1500; return; }
+        // 有事要忙的員工比較常待在座位上
+        const busy = d && ((s.id === 'book' && d.todayCount > 0) || (s.id === 'stock' && !d.alerts.length));
+        if (busy && Math.random() < 0.45) { a.until = ts + 6000 + Math.random() * 6000; return; }
+        a.spot = s.visits[Math.floor(Math.random() * s.visits.length)];
+        const spot = OFFICE_SPOTS[a.spot];
+        a.path = officePath(a, a.zone, spot, spot.zone);
+        a.back = false;
+      } else {
+        a.path = officePath(a, a.zone, s.seat, s.seat.zone);
+        a.back = true;
+      }
+      a.state = 'walk';
+      canStart = false;
+      changed = true;
+      if (el) el.classList.add('walking');
+    }
+  });
+
+  // 坐在位子上的員工偶爾冒出對話框，說自己正在做什麼
+  if (d && ts >= officeSayAt) {
+    officeSayAt = ts + 4200;
+    const seated = OFFICE_STAFF.filter(s => officeActors[s.id].state === 'seat');
+    if (seated.length) { const s = seated[Math.floor(Math.random() * seated.length)]; officeSay(s.id, officeActivity(s.id, d)); }
+  }
+  if (changed) officeRefreshTexts();
+  officeRaf = requestAnimationFrame(officeTick);
+}
+
+function officeStart() {
+  officeLastTs = 0;
+  if (!officeRaf && !officePaused && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    officeRaf = requestAnimationFrame(ts => {
+      // 第一次啟動時，把每個人的計時起點對齊到現在
+      Object.values(officeActors).forEach(a => { if (a.until < 1e6) a.until += ts; });
+      officeSayAt = ts + 1500;
+      officeTick(ts);
+    });
+  }
+}
+function officeStop() {
+  if (officeRaf) { cancelAnimationFrame(officeRaf); officeRaf = null; }
+}
+// 給 app.js 切換分頁時呼叫（沿用舊名稱）
+function officeStopBubbles() { officeStop(); }
+
+// 進入分頁時呼叫：記下這次比上次多幾筆、更新庫存、開始走動
 function renderOffice() {
   const sheet = currentSheet();
   if (officeNewCount[sheet] === undefined) {
@@ -404,7 +633,7 @@ function renderOffice() {
     try { localStorage.setItem(OFFICE_SEEN_PREFIX + sheet, String(count)); } catch (e) { /* ignore */ }
   }
   drawOffice();
-  officeStartBubbles();
+  officeStart();
   if (!officeInvRequested) {
     officeInvRequested = true;
     Promise.resolve(loadInventory()).then(() => { if (officeVisible()) drawOffice(); }).catch(() => {});
@@ -413,7 +642,13 @@ function renderOffice() {
 
 document.addEventListener('click', e => {
   if (!officeVisible()) return;
-  if (e.target.closest('[data-office-swap]')) { officeSwapRoles(); return; }
+  if (e.target.closest('#office-pause')) {
+    officePaused = !officePaused;
+    e.target.closest('#office-pause').textContent = officePaused ? '繼續' : '暫停';
+    document.getElementById('office-scene').classList.toggle('paused', officePaused);
+    if (officePaused) officeStop(); else officeStart();
+    return;
+  }
   if (e.target.closest('[data-office-add]')) { openModal(); return; }
   const go = e.target.closest('[data-office-go]');
   if (go) {
@@ -422,10 +657,14 @@ document.addEventListener('click', e => {
     if (tabBtn) switchTab(name, tabBtn);
     return;
   }
-  const st = e.target.closest('[data-office-station]');
-  if (st) {
-    const key = st.dataset.officeStation;
-    officeSelected = officeSelected === key ? null : key;
+  const hit = e.target.closest('[data-office-id]');
+  if (hit) {
+    const id = hit.dataset.officeId;
+    officeSelected = officeSelected === id ? null : id;
     drawOffice();
+    if (officeSelected && hit.classList.contains('of-card')) {
+      const detail = document.getElementById('office-detail');
+      if (detail) detail.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
   }
 });

@@ -241,3 +241,6 @@
 /* 升職後頭銜比較長：名字不換行，頭銜不夠放就換到下一行 */
 .of-card-top { flex-wrap: wrap; row-gap: 2px; }
 .of-card-top b, .of-tag { white-space: nowrap; }
+
+/* 角色個性 */
+.of-persona { margin: -2px 0 8px; padding: 6px 10px; border-radius: 8px; background: var(--surface2); font-size: 12px; line-height: 1.5; color: var(--text2); }

@@ -228,3 +228,16 @@
 .of-fan { transform-box: fill-box; transform-origin: 0% 100%; animation: of-fanning 0.8s ease-in-out infinite; }
 @keyframes of-fanning { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-14deg); } }
 @media (prefers-reduced-motion: reduce) { .of-fish, .of-paw, .of-fan { animation: none; } }
+
+/* 成就：可以點的等級列、星星燈 */
+.of-level { cursor: pointer; }
+.of-level:hover { border-color: #e9c46a; }
+.of-bulb { animation: of-bulb 2.4s ease-in-out infinite; }
+.of-bulb.b1 { animation-delay: 0.8s; } .of-bulb.b2 { animation-delay: 1.6s; }
+@keyframes of-bulb { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.office-scene[data-phase="night"] .of-bulb, .office-scene[data-phase="evening"] .of-bulb { filter: drop-shadow(0 0 3px #ffe08a); }
+@media (prefers-reduced-motion: reduce) { .of-bulb { animation: none; } }
+
+/* 升職後頭銜比較長：名字不換行，頭銜不夠放就換到下一行 */
+.of-card-top { flex-wrap: wrap; row-gap: 2px; }
+.of-card-top b, .of-tag { white-space: nowrap; }

@@ -13,7 +13,18 @@ let officeLastTs = 0;
 let officeSayAt = 0;                // 下一次冒出對話框的時間
 let officeData_ = null;             // 最近一次整理好的資料
 const officeJobs = { book: [], chart: [], stock: [], cash: [], elf: [], fox: [], dog: [] };
-let officeDogPets = 0;              // 這次開啟期間黑柴被摸了幾次
+const OFFICE_PETS_KEY = 'shareExpense.office.pets';       // 黑柴累積被摸的次數
+const OFFICE_PROMO_KEY = 'shareExpense.office.promo';     // 已經慶祝過的升職
+let officeDogPets = 0;
+try { officeDogPets = parseInt(localStorage.getItem(OFFICE_PETS_KEY) || '0', 10) || 0; } catch (e) { officeDogPets = 0; }
+let officeInfo_ = null;             // 最近一次算好的等級、獎盃、升職
+// 摸黑柴：累積次數記在瀏覽器裡
+function officePet() {
+  officeDogPets++;
+  try { localStorage.setItem(OFFICE_PETS_KEY, String(officeDogPets)); } catch (e) { /* ignore */ }
+  const n = document.querySelector('[data-office-num="dog"]'); if (n) n.textContent = officeDogPets + ' 次';
+  if (officeDogPets === 100 && officeVisible()) setTimeout(() => drawOffice(), 300);   // 戴上小皇冠
+}
 let officeSkitAt = 0;               // 下一次安排角色互動的時間
 let officeSkitLast = '';            // 上一次的互動，避免連續重複
 let officeSkitSeq = 0;
@@ -29,7 +40,8 @@ const OFFICE_BIG = 5000;            // 單筆支出超過這個金額，大家�
 // 辦公室升級：累積記帳筆數解鎖家具
 const OFFICE_LEVELS = [
   { at: 50, name: '書櫃' }, { at: 150, name: '地毯' }, { at: 300, name: '魚缸' }, { at: 500, name: '招財貓' },
-];
+  { at: 800, name: '大電視' }, { at: 1200, name: '走廊花園' }, { at: 2000, name: '星星燈' },
+]
 const OFFICE_STATS_KEY = 'shareExpense.office.stats';     // 各月份的筆數與記帳日期（下次打開先用）
 const OFFICE_LEVEL_KEY = 'shareExpense.office.level';     // 上次看到的等級（升級時慶祝）
 let officeStats = null;             // { sheets: { 'YYYY/M月': { count, days: ['YYYY-MM-DD'] } } }
@@ -132,7 +144,8 @@ function officeSheetStats(sheet, recs) {
   const year = m ? m[1] : String(new Date().getFullYear());
   const real = (recs || []).filter(r => !isSummaryRow(r) && r.item !== '帳戶餘額' && r.owner !== '');
   const days = [...new Set(real.map(r => toMMDD(r.date)).filter(Boolean).map(k => `${year}-${k.replace('/', '-')}`))];
-  return { count: real.length, days };
+  const expense = real.filter(r => r.expense > 0 && !(r.note && r.note.includes('先付'))).reduce((t, r) => t + r.expense, 0);
+  return { count: real.length, days, expense, y: m ? +m[1] : 0, m: m ? +(String(sheet).match(/\/(\d{1,2})月/) || [0, 0])[1] : 0 };
 }
 
 // 讀所有月份（有快取就用快取），算累積筆數；只在背景做，不擋畫面
@@ -157,16 +170,117 @@ async function officeLoadStats() {
 // 等級、累積筆數、連續記帳天數（目前月份用畫面上最新的資料）
 function officeLevelInfo() {
   if (!officeStats) return null;
-  const sheets = { ...officeStats.sheets, [currentSheet()]: officeSheetStats(currentSheet(), records) };
+  const cur = currentSheet();
+  const sheets = { ...officeStats.sheets, [cur]: officeSheetStats(cur, records) };
   const total = Object.values(sheets).reduce((t, v) => t + v.count, 0);
   const days = new Set(Object.values(sheets).flatMap(v => v.days));
   const key = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const day = new Date(); day.setHours(12, 0, 0, 0);
   if (!days.has(key(day))) day.setDate(day.getDate() - 1);   // 今天還沒記，從昨天算起
   let streak = 0;
-  while (days.has(key(day)) && streak < 400) { streak++; day.setDate(day.getDate() - 1); }
+  while (days.has(key(day)) && streak < 2000) { streak++; day.setDate(day.getDate() - 1); }
   const level = OFFICE_LEVELS.filter(l => total >= l.at).length;
-  return { total, streak, level, next: OFFICE_LEVELS[level] || null, unlocked: OFFICE_LEVELS.slice(0, level).map(l => l.name) };
+
+  // 使用了幾個月（有紀錄的月份數）：盆栽跟著長大
+  const months = Object.values(sheets).filter(v => v.count > 0).length;
+  const plant = months >= 24 ? 5 : (months >= 12 ? 4 : (months >= 6 ? 3 : (months >= 3 ? 2 : 1)));
+
+  // 省錢獎章：已經過完的月份，支出比前一個月少一成以上
+  const now = new Date(), curIdx = now.getFullYear() * 12 + now.getMonth() + 1;
+  const byIdx = {};
+  Object.values(sheets).forEach(v => { if (v.y && v.m && v.expense !== undefined) byIdx[v.y * 12 + v.m] = v.expense; });
+  const medals = Object.keys(byIdx).map(Number).filter(i => i < curIdx && byIdx[i - 1] > 0 && byIdx[i] <= byIdx[i - 1] * 0.9).sort((a, b) => a - b)
+    .map(i => `${Math.floor((i - 1) / 12)}/${((i - 1) % 12) + 1}`);
+
+  // 辦公室週年：第一筆紀錄的那一天，之後每年同一天
+  const sortedDays = [...days].sort();
+  const first = sortedDays[0] || null;
+  const todayKey = key(new Date());
+  let party = 0;
+  if (first) {
+    const years = now.getFullYear() - parseInt(first.slice(0, 4), 10);
+    if (years >= 1 && first.slice(5) === todayKey.slice(5)) party = years;
+  }
+  const yearAgo = curIdx - 12;
+  const yearCount = Object.values(sheets).filter(v => v.y && v.y * 12 + v.m > yearAgo).reduce((t, v) => t + v.count, 0);
+
+  // 員工升職
+  const items = Array.isArray(inventory) ? inventory.length : 0;
+  const promo = {};
+  if (total >= 1000) promo.book = '資深記帳師';
+  if (months >= 12) promo.chart = '首席分析師';
+  if (items >= 20) promo.stock = '倉庫主管';
+  if (medals.length >= 3) promo.cash = '金庫主管';
+  if (officeDogPets >= 100) promo.dog = '皇冠吉祥物';
+
+  return { total, streak, level, next: OFFICE_LEVELS[level] || null, unlocked: OFFICE_LEVELS.slice(0, level).map(l => l.name),
+    months, plant, medals, first, party, yearCount, promo };
+}
+
+// 成就一覽（點等級列打開）
+function officeAchievementsHtml(info) {
+  if (!info) return '';
+  const row = (label, value, cls = '') => `<div class="of-row"><span>${label}</span><b class="${cls}">${value}</b></div>`;
+  const levels = OFFICE_LEVELS.map(l => row(`${info.total >= l.at ? '✅' : '🔒'} ${l.name}`, `${l.at} 筆`, info.total >= l.at ? 'of-inc' : '')).join('');
+  const cups = [[7, '🥈 銀獎盃'], [30, '🥇 金獎盃'], [100, '🏆 白金獎盃'], [365, '💎 鑽石獎盃']]
+    .map(([n, name]) => row(`${info.streak >= n ? '✅' : '🔒'} ${name}`, `連續 ${n} 天`, info.streak >= n ? 'of-inc' : '')).join('');
+  const plantName = ['', '小芽', '長葉子', '茂盛', '開花', '結果'][info.plant];
+  const plantNext = info.plant >= 5 ? '已經結果了 🍊' : `第 ${[0, 3, 6, 12, 24][info.plant]} 個月長成「${['', '長葉子', '茂盛', '開花', '結果'][info.plant]}」`;
+  const promos = [['book', '小帳', '資深記帳師', '累積 1000 筆'], ['chart', '小析', '首席分析師', '使用滿 12 個月'], ['stock', '阿貨', '倉庫主管', '庫存登記 20 項'],
+    ['cash', '阿庫', '金庫主管', '省錢獎章 3 枚'], ['dog', '黑柴', '戴小皇冠', '被摸 100 次']]
+    .map(([id, name, title, need]) => row(`${info.promo[id] ? '✅' : '🔒'} ${name}・${title}`, need, info.promo[id] ? 'of-inc' : '')).join('');
+  return `<h4>🏆 辦公室成就 <small>Lv.${info.level + 1}</small></h4>
+    <div class="of-sub">家具（累積 ${info.total} 筆）</div>${levels}
+    <div class="of-sub">連續記帳獎盃（目前 ${info.streak} 天）</div>${cups}
+    <div class="of-sub">省錢獎章</div>${row('已獲得', info.medals.length ? `${info.medals.length} 枚（最近：${info.medals.slice(-3).reverse().join('、')}）` : '還沒有')}
+    <p class="of-note">支出比前一個月少一成以上，就得一枚。</p>
+    <div class="of-sub">盆栽</div>${row(`🌱 第 ${info.months} 個月`, plantName)}<p class="of-note">${plantNext}</p>
+    <div class="of-sub">員工升職</div>${promos}
+    ${info.first ? `<p class="of-note">辦公室成立於 ${info.first.replace(/-/g, '/')}，每年這天會辦週年派對。</p>` : ''}`;
+}
+
+// 週年派對：大家戴派對帽，小析報告這一年（每台裝置每年一次）
+function officeCheckParty(info) {
+  if (!info || !info.party || !officeOnce('party')) return;
+  // 派對進行中先不安排別的互動
+  officeSkitAt = Math.max(officeSkitAt, performance.now() + 18000);
+  setTimeout(() => {
+    officeBurst(500, 640, ['🎉', '🎂', '🎊', '✨'], 18);
+    officeJobFx({ i: 0, steps: [{ fx: 'talk', lines: [
+      { who: 'chart', text: `辦公室 ${info.party} 週年快樂！🎂` },
+      { who: 'chart', text: `這一年大家一共記了 ${info.yearCount} 筆` },
+      { who: 'elf', text: '謝謝大家 💕', burst: true },
+      { who: 'fox', text: '明年也要一起加油！' },
+      { who: 'dog', text: '汪汪！🎉' }] }], rec: { type: 'skit' } });
+  }, 1800);
+}
+
+// 獎盃：連續記帳 7 / 30 / 100 / 365 天
+function officeCup(streak) {
+  if (streak >= 365) return { icon: '💎', name: '鑽石獎盃', fill: '#cfeefe', stroke: '#6fb7d9', n: 365 };
+  if (streak >= 100) return { icon: '🏆', name: '白金獎盃', fill: '#eef2f7', stroke: '#8a9bb0', n: 100 };
+  if (streak >= 30) return { icon: '🥇', name: '金獎盃', fill: '#ffd66b', stroke: '#d99a1e', n: 30 };
+  if (streak >= 7) return { icon: '🥈', name: '銀獎盃', fill: '#d6dde4', stroke: '#9fb0bf', n: 7 };
+  return null;
+}
+
+// 升職時慶祝一次（每台裝置各一次）
+function officeCheckPromo(info) {
+  if (!info) return;
+  let seen = {};
+  try { seen = JSON.parse(localStorage.getItem(OFFICE_PROMO_KEY) || 'null'); } catch (e) { return; }
+  const first = seen === null;
+  seen = seen || {};
+  const fresh = Object.keys(info.promo).filter(id => !seen[id]);
+  fresh.forEach(id => { seen[id] = 1; });
+  try { localStorage.setItem(OFFICE_PROMO_KEY, JSON.stringify(seen)); } catch (e) { return; }
+  if (first || !fresh.length) return;   // 第一次打開：直接顯示，不慶祝
+  const id = fresh[0];
+  setTimeout(() => {
+    const a = officeActors[id];
+    if (a) officeBurst(a.x, a.y - 120, ['🎉', '⭐', '✨'], 10);
+    officeSay(id, id === 'dog' ? '汪汪！（戴上小皇冠 👑）' : `升職了！我現在是${info.promo[id]} 🎉`);
+  }, 2600);
 }
 
 // 升級時：撒彩帶、大家喊一聲（每台裝置各一次）
@@ -413,6 +527,20 @@ function officeStaffSvg(id) {
 }
 // 換季服裝：冬天（12–2 月）圍巾、黑柴穿背心；夏天（6–8 月）手拿小扇子
 function officeOutfit(id) {
+  let add = '';
+  const info = officeInfo_;
+  if (info && info.promo[id]) {
+    add += id === 'dog'
+      ? '<path d="M30 8 L33 -1 L37 6 L40 -3 L43 6 L47 -1 L50 8 Z" fill="#ffd66b" stroke="#d99a1e" stroke-width="1.4"/><circle cx="40" cy="4" r="1.8" fill="#ef5f7a"/>'
+      : '<path d="M49 64 l2.2 4.4 4.8 0.7 -3.5 3.4 0.8 4.8 -4.3 -2.3 -4.3 2.3 0.8 -4.8 -3.5 -3.4 4.8 -0.7 Z" fill="#ffd66b" stroke="#d99a1e" stroke-width="1"/>';
+  }
+  if (info && info.party) {
+    const c = { book: '#f7a8c0', chart: '#9fd0f0', stock: '#ffd66b', cash: '#8fd3b0', elf: '#c9a0e6', fox: '#ef7d7d', dog: '#9fd0f0' }[id] || '#f7a8c0';
+    add += `<path d="M33 17 L40 1 L47 17 Z" fill="${c}" stroke="#fff" stroke-width="1.2"/><circle cx="40" cy="2" r="2.6" fill="#ffd66b"/>`;
+  }
+  return officeSeasonOutfit(id) + add;
+}
+function officeSeasonOutfit(id) {
   const m = new Date().getMonth() + 1;
   const winter = m === 12 || m <= 2, summer = m >= 6 && m <= 8;
   if (winter) {
@@ -506,14 +634,63 @@ function officeUpgradeSvg() {
       <path d="M-14 12 Q0 18 14 12" stroke="#ef5f7a" stroke-width="3" fill="none"/><circle cx="0" cy="16" r="3" fill="#ffd66b"/>
       <g class="of-paw"><ellipse cx="18" cy="-6" rx="5" ry="8" fill="#fffaf2" stroke="#e8d7c0" stroke-width="2"/></g>
       <rect x="-9" y="26" width="18" height="11" rx="2" fill="#ffd66b"/><text x="0" y="35" font-size="8" font-weight="700" text-anchor="middle" fill="#b9831c">千萬</text></g>`;
-  if (info.streak >= 7) {
-    const gold = info.streak >= 30;
-    g += `<g transform="translate(76 40)"><path d="M-14 0 h28 v6 q0 16 -14 18 q-14 -2 -14 -18 Z" fill="${gold ? '#ffd66b' : '#d6dde4'}" stroke="${gold ? '#d99a1e' : '#9fb0bf'}" stroke-width="2"/>
-      <path d="M-14 4 q-9 0 -8 8 q1 6 9 6 M14 4 q9 0 8 8 q-1 6 -9 6" fill="none" stroke="${gold ? '#d99a1e' : '#9fb0bf'}" stroke-width="2"/>
-      <rect x="-3" y="24" width="6" height="7" fill="${gold ? '#d99a1e' : '#9fb0bf'}"/><rect x="-10" y="31" width="20" height="6" rx="2" fill="#a9754f"/>
-      <text x="0" y="14" font-size="10" font-weight="700" text-anchor="middle" fill="${gold ? '#8a5a12' : '#56677a'}">${gold ? 30 : 7}</text></g>`;
+  const cup = officeCup(info.streak);
+  if (cup) {
+    g += `<g transform="translate(76 40)"><path d="M-14 0 h28 v6 q0 16 -14 18 q-14 -2 -14 -18 Z" fill="${cup.fill}" stroke="${cup.stroke}" stroke-width="2"/>
+      <path d="M-14 4 q-9 0 -8 8 q1 6 9 6 M14 4 q9 0 8 8 q-1 6 -9 6" fill="none" stroke="${cup.stroke}" stroke-width="2"/>
+      <rect x="-3" y="24" width="6" height="7" fill="${cup.stroke}"/><rect x="-10" y="31" width="20" height="6" rx="2" fill="#a9754f"/>
+      <text x="0" y="14" font-size="${cup.n >= 100 ? 8 : 10}" font-weight="700" text-anchor="middle" fill="#4a3b30">${cup.n}</text></g>`;
+  }
+  // 省錢獎章：牆上一排，最多畫 8 枚
+  if (info.medals.length) {
+    g += info.medals.slice(-8).map((m, i) => `<g transform="translate(${116 + i * 22} 46)"><path d="M-5 -14 L0 -4 L5 -14" stroke="#ef7d7d" stroke-width="4" fill="none"/>
+      <circle cx="0" cy="2" r="8" fill="#ffd66b" stroke="#d99a1e" stroke-width="1.6"/><path d="M-3 2 h6" stroke="#b9831c" stroke-width="1.6"/></g>`).join('');
+    if (info.medals.length > 8) g += `<text x="${116 + 8 * 22}" y="52" font-size="16" font-weight="700" fill="#9a6614">+${info.medals.length - 8}</text>`;
+  }
+  if (has('大電視')) g += `<g><rect x="676" y="672" width="118" height="66" rx="8" fill="#3e4a5a"/><rect x="683" y="679" width="104" height="52" rx="5" fill="#9fd0f0"/>
+      <path d="M683 716 q26 -16 52 0 t52 0 v15 h-104 Z" fill="#8fd3b0"/><circle cx="760" cy="694" r="7" fill="#ffd66b"/><rect x="726" y="738" width="18" height="6" fill="#3e4a5a"/></g>`;
+  if (has('走廊花園')) {
+    const bed = (x, w) => `<rect x="${x}" y="588" width="${w}" height="44" rx="12" fill="#c9a27c"/><rect x="${x + 6}" y="592" width="${w - 12}" height="22" rx="8" fill="#8fd3b0"/>` +
+      Array.from({ length: Math.floor(w / 34) }, (_, i) => { const fx = x + 20 + i * 34, c = ['#f7a8c0', '#ffd66b', '#c9a0e6', '#ef7d7d'][i % 4];
+        return `<circle cx="${fx}" cy="598" r="7" fill="${c}"/><circle cx="${fx}" cy="598" r="2.6" fill="#fff6c9"/>`; }).join('');
+    g += bed(40, 236) + bed(736, 230);
+  }
+  if (has('星星燈')) {
+    const line = (x1, x2, y) => {
+      let d = `M${x1} ${y}`, bulbs = '';
+      for (let x = x1, i = 0; x < x2; x += 40, i++) {
+        d += ` Q${x + 20} ${y + 14} ${x + 40} ${y}`;
+        bulbs += `<circle class="of-bulb b${i % 3}" cx="${x + 20}" cy="${y + 8}" r="4.5" fill="${['#ffd66b', '#f7a8c0', '#9fd0f0'][i % 3]}"/>`;
+      }
+      return `<path d="${d}" fill="none" stroke="#a98f74" stroke-width="1.6"/>${bulbs}`;
+    };
+    g += `<g class="of-lights">${line(40, 580, 24)}${line(650, 960, 24)}${line(40, 440, 664)}${line(510, 960, 664)}</g>`;
   }
   return g;
+}
+
+// 會長大的盆栽：1 小芽、2 一般、3 茂盛、4 開花、5 結果
+function officePlantSvg(cx, potTop, stage) {
+  const sc = [0, 0.5, 1, 1.25, 1.3, 1.35][stage];
+  const leaves = `<path d="M0 0 Q-26 -18 -22 -54 Q-2 -40 0 0 Z" fill="#8fd3b0"/><path d="M0 0 Q26 -20 26 -58 Q4 -42 0 0 Z" fill="#a8e0c0"/>` +
+    (stage >= 3 ? `<path d="M0 0 Q-8 -40 4 -72 Q12 -38 0 0 Z" fill="#7cc7a0"/><path d="M0 -6 Q-30 -10 -38 -34 Q-14 -30 0 -6 Z" fill="#9fdcb8"/>` : '');
+  const flowers = stage >= 4 ? [[-22, -54], [26, -58], [4, -72]].map(([x, y]) =>
+    `<circle cx="${x}" cy="${y}" r="7" fill="${stage >= 5 ? '#ffffff' : '#f7a8c0'}"/><circle cx="${x}" cy="${y}" r="2.8" fill="#ffd66b"/>`).join('') : '';
+  const fruits = stage >= 5 ? [[-14, -30], [14, -36], [-30, -40]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="6" fill="#f4a261"/><path d="M${x} ${y - 6} l2 -3" stroke="#5f9e7a" stroke-width="2"/>`).join('') : '';
+  return `<g class="of-leaf"><g transform="translate(${cx} ${potTop}) scale(${sc})">${leaves}${flowers}${fruits}</g></g>
+    <path d="M${cx - 20} ${potTop} h40 l-5 34 q-15 5 -30 0 Z" fill="#f4b99a"/>`;
+}
+
+// 辦公室週年：派對布條、茶几上的蛋糕
+function officePartySvg() {
+  const info = officeInfo_;
+  if (!info || !info.party) return '';
+  return `<g class="of-decor"><path d="M300 580 Q500 620 700 580" fill="none" stroke="#c9a0e6" stroke-width="3"/>
+    ${[0, 1, 2, 3, 4, 5, 6, 7].map(i => `<path d="M${312 + i * 50} ${586 + (i < 4 ? i : 7 - i) * 5} l12 26 l12 -26 Z" fill="${['#f7a8c0', '#ffd66b', '#9fd0f0', '#8fd3b0'][i % 4]}"/>`).join('')}
+    <rect x="404" y="618" width="192" height="34" rx="17" fill="#fff" stroke="#c9a0e6" stroke-width="3"/>
+    <text x="500" y="642" font-size="21" font-weight="700" text-anchor="middle" fill="#8a5fb5">辦公室 ${info.party} 週年 🎉</text>
+    <g transform="translate(812 954)"><rect x="-26" y="-10" width="52" height="26" rx="6" fill="#fff6ec" stroke="#f3a0b8" stroke-width="2.4"/><rect x="-26" y="-10" width="52" height="8" rx="4" fill="#f7a8c0"/>
+      <rect x="-2" y="-28" width="4" height="18" fill="#9fd0f0"/><path d="M0 -36 q-4 4 0 8 q4 -4 0 -8 Z" fill="#ffb74d"/></g></g>`;
 }
 
 // 地毯畫在家具下面（茶几下）
@@ -627,8 +804,7 @@ function officeBgSvg(d) {
     ${mv(79, `${desk(380, 178, 195, wood)}
     <rect x="436" y="186" width="84" height="42" rx="8" fill="#5b6475"/><rect x="442" y="191" width="72" height="31" rx="5" fill="#cfe7ff"/>
     <path d="M450 216 l10 -9 9 5 12 -13 12 8 10 -10" fill="none" stroke="#f79aae" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>`)}
-    ${mv(80, `<g class="of-leaf"><path d="M550 330 Q524 312 528 276 Q548 290 550 330 Z" fill="#8fd3b0"/><path d="M550 330 Q576 310 576 272 Q554 288 550 330 Z" fill="#a8e0c0"/></g>
-    <path d="M530 330 h40 l-5 34 q-15 5 -30 0 Z" fill="#f4b99a"/>`)}
+    ${officePlantSvg(550, 410, officeInfo_ ? officeInfo_.plant : 2)}
     <!-- 倉庫：兩排貨架、小推車桌 -->
     ${mv(29, `<rect x="656" y="46" width="300" height="92" rx="14" fill="#f8e3c6" stroke="#e3b98a" stroke-width="5"/>${topBoxes}
     ${d.alerts.length ? `<circle cx="952" cy="50" r="26" fill="#ef5f7a"/><text x="952" y="61" font-size="30" font-weight="700" text-anchor="middle" fill="#fff">${d.alerts.length}</text>` : ''}`)}
@@ -660,8 +836,8 @@ function officeBgSvg(d) {
     ${mv(328, `<rect x="672" y="792" width="276" height="96" rx="34" fill="#f3a9bf"/>
     <rect x="690" y="806" width="240" height="70" rx="24" fill="#f9c6d5"/>
     <rect x="700" y="812" width="106" height="48" rx="18" fill="#fde0e9"/><rect x="814" y="812" width="106" height="48" rx="18" fill="#fde0e9"/>`)}
-    ${mv(219, `<g class="of-leaf"><path d="M934 580 Q908 562 912 526 Q932 540 934 580 Z" fill="#8fd3b0"/><path d="M934 580 Q960 560 960 522 Q938 538 934 580 Z" fill="#a8e0c0"/></g>
-    <path d="M914 580 h40 l-5 34 q-15 5 -30 0 Z" fill="#f4b99a"/>`)}
+    ${officePlantSvg(934, 799, officeInfo_ ? officeInfo_.plant : 2)}
+    ${officePartySvg()}
   </svg>`;
 }
 
@@ -1139,8 +1315,7 @@ function officeReact(id) {
   };
   officeSay(id, sleepy ? (id === 'dog' ? '（打哈欠）嗚…' : '（揉眼睛）嗯…？ 😪') : pick(lines[id] || ['嗨～']));
   if (id === 'dog') {
-    officeDogPets++;
-    const n = document.querySelector('[data-office-num="dog"]'); if (n) n.textContent = officeDogPets + ' 次';
+    officePet();
     officeFloat('🐾', false, { x: a.x, y: a.y - 75 });
   }
   if (id === 'elf' || id === 'fox') officeFloat('💗', false, { x: a.x, y: a.y - 75 });
@@ -1236,7 +1411,7 @@ function officeJobFx(job) {
       [...new Set(st.lines.map(x => x.who))].filter(w => w !== l.who).forEach(officeHush);
       officeSay(l.who, l.text);
       if (l.emoji) officeFloat(l.emoji, false, { x: o.x, y: o.y - 75 });
-      if (l.pet) { officeDogPets++; const n = document.querySelector('[data-office-num="dog"]'); if (n) n.textContent = officeDogPets + ' 次'; }
+      if (l.pet) officePet();
       if (l.lean) officeLean(2600 + 2100);
       if (l.burst) officeLoveBurst();
       if (l.heart) officeFloat('💕', false, { x: (officeActors.elf.x + officeActors.fox.x) / 2, y: officeActors.elf.y - 75 });
@@ -1341,6 +1516,7 @@ function drawOffice() {
   catch (e) { scene.innerHTML = '<div class="empty-state">⚠️ 辦公室載入失敗</div>'; return; }
   d.pace = officePace(d);
   officeData_ = d;
+  officeInfo_ = officeLevelInfo();
   officePhase = officePhaseNow();
   officeInitActors();
   officeDailyEvents(d);
@@ -1367,16 +1543,20 @@ function drawOffice() {
   const status = document.getElementById('office-status');
   if (status) status.innerHTML = officeStatusText(d);
   const lvEl = document.getElementById('office-level');
-  const info = officeLevelInfo();
+  const info = officeInfo_;
   if (lvEl) {
     lvEl.hidden = !info;
     if (info) {
       const next = info.next ? `再記 ${info.next.at - info.total} 筆解鎖${info.next.name}` : '家具都解鎖了 🎉';
-      const cup = info.streak >= 30 ? '🥇' : (info.streak >= 7 ? '🥈' : '🔥');
-      lvEl.innerHTML = `<b>🏢 Lv.${info.level + 1}</b><span>累積 ${info.total} 筆</span><span>${cup} 連續記帳 ${info.streak} 天</span><span class="of-level-next">${next}</span>`;
+      const cup = officeCup(info.streak);
+      lvEl.innerHTML = `<b>🏢 Lv.${info.level + 1}</b><span>累積 ${info.total} 筆</span><span>${cup ? cup.icon : '🔥'} 連續 ${info.streak} 天</span>`
+        + (info.medals.length ? `<span>🏅 獎章 ${info.medals.length}</span>` : '')
+        + `<span>🌱 第 ${info.months} 個月</span><span class="of-level-next">${next}・點我看成就</span>`;
     }
   }
   officeCheckLevelUp(info);
+  officeCheckPromo(info);
+  officeCheckParty(info);
   const pause = document.getElementById('office-pause');
   if (pause) pause.textContent = officePaused ? '繼續' : '暫停';
 
@@ -1384,9 +1564,10 @@ function drawOffice() {
   if (detail) {
     detail.hidden = !officeSelected;
     detail.innerHTML = !officeSelected ? ''
+      : officeSelected === 'level' ? officeAchievementsHtml(officeInfo_)
       : officeSelected === 'dog' ? `<h4>🐕 黑柴 <small>吉祥物</small></h4>
           <div class="of-row"><span>現在</span><b>${esc(officeActivity('dog', d))}</b></div>
-          <div class="of-row"><span>這次被摸</span><b>${officeDogPets} 次</b></div>
+          <div class="of-row"><span>累積被摸</span><b>${officeDogPets} 次${officeDogPets >= 100 ? '（戴上小皇冠 👑）' : `（再 ${100 - officeDogPets} 次戴小皇冠）`}</b></div>
           <p class="of-note">黑柴會在辦公室巡邏、找大家玩，大家有空也會去窩邊摸牠。</p>`
       : (officeSelected === 'elf' || officeSelected === 'fox' ? officeMemberDetail(officeSelected, d) : officeDetailHtml(OFFICE_DETAIL_KEY[officeSelected], d));
   }
@@ -1400,9 +1581,10 @@ function drawOffice() {
         ? (d.mood === 'cry' ? `透支 ${fmt(-d.balance)}，肚子空空哭哭` : (d.mood === 'worry' ? `餘額 ${fmt(d.balance)}，金幣不多有點緊張` : `餘額 ${fmt(d.balance)}，金幣滿滿心情好`))
         : officeActivity(s.id, d);
       const ava = s.id === 'piggy' ? '<span class="of-ava of-ava-pig">🐷</span>' : `<span class="of-ava">${officeActorSvg(s.id)}</span>`;
+      const role = officeInfo_ && officeInfo_.promo[s.id] ? officeInfo_.promo[s.id] : s.role;
       return `<button type="button" class="of-card${officeSelected === s.id ? ' selected' : ''}" data-office-id="${s.id}">
         ${ava}
-        <span class="of-card-main"><span class="of-card-top"><b>${s.name}</b><em class="of-tag tag-${s.tag}">${s.role}</em></span>
+        <span class="of-card-main"><span class="of-card-top"><b>${s.name}</b><em class="of-tag tag-${s.tag}">${role}</em></span>
           <span class="of-card-num"><small>${label}</small><b data-office-num="${s.id}">${num}</b></span></span>
         <small class="of-card-act" data-office-act="${s.id}">${esc(act)}</small>
       </button>`;
@@ -1716,6 +1898,13 @@ document.addEventListener('click', e => {
     const name = go.dataset.officeGo;
     const tabBtn = [...document.querySelectorAll('.tab')].find(t => (t.getAttribute('onclick') || '').includes(`'${name}'`));
     if (tabBtn) switchTab(name, tabBtn);
+    return;
+  }
+  if (e.target.closest('#office-level')) {
+    officeSelected = officeSelected === 'level' ? null : 'level';
+    drawOffice();
+    const detail = document.getElementById('office-detail');
+    if (officeSelected && detail) detail.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     return;
   }
   const hit = e.target.closest('[data-office-id]');

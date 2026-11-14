@@ -646,7 +646,8 @@ function officeActivity(id, d) {
     const st = a.job.steps[a.job.i];
     return a.state === 'walk' ? st.go : st.at;
   }
-  const asleep = officePhase === 'night' && (!a || a.state === 'seat');
+  const asleep = officePhase === 'night' && (!a || (a.state === 'seat' && !a.awake));
+  if (officePhase === 'night' && a && a.awake && a.state === 'seat') return '被叫醒了，處理完再睡 😪';
   if (asleep) return id === 'dog' ? '睡在窩裡 💤' : (id === 'elf' || id === 'fox' ? '在沙發上依偎著睡著了 💤' : '趴在桌上打瞌睡 💤');
   if (id === 'dog') {
     if (a && a.state === 'walk') return a.back ? '跑回窩裡' : '在辦公室巡邏';
@@ -939,6 +940,24 @@ function officeNoteSettle() {
   if (!officeJobs.cash.some(j => j.type === 'settle')) officeJobs.cash.push({ type: 'settle' });
 }
 
+// 晚上被叫到的人：先醒來回話，過幾秒再睡回去
+function officeWakeSay(id, text) {
+  const el = document.querySelector(`.of-actor[data-office-id="${id}"]`);
+  const asleep = officePhase === 'night' && el && el.classList.contains('sleeping');
+  if (!asleep) { officeSay(id, text); return; }
+  el.classList.remove('sleeping');
+  officeActors[id].awake = true;
+  officeSay(id, '（揉眼睛）' + text);
+  clearTimeout(el._sleep);
+  el._sleep = setTimeout(() => {
+    officeActors[id].awake = false;
+    const cur = document.querySelector(`.of-actor[data-office-id="${id}"]`);
+    if (cur && officePhase === 'night' && officeActors[id].state === 'seat' && !officeActors[id].job) cur.classList.add('sleeping');
+    if (officeVisible()) officeRefreshTexts();
+  }, 5000);
+  officeRefreshTexts();
+}
+
 // 點場景裡的角色：跳一下、打招呼；黑柴會叫，小豬吐金幣
 function officeReact(id) {
   const pick = arr => arr[Math.floor(Math.random() * arr.length)];
@@ -1068,10 +1087,10 @@ function officeJobFx(job) {
     return;
   }
   if (st.fx === 'book') {
-    setTimeout(() => { if (officeActors.book.state === 'seat') officeSay('book', '收到，記好了 ✓'); }, 1400);
+    setTimeout(() => { if (officeActors.book.state === 'seat') officeWakeSay('book', '收到，記好了 ✓'); }, 1400);
   } else {
     officeFloat((j.income ? '+' : '−') + fmt(j.amount), j.income);
-    setTimeout(() => { if (officeActors.cash.state === 'seat') officeSay('cash', j.income ? '入帳確認 ✓' : '出帳確認 ✓'); }, 1400);
+    setTimeout(() => { if (officeActors.cash.state === 'seat') officeWakeSay('cash', j.income ? '入帳確認 ✓' : '出帳確認 ✓'); }, 1400);
   }
 }
 

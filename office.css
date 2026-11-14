@@ -3,7 +3,12 @@
 .office-wrap h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
 .office-wrap > p { font-size: 12px; color: var(--text2); margin-bottom: 12px; }
 .of-top { max-width: 640px; margin: 0 auto 8px; display: flex; align-items: center; gap: 8px; text-align: left; }
-.of-status { flex: 1; min-width: 0; font-size: 12px; line-height: 1.5; color: var(--text2); background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 6px 10px; }
+.of-status { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 5px; font-size: 12px; line-height: 1.5; color: var(--text2); background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 6px 8px; }
+.of-chip { display: inline-flex; align-items: center; gap: 3px; padding: 1px 8px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); white-space: nowrap; }
+.of-chip b { font-weight: 600; color: var(--text); }
+.of-chip.warn { background: #fff0f3; border-color: #f5b5c4; }
+.of-chip.warn b { color: #c2405b; }
+.of-chip.hot { background: #fff6dc; border-color: #f2d27a; }
 .of-pause { flex: 0 0 auto; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px; cursor: pointer; }
 
 .office-scene {
@@ -165,4 +170,46 @@
   15% { opacity: 1; }
   70% { opacity: 1; }
   100% { transform: translate(calc(-50% + var(--dx)), calc(var(--dy) - 12cqw)) scale(var(--s)); opacity: 0; }
+}
+
+/* 名單：兩欄小卡，正在做的事完整顯示 */
+.of-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.of-card { display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: center; gap: 4px 8px; padding: 8px 10px; }
+.of-card .of-ava { width: 38px; height: 38px; flex-basis: 38px; }
+.of-card .of-ava svg { width: 46px; }
+.of-card .of-ava-pig { font-size: 22px; }
+.of-card-main { gap: 1px; }
+.of-card-top b { font-size: 14px; }
+.of-card .of-card-num { flex-direction: row; align-items: baseline; gap: 4px; }
+.of-card .of-card-num b { font-size: 14px; }
+.of-card-act { grid-column: 1 / -1; font-size: 12px; line-height: 1.45; color: var(--text2); white-space: normal; overflow-wrap: anywhere; }
+
+/* 白天和晚上 */
+.of-shade { position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: 0; transition: opacity 1.2s ease, background 1.2s ease; }
+.office-scene[data-phase="morning"] .of-shade { opacity: 1; background: linear-gradient(160deg, rgba(255,226,150,0.28), rgba(255,226,150,0) 60%); }
+.office-scene[data-phase="evening"] .of-shade { opacity: 1; background: rgba(255,140,60,0.16); }
+.office-scene[data-phase="night"] .of-shade { opacity: 1; background: rgba(26,30,78,0.45); }
+.of-glow { position: absolute; z-index: 2; width: 26cqw; height: 26cqw; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; display: none;
+  background: radial-gradient(circle, rgba(255,214,120,0.5), rgba(255,214,120,0) 70%); mix-blend-mode: screen; }
+.office-scene[data-phase="night"] .of-glow, .office-scene[data-phase="evening"] .of-glow { display: block; }
+.office-scene[data-phase="evening"] .of-glow { opacity: 0.55; }
+.of-fig { position: relative; }
+.of-actor.sleeping .of-fig svg { animation: of-breathe 3.2s ease-in-out infinite; }
+.of-actor.sleeping .of-fig::after { content: '💤'; position: absolute; right: -6%; top: -4%; font-size: 3.4cqw; animation: of-zzz 2.6s ease-in-out infinite; }
+@keyframes of-breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.02, 0.97); } }
+@keyframes of-zzz { 0% { transform: translate(0, 0.6cqw) scale(0.7); opacity: 0; } 30% { opacity: 1; } 100% { transform: translate(1.4cqw, -2.4cqw) scale(1.05); opacity: 0; } }
+
+/* 點角色的反應 */
+.of-actor.react .of-fig svg { animation: of-react 0.6s ease; }
+@keyframes of-react { 0%, 100% { transform: translateY(0) rotate(0); } 35% { transform: translateY(-14%) rotate(-6deg); } 70% { transform: translateY(0) rotate(4deg); } }
+
+/* 白板警報、節日裝飾 */
+.of-alarm { animation: of-alarm 1.4s ease-in-out infinite; }
+@keyframes of-alarm { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+.of-star { transform-box: fill-box; transform-origin: 50% 50%; animation: of-twinkle 2.4s ease-in-out infinite; }
+.of-lantern { animation: of-swing 3s ease-in-out infinite; }
+@keyframes of-swing { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .of-actor.sleeping .of-fig svg, .of-actor.sleeping .of-fig::after, .of-actor.react .of-fig svg, .of-alarm, .of-star, .of-lantern { animation: none; }
 }

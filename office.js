@@ -17,7 +17,145 @@ let officeDogPets = 0;              // 這次開啟期間黑柴被摸了幾次
 let officeSkitAt = 0;               // 下一次安排角色互動的時間
 let officeSkitLast = '';            // 上一次的互動，避免連續重複
 let officeSkitSeq = 0;
-let officeQuietUntil = 0;           // 互動或跑腿結束後 1.5 秒內，其他人不冒出平常的對話框   // 剛記的帳：等成員去跑一趟（記帳區 → 金庫）
+let officeQuietUntil = 0;           // 互動或跑腿結束後 1.5 秒內，其他人不冒出平常的對話框
+let officePhase = 'day';            // 依實際時間：morning / day / evening / night
+let officePhaseCheckAt = 0;
+let officePrev = null;              // 上個月的摘要（月會、花太快警報用），只在看本月時載入
+let officePrevLoading = false;
+let officeMeeting = null;           // 月會：{ pending } → { ids, started, launchedAt }
+const OFFICE_MEET_PREFIX = 'shareExpense.office.meeting:';   // 每個月的月會開過了沒
+const OFFICE_EVENT_PREFIX = 'shareExpense.office.event:';    // 每天只演一次的事件（入帳、過期）
+// 紀念日（MM-DD），填上後當天辦公室會掛滿愛心
+const OFFICE_ANNIVERSARY = '';
+// 農曆新年（初一）：前 10 天到元宵節掛燈籠
+const OFFICE_CNY = { 2026: '02-17', 2027: '02-06', 2028: '01-26', 2029: '02-13', 2030: '02-03', 2031: '01-23', 2032: '02-11' };
+
+// 白天和晚上：依實際時間
+function officePhaseNow() {
+  const h = new Date().getHours();
+  return h >= 23 || h < 6 ? 'night' : (h < 9 ? 'morning' : (h < 18 ? 'day' : 'evening'));
+}
+const OFFICE_PHASE_LABEL = { morning: '🌅 早上', day: '☀️ 白天', evening: '🌆 傍晚', night: '🌙 晚上' };
+
+// 節日：12 月聖誕、農曆年前後、紀念日
+function officeHoliday() {
+  const now = new Date(), y = now.getFullYear(), mmdd = String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+  if (OFFICE_ANNIVERSARY && mmdd === OFFICE_ANNIVERSARY) return 'anniv';
+  const cny = OFFICE_CNY[y];
+  if (cny) {
+    const day = new Date(y, parseInt(cny.slice(0, 2), 10) - 1, parseInt(cny.slice(3), 10));
+    const diff = Math.round((new Date(y, now.getMonth(), now.getDate()) - day) / 86400000);
+    if (diff >= -10 && diff <= 15) return 'cny';
+  }
+  if (now.getMonth() === 11) return 'xmas';
+  return '';
+}
+
+// 目前選的月份是不是這個月（月會、入帳日、過期提醒只在看本月時出現）
+function officeIsCurrentMonth() {
+  const m = String(currentSheet() || '').match(/(\d{4})\/(\d{1,2})月/);
+  const now = new Date();
+  return !!m && +m[1] === now.getFullYear() && +m[2] === now.getMonth() + 1;
+}
+
+// 每天只演一次：記在瀏覽器裡（順便清掉以前的紀錄）
+function officeOnce(key) {
+  const now = new Date();
+  const day = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(OFFICE_EVENT_PREFIX) && !k.startsWith(OFFICE_EVENT_PREFIX + day + ':')) localStorage.removeItem(k);
+    }
+    const k = OFFICE_EVENT_PREFIX + day + ':' + key;
+    if (localStorage.getItem(k)) return false;
+    localStorage.setItem(k, '1');
+    return true;
+  } catch (e) { return false; }
+}
+
+// 上個月（和上上個月）的摘要：月會報告、這個月花得快不快
+async function officeLoadPrev() {
+  if (officePrevLoading || !officeIsCurrentMonth()) return;
+  const sheet = currentSheet();
+  if (officePrev && officePrev.sheet === sheet) return;
+  officePrevLoading = true;
+  try {
+    const m = sheet.match(/(\d{4})\/(\d{1,2})月/);
+    const y = +m[1], mo = +m[2];
+    const p1 = mo === 1 ? [y - 1, 12] : [y, mo - 1];
+    const p2 = p1[1] === 1 ? [p1[0] - 1, 12] : [p1[0], p1[1] - 1];
+    const list = await apiCall({ action: 'getSheets' });
+    const find = ([yy, mm]) => (list.sheets || []).find(n => { const t = n.match(/(\d{4})\/(\d{1,2})月/); return t && +t[1] === yy && +t[2] === mm; });
+    const s1 = find(p1), s2 = find(p2);
+    if (!s1) { officePrev = { sheet, none: true }; return; }
+    const vers = await getVersions();
+    const [r1, r2] = await Promise.all([fetchMonth(s1, vers, false), s2 ? fetchMonth(s2, vers, false) : Promise.resolve(null)]);
+    const exp = recs => (recs || []).filter(r => !isSummaryRow(r) && r.owner !== '' && r.expense > 0 && !(r.note && r.note.includes('先付')));
+    const sum = arr => arr.reduce((t, r) => t + r.expense, 0);
+    const e1 = exp(r1);
+    const catMap = {};
+    e1.forEach(r => { const c = categorize(r.item); catMap[c] = (catMap[c] || 0) + r.expense; });
+    const top = Object.entries(catMap).sort((a, b) => b[1] - a[1])[0];
+    const today = new Date().getDate();
+    const dayOf = r => { const k = toMMDD(r.date); return k ? parseInt(k.slice(3), 10) : 0; };
+    officePrev = {
+      sheet, month: p1[1], prevMonth: p2[1],
+      total: sum(e1),
+      prevTotal: r2 ? sum(exp(r2)) : null,
+      sameDay: sum(e1.filter(r => dayOf(r) <= today)),
+      top: top ? { name: top[0], value: top[1] } : null,
+      count: (r1 || []).filter(r => !isSummaryRow(r) && r.item !== '帳戶餘額' && r.owner !== '').length,
+      owners: { 精靈: sum(e1.filter(r => r.owner === '精靈')), 小狐狸: sum(e1.filter(r => r.owner === '小狐狸')) },
+    };
+  } catch (e) {
+    officePrev = null;
+  } finally {
+    officePrevLoading = false;
+  }
+  if (officePrev && !officePrev.none && officeVisible()) { drawOffice(); officeMaybeMeeting(false); }
+}
+
+// 這個月花得快不快：跟上個月同一天以前的支出比
+function officePace(d) {
+  const p = officePrev;
+  if (!p || p.none || p.sheet !== currentSheet() || !(p.sameDay > 0)) return null;
+  const diff = d.expense - p.sameDay;
+  const pct = Math.round(diff / p.sameDay * 100);
+  return { pct, diff, same: p.sameDay, fast: pct >= 20 && diff >= 1000 };
+}
+
+// 每月第一次打開本月時開月會；force 為重播
+function officeMaybeMeeting(force) {
+  const p = officePrev;
+  if (!p || p.none || p.sheet !== currentSheet() || officeMeeting) return false;
+  if (!force) {
+    try { if (localStorage.getItem(OFFICE_MEET_PREFIX + p.sheet)) return false; } catch (e) { return false; }
+  }
+  officeMeeting = { pending: true, force: !!force };
+  return true;
+}
+
+// 月會的台詞（依上個月的資料）
+function officeMeetingLines(d) {
+  const p = officePrev;
+  const lines = [{ who: 'chart', text: `${p.month}月的月會開始囉！📋` }];
+  let total = `上個月總支出 ${fmt(p.total)}`;
+  if (p.prevTotal) {
+    const pct = Math.round((p.total - p.prevTotal) / p.prevTotal * 100);
+    total += pct === 0 ? `，跟${p.prevMonth}月差不多` : `，比${p.prevMonth}月${pct > 0 ? '多' : '少'} ${Math.abs(pct)}%`;
+  }
+  lines.push({ who: 'chart', text: total });
+  lines.push({ who: 'chart', text: p.top ? `花最多的是${p.top.name}，${fmt(p.top.value)}` : '上個月沒有支出紀錄' });
+  lines.push({ who: 'book', text: `上個月一共記了 ${p.count} 筆 ✍️` });
+  lines.push({ who: 'cash', text: `精靈花了 ${fmt(p.owners['精靈'])}，小狐狸花了 ${fmt(p.owners['小狐狸'])}` });
+  lines.push({ who: 'stock', text: d.alerts.length ? `倉庫有 ${d.alerts.length} 項要注意，散會後去看看` : '倉庫一切正常 📦' });
+  const up = p.prevTotal && p.total > p.prevTotal;
+  lines.push({ who: 'elf', text: up ? '這個月一起省一點 💪' : '上個月表現很好 ✨' });
+  lines.push({ who: 'fox', text: '散會～大家辛苦了 👏', burst: true });
+  lines.push({ who: 'dog', text: '汪！' });
+  return lines;
+}
 
 function officeVisible() {
   const tab = document.getElementById('tab-office');
@@ -263,6 +401,39 @@ function officePiggySvg(d) {
 }
 
 
+// 節日裝飾：聖誕樹、燈籠和福字、紀念日愛心
+function officeDecorSvg() {
+  const h = officeHoliday();
+  if (h === 'xmas') return `
+    <g class="of-decor">
+      <path d="M860 690 L905 760 L882 760 L918 820 L802 820 L838 760 L815 760 Z" fill="#5fbf8f"/>
+      <path d="M860 690 L885 730 L835 730 Z" fill="#7fd6a8"/>
+      <rect x="850" y="820" width="20" height="18" rx="3" fill="#a9754f"/>
+      <path class="of-star" d="M860 670 l6 13 14 1 -11 9 4 14 -13 -8 -13 8 4 -14 -11 -9 14 -1 Z" fill="#ffd66b"/>
+      <circle cx="846" cy="752" r="6" fill="#ef5f7a"/><circle cx="874" cy="782" r="6" fill="#ffd66b"/><circle cx="838" cy="800" r="6" fill="#7fb6f0"/><circle cx="890" cy="806" r="6" fill="#ef5f7a"/>
+      <rect x="808" y="824" width="34" height="28" rx="4" fill="#ef5f7a"/><path d="M825 824 v28 M808 838 h34" stroke="#ffd66b" stroke-width="4"/>
+      <rect x="880" y="828" width="30" height="24" rx="4" fill="#7fb6f0"/><path d="M895 828 v24 M880 840 h30" stroke="#fff" stroke-width="4"/>
+    </g>`;
+  if (h === 'cny') {
+    const lantern = x => `<g class="of-lantern" style="transform-origin:${x}px 560px">
+      <path d="M${x} 560 v14" stroke="#c9a27c" stroke-width="3"/>
+      <rect x="${x - 26}" y="574" width="52" height="8" rx="3" fill="#ffd66b"/>
+      <ellipse cx="${x}" cy="604" rx="34" ry="26" fill="#e8463e"/>
+      <path d="M${x} 580 v48 M${x - 18} 584 q-8 20 0 40 M${x + 18} 584 q8 20 0 40" stroke="#c7322b" stroke-width="2.4" fill="none"/>
+      <rect x="${x - 26}" y="626" width="52" height="8" rx="3" fill="#ffd66b"/>
+      <path d="M${x - 8} 634 v18 M${x} 634 v22 M${x + 8} 634 v18" stroke="#ffd66b" stroke-width="2.4"/>
+    </g>`;
+    return `<g class="of-decor">${lantern(160)}${lantern(840)}
+      <g transform="translate(720 708) rotate(45)"><rect x="-26" y="-26" width="52" height="52" rx="4" fill="#e8463e"/></g>
+      <text x="720" y="720" font-size="34" font-weight="700" text-anchor="middle" fill="#ffd66b">福</text></g>`;
+  }
+  if (h === 'anniv') {
+    const hearts = [80, 200, 330, 560, 690, 820, 940].map((x, i) => `<path d="M${x} ${590 + (i % 2) * 18} c-8 -12 -24 -2 -14 10 l14 13 14 -13 c10 -12 -6 -22 -14 -10 Z" fill="${i % 2 ? '#f7a8c0' : '#ef5f7a'}"/>`).join('');
+    return `<g class="of-decor"><path d="M40 584 Q270 640 500 590 Q730 640 960 584" fill="none" stroke="#f3a0b8" stroke-width="3"/>${hearts}</g>`;
+  }
+  return '';
+}
+
 // ── 平面圖（座標系 1000 × 1300）：記帳區、倉庫、走道、金庫、休息區 ──
 function officeBgSvg(d) {
   const t = (s, n) => { const a = [...String(s)]; return esc(a.length > n ? a.slice(0, n).join('') : a.join('')); };
@@ -320,7 +491,7 @@ function officeBgSvg(d) {
       <text x="386" y="1258">金庫</text><text x="512" y="1258">休息區</text>
     </g>
     <!-- 記帳區：白板、兩張桌子、盆栽 -->
-    ${mv(30, `<rect x="296" y="34" width="296" height="124" rx="16" fill="#ffffff" stroke="#9fd8cb" stroke-width="8"/>${board}`)}
+    ${mv(30, `<rect x="296" y="34" width="296" height="124" rx="16" fill="#ffffff" stroke="${d.pace && d.pace.fast ? '#ef5f7a' : '#9fd8cb'}" stroke-width="8"/>${board}${d.pace && d.pace.fast ? `<g class="of-alarm"><rect x="372" y="-14" width="144" height="34" rx="17" fill="#ef5f7a"/><text x="444" y="10" font-size="22" font-weight="700" text-anchor="middle" fill="#fff">⚠ 花比較快</text></g>` : ''}`)}
     ${mv(51, `${desk(60, 108, 215, wood)}
     <path d="M118 150 Q140 138 162 148 Q184 138 206 150 L206 126 Q184 115 162 124 Q140 115 118 126 Z" fill="#ffffff" stroke="#d9c7b0" stroke-width="2"/>
     <path d="M162 124 L162 148 M128 132 Q140 127 154 132 M170 132 Q184 127 198 132" fill="none" stroke="#9fd8cb" stroke-width="2.4" stroke-linecap="round"/>
@@ -345,6 +516,10 @@ function officeBgSvg(d) {
       <path d="M200 790 q-22 -2 -20 -24 q2 -16 14 -22 l-5 -9 h22 l-5 9 q12 6 14 22 q2 22 -20 24 Z" fill="#e3b98a"/>
       <text x="200" y="778" font-size="22" font-weight="700" text-anchor="middle" fill="#8a5a2b">$</text>
     </g>`)}
+    <!-- 倉庫的垃圾桶、金庫門口的信箱 -->
+    <g><rect x="776" y="478" width="44" height="54" rx="8" fill="#b9cbd6"/><rect x="770" y="470" width="56" height="12" rx="6" fill="#9fb4c4"/><path d="M788 492 v30 M798 492 v30 M808 492 v30" stroke="#9fb4c4" stroke-width="3" stroke-linecap="round"/></g>
+    <g><rect x="470" y="600" width="12" height="52" fill="#c9a27c"/><rect x="452" y="574" width="48" height="34" rx="10" fill="#f08fb0"/><rect x="458" y="584" width="36" height="6" rx="3" fill="#c2557f"/><path d="M496 578 v-14 h10 v8 h-10" fill="#ffd66b"/></g>
+    ${officeDecorSvg()}
     <!-- 休息區：茶水機、茶几、沙發、盆栽、黑柴的窩 -->
     ${mv(310, `<ellipse cx="575" cy="800" rx="64" ry="34" fill="#b9a48d"/><ellipse cx="575" cy="793" rx="64" ry="34" fill="#d7c4ae"/><ellipse cx="575" cy="790" rx="48" ry="23" fill="#f3e9db"/>
     <g transform="translate(628 824) rotate(-20)"><rect x="-11" y="-2.5" width="22" height="5" rx="2.5" fill="#fff"/><circle cx="-11" cy="-3" r="4" fill="#fff"/><circle cx="-11" cy="3" r="4" fill="#fff"/><circle cx="11" cy="-3" r="4" fill="#fff"/><circle cx="11" cy="3" r="4" fill="#fff"/></g>`)}
@@ -396,9 +571,12 @@ function officeDetailHtml(key, d) {
   }
   const max = d.cats.length ? d.cats[0].value : 1;
   const bars = d.cats.slice(0, 6).map(c => `<div class="of-bar-row"><span>${esc(c.name)}</span><i><em style="width:${Math.max(4, c.value / max * 100).toFixed(0)}%"></em></i><b>${fmt(c.value)}</b></div>`).join('');
+  const pace = d.pace ? `<div class="of-row"><span>跟上月同期比</span><b class="${d.pace.pct > 0 ? 'of-exp' : 'of-inc'}">${d.pace.pct > 0 ? '+' : ''}${d.pace.pct}%（上月同期 ${fmt(d.pace.same)}）</b></div>` : '';
+  const replay = officePrev && !officePrev.none && officePrev.sheet === currentSheet() ? '<button type="button" class="of-go" data-office-meeting>重播月會</button>' : '';
   return `<h4>📊 白板 <small>小析負責</small></h4>
-    ${bars || '<p class="of-note">這個月還沒有支出。</p>'}
-    <div class="of-actions">${go('analysis', '看分析')}</div>`;
+    ${pace}${bars || '<p class="of-note">這個月還沒有支出。</p>'}
+    ${d.pace && d.pace.fast ? '<p class="of-note">這個月的支出速度比上個月快，白板會亮紅框提醒。</p>' : ''}
+    <div class="of-actions">${replay}${go('analysis', '看分析')}</div>`;
 }
 
 
@@ -412,8 +590,17 @@ const OFFICE_SPOTS = {
   byStock: { x: 815, y: 485, zone: 'B' },   // 阿貨座位旁
   byCash:  { x: 252, y: 1224, zone: 'C' },  // 阿庫座位旁
   tea2:    { x: 738, y: 832, zone: 'D' },   // 茶水間的第二個位置（一起喝茶）
-  hugFox:  { x: 793, y: 1219, zone: 'D' },  // 小狐狸身邊（精靈走過去抱抱）
-  hugElf:  { x: 827, y: 1219, zone: 'D' },  // 精靈身邊（小狐狸走過去抱抱）
+  mail:    { x: 412, y: 735, zone: 'C' },   // 金庫門口（收信）
+  trash:   { x: 745, y: 545, zone: 'B' },   // 倉庫的垃圾桶旁
+  meet_chart: { x: 252, y: 262, zone: 'A' },   // 月會：小析站在白板左邊報告
+  meet_stock: { x: 115, y: 440, zone: 'A' },    // 後排
+  meet_cash:  { x: 228, y: 440, zone: 'A' },
+  meet_elf:   { x: 341, y: 440, zone: 'A' },
+  meet_book:  { x: 170, y: 540, zone: 'A' },    // 前排
+  meet_fox:   { x: 285, y: 540, zone: 'A' },
+  meet_dog:   { x: 395, y: 545, zone: 'A' },
+  hugFox:  { x: 780, y: 1219, zone: 'D' },  // 小狐狸身邊（精靈走過去抱抱）
+  hugElf:  { x: 840, y: 1219, zone: 'D' },  // 精靈身邊（小狐狸走過去抱抱）
   giveElf: { x: 690, y: 1112, zone: 'D' },  // 沙發前：把錢交給精靈
   giveFox: { x: 810, y: 1073, zone: 'D' },  // 沙發前：把錢交給小狐狸
   tea:   { x: 620, y: 808, zone: 'D', go: '走去茶水間', at: '倒杯茶休息一下', rest: true },
@@ -459,13 +646,17 @@ function officeActivity(id, d) {
     const st = a.job.steps[a.job.i];
     return a.state === 'walk' ? st.go : st.at;
   }
+  const asleep = officePhase === 'night' && (!a || a.state === 'seat');
+  if (asleep) return id === 'dog' ? '睡在窩裡 💤' : (id === 'elf' || id === 'fox' ? '在沙發上依偎著睡著了 💤' : '趴在桌上打瞌睡 💤');
   if (id === 'dog') {
     if (a && a.state === 'walk') return a.back ? '跑回窩裡' : '在辦公室巡邏';
     if (a && a.state === 'visit') return a.spot === 'piggy' ? '聞聞小豬' : (a.spot === 'shelf' ? '聞聞貨架上的箱子' : (a.spot === 'board' ? '歪頭看白板' : '在茶水間討零食'));
-    return '趴在窩裡打瞌睡 💤';
+    return '趴在窩裡休息';
   }
   if (a && a.state === 'walk') return a.back ? '走回座位' : OFFICE_SPOTS[a.spot].go;
   if (a && a.state === 'visit') {
+    if (a.spot === 'tea' && officePhase === 'morning') return '早安～泡杯咖啡 ☕';
+    if (a.spot === 'tea' && officePhase === 'evening') return '下班前喝杯茶 🍵';
     if (a.spot === 'shelf') return d.alerts.length ? `例行盤點：${d.alerts[0].name}${d.alerts[0].text}` : '例行檢查貨架';
     if (a.spot === 'piggy') return id === 'cash' ? '把零錢投進存錢筒' : `例行檢查存錢筒：${fmt(d.balance)}`;
     if (a.spot === 'board') return d.cats.length ? `例行檢查白板：${d.cats[0].name}最多` : '例行檢查白板';
@@ -479,7 +670,10 @@ function officeActivity(id, d) {
     if (n > 0) return `專心：新增了 ${n} 筆`;
     return d.todayCount > 0 && latest ? `專心：登記 ${latest.item}` : (latest ? `整理帳本：${latest.item}` : '等第一筆紀錄');
   }
-  if (id === 'chart') return d.cats.length ? `專心：${d.cats[0].name}占最多` : '等資料畫圖';
+  if (id === 'chart') {
+    if (d.pace && d.pace.fast) return `專心：這個月花比較快（比上月同期 +${d.pace.pct}%）`;
+    return d.cats.length ? `專心：${d.cats[0].name}占最多` : '等資料畫圖';
+  }
   if (id === 'stock') return d.alerts.length ? `專心：${d.alerts[0].name}${d.alerts[0].text}` : (d.items.length ? '貨架都整理好了' : '貨架還是空的');
   if (id === 'cash') {
     if (d.settled) return '月底結算完成';
@@ -490,9 +684,36 @@ function officeActivity(id, d) {
   return o.count ? `在沙發休息・本月花了 ${fmt(o.expense)}` : '在沙發休息・這個月還沒有支出';
 }
 
+// 每天一次的事件：每月的愛入帳當天、庫存有東西過期
+function officeDailyEvents(d) {
+  if (!officeIsCurrentMonth()) return;
+  d.love.filter(p => p.arrivedToday && p.amount > 0).forEach(p => {
+    if (officeOnce('love:' + p.name)) officeJobs.cash.push({ type: 'love', name: p.name, amount: p.amount });
+  });
+  const expired = d.alerts.filter(a => a.text === '已過期');
+  if (expired.length && officeOnce('expired:' + expired.map(a => a.name).join(','))) {
+    officeJobs.stock.push({ type: 'expired', names: expired.slice(0, 3).map(a => a.name), total: expired.length });
+  }
+}
+
 // ── 記帳後的跑腿：記帳區登記 → 金庫領錢（收入則是存錢）──────────
 function officeJobSteps(j) {
-  if (j.type === 'skit') return j.steps;
+  if (j.type === 'skit' || j.type === 'meeting') return j.steps;
+  if (j.type === 'love') {
+    // 每月的愛入帳：阿庫到門口收信，再拿去投進小豬
+    return [
+      { spot: 'mail', fx: 'mail', stay: 2800, go: '去門口收信 💌', at: `收到${j.name}的每月的愛 💌` },
+      { spot: 'piggy', fx: 'loveIn', amount: j.amount, stay: 3200, go: `把 ${fmt(j.amount)} 拿去存`, at: `存入 ${fmt(j.amount)} 🐷` },
+    ];
+  }
+  if (j.type === 'expired') {
+    // 過期：阿貨到貨架拿出來，丟進垃圾桶
+    const names = j.names.join('、') + (j.total > j.names.length ? ` 等 ${j.total} 項` : '');
+    return [
+      { spot: 'shelf', fx: 'pick', stay: 2800, go: '去貨架拿過期的東西', at: `拿出過期的${names}` },
+      { spot: 'trash', fx: 'trash', stay: 3000, go: '拿去垃圾桶', at: '丟掉 🗑️ 記得到庫存更新' },
+    ];
+  }
   if (j.type === 'settle') {
     // 月底結算：阿庫到存錢筒領錢，再送到沙發交給兩人（金額以目前資料為準）
     const back = officeData_ ? officeData_.back.filter(b => b.amount > 0) : [];
@@ -582,6 +803,12 @@ function officeSkits(d) {
       { who: id, text: pick(['好療癒，回去工作了', '真乖，晚點再來', '摸一下精神都來了']) }])] }));
   });
 
+  // 這個月花比較快：阿庫去找小析確認
+  if (d.pace && d.pace.fast) add('pace', ['cash', 'chart'], () => ({ cash: [talk('byChart', '去找小析確認支出', '跟小析確認支出', [
+    { who: 'cash', text: '小析，這個月是不是花比較快？' },
+    { who: 'chart', text: `對，比上個月同期多 ${d.pace.pct}%，多了 ${fmt(d.pace.diff)}` },
+    { who: 'cash', text: '收到，我提醒精靈和小狐狸 🙏' }])] }));
+
   // 一起喝茶：兩位員工各自走到茶水間，都到了才開始聊
   const staffLine = id => id === 'book' ? (d.todayCount ? `今天記了 ${d.todayCount} 筆` : '今天還沒有新的帳')
     : id === 'chart' ? (top ? `${top.name}還是占最多` : '還沒有資料可以畫圖')
@@ -613,7 +840,13 @@ function officeSkits(d) {
     if (alert) chats.push([
       { who: 'elf', text: `${alert.name}${alert.text}，週末去買？` },
       { who: 'fox', text: '好啊，順便逛逛', heart: true }]);
-    list.push({ key: 'sofa', ids: ['elf', 'fox'], sofa: () => pick(chats) });
+    // 晚上：沙發上的悄悄話
+    const nightChats = [[
+      { who: 'elf', text: '好睏喔… 😪' },
+      { who: 'fox', text: '晚安，明天見 💕', heart: true }], [
+      { who: 'fox', text: '今天也辛苦了' },
+      { who: 'elf', text: '你也是，晚安 🌙', heart: true }]];
+    list.push({ key: 'sofa', ids: ['elf', 'fox'], sofa: () => pick(officePhase === 'night' ? nightChats : chats) });
 
     // 愛的互動：沙發上親親，或走過去抱抱（burst＝冒出愛心和粉紅泡泡，lean＝兩人靠在一起）
     const kisser = pick(['elf', 'fox']), kissed = kisser === 'elf' ? 'fox' : 'elf';
@@ -642,6 +875,14 @@ function officeStartSkit(d, ts) {
   let list = officeSkits(d);
   if (list.length > 1) list = list.filter(k => k.key !== officeSkitLast);
   if (!list.length) return false;
+  // 晚上：大家在睡覺，只剩沙發上的悄悄話
+  if (officePhase === 'night') {
+    list = list.filter(k => k.key === 'love-kiss' || k.key === 'sofa');
+    if (!list.length || Math.random() < 0.5) return false;
+  }
+  // 花太快時，優先演提醒的那一段
+  const paceSkit = list.find(k => k.key === 'pace');
+  if (paceSkit && Math.random() < 0.4) list = [paceSkit];
   // 精靈和小狐狸都有空時，三成機會是愛的互動
   const love = list.filter(k => k.key.startsWith('love'));
   if (love.length && Math.random() < 0.3) list = love;
@@ -696,6 +937,40 @@ function officeNoteRecord(data) {
 // app.js 修改「支出部分轉回」的轉回金額後呼叫：排一趟月底結算（重複修改只排一趟）
 function officeNoteSettle() {
   if (!officeJobs.cash.some(j => j.type === 'settle')) officeJobs.cash.push({ type: 'settle' });
+}
+
+// 點場景裡的角色：跳一下、打招呼；黑柴會叫，小豬吐金幣
+function officeReact(id) {
+  const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+  if (id === 'piggy') {
+    const pig = document.querySelector('.of-pigbtn');
+    if (pig) { pig.classList.remove('poke'); void pig.offsetWidth; pig.classList.add('poke'); setTimeout(() => pig.classList.remove('poke'), 700); }
+    officeFloat(pick(['🪙 叮！', '🪙 叮叮！', '🪙 噗嚕～']), false);
+    return;
+  }
+  const el = document.querySelector(`.of-actor[data-office-id="${id}"]`);
+  const a = officeActors[id];
+  if (!el || !a) return;
+  el.classList.remove('react'); void el.offsetWidth; el.classList.add('react');
+  setTimeout(() => el.classList.remove('react'), 700);
+  if (a.job && a.job.rec.type !== 'skit') return;   // 正在跑腿或開會：跳一下就好，不打斷
+  const sleepy = officePhase === 'night' && a.state === 'seat';
+  const lines = {
+    book: ['嗨～我在記帳 ✍️', '今天也要記得記帳喔', '有什麼要記的嗎？'],
+    chart: ['嗨！要看圖表嗎？📊', '數字我都盯著喔', '嘿嘿，被你發現了'],
+    stock: ['嗨～倉庫交給我 📦', '要補貨記得跟我說', '嘿！'],
+    cash: ['嗨～金庫很安全 🔐', '錢都數好了', '嘿嘿 💰'],
+    elf: ['嗨～ 💕', '幹嘛啦～', '嘿嘿 😊'],
+    fox: ['嗨～ 🦊', '幹嘛戳我啦', '嘿嘿 😊'],
+    dog: ['汪！', '汪汪！（搖尾巴）', '嗷嗚～'],
+  };
+  officeSay(id, sleepy ? (id === 'dog' ? '（打哈欠）嗚…' : '（揉眼睛）嗯…？ 😪') : pick(lines[id] || ['嗨～']));
+  if (id === 'dog') {
+    officeDogPets++;
+    const n = document.querySelector('[data-office-num="dog"]'); if (n) n.textContent = officeDogPets + ' 次';
+    officeFloat('🐾', false, { x: a.x, y: a.y - 30 });
+  }
+  if (id === 'elf' || id === 'fox') officeFloat('💗', false, { x: a.x, y: a.y - 30 });
 }
 
 // 精靈和小狐狸靠在一起（各自往對方那邊傾）
@@ -755,7 +1030,7 @@ function officeFloat(text, income, at) {
 
 function officeJobFx(job) {
   const st = job.steps[job.i], j = job.rec;
-  if (!st.fx) return;
+  if (!st.fx || st.fx === 'meet') return;
   if (st.fx === 'talk') {
     // 對話期間（含最後一句停留的時間）加 1.5 秒，平常的對話框先不出現
     officeQuietUntil = Math.max(officeQuietUntil, performance.now() + ((st.lines || []).length - 1) * 2100 + 3200 + 1500);
@@ -775,6 +1050,14 @@ function officeJobFx(job) {
     }, i * 2100));
     return;
   }
+  if (st.fx === 'mail') { officeFloat('💌', false, OFFICE_SPOTS.mail); return; }
+  if (st.fx === 'loveIn') {
+    officeFloat('+' + fmt(st.amount), true);
+    setTimeout(() => officeSay('cash', '小豬吃飽飽 🐷💕'), 1500);
+    return;
+  }
+  if (st.fx === 'pick') { officeFloat('📦', false, OFFICE_SPOTS.shelf); return; }
+  if (st.fx === 'trash') { officeFloat('🗑️', false, OFFICE_SPOTS.trash); return; }
   if (st.fx === 'settleOut') { officeFloat('−' + fmt(st.amount), false); return; }
   if (st.fx === 'give') {
     const to = officeActors[st.to];
@@ -840,8 +1123,20 @@ function officeStatusText(d) {
   const seat = all.filter(a => a.state === 'seat').length;
   const walk = all.filter(a => a.state === 'walk').length;
   const rest = all.filter(a => a.state === 'visit').length;
-  const job = all.filter(a => a.job && a.job.rec.type !== 'skit').length;
-  return `${job ? `記帳跑腿 ${job} 人・` : ''}座位上 ${seat} 人・走動中 ${walk} 人・巡視休息 ${rest} 人・待補貨 ${d.alerts.length} 項・存錢筒 ${Math.round(d.ratio * 100)}%`;
+  const meeting = Object.values(officeActors).some(a => a.job && a.job.rec.type === 'meeting');
+  const job = all.filter(a => a.job && a.job.rec.type !== 'skit' && a.job.rec.type !== 'meeting').length;
+  const chip = (icon, text, title, cls = '') => `<span class="of-chip${cls ? ' ' + cls : ''}" title="${title}">${icon}<b>${text}</b></span>`;
+  return [
+    chip('', OFFICE_PHASE_LABEL[officePhase], '現在的時段'),
+    meeting ? chip('📋', '月會中', '大家在白板前開月會', 'hot') : '',
+    job ? chip('🏃', job, '正在跑腿（記帳、結算、收信、丟垃圾）', 'hot') : '',
+    chip('🪑', seat, '在座位上'),
+    chip('🚶', walk, '走動中'),
+    chip('☕', rest, '巡視或休息'),
+    chip('📦', d.alerts.length, '待補貨', d.alerts.length ? 'warn' : ''),
+    chip('🐷', Math.round(d.ratio * 100) + '%', '存錢筒的金幣', d.mood !== 'happy' ? 'warn' : ''),
+    d.pace && d.pace.fast ? chip('⚠️', `花比較快 +${d.pace.pct}%`, '本月支出比上個月同期多', 'warn') : '',
+  ].join('');
 }
 
 function drawOffice() {
@@ -850,25 +1145,33 @@ function drawOffice() {
   let d;
   try { d = officeData(); d.owners = officeOwners(d); }
   catch (e) { scene.innerHTML = '<div class="empty-state">⚠️ 辦公室載入失敗</div>'; return; }
+  d.pace = officePace(d);
   officeData_ = d;
+  officePhase = officePhaseNow();
   officeInitActors();
+  officeDailyEvents(d);
 
   const actorsHtml = OFFICE_STAFF.map(s => {
     const a = officeActors[s.id];
-    return `<button type="button" class="of-actor tag-${s.tag}${a.state === 'walk' ? ' walking' : ''}${officeSelected === s.id ? ' selected' : ''}" data-office-id="${s.id}" style="${officePos(a)}" aria-label="${s.name}（${s.role}）">
+    const sleep = officePhase === 'night' && a.state === 'seat' && !a.job;
+    return `<button type="button" class="of-actor tag-${s.tag}${a.state === 'walk' ? ' walking' : ''}${sleep ? ' sleeping' : ''}${officeSelected === s.id ? ' selected' : ''}" data-office-id="${s.id}" style="${officePos(a)}" aria-label="${s.name}（${s.role}）">
       <span class="of-say"></span><span class="of-name">${s.name}</span>
       <span class="of-fig" style="transform:scaleX(${a.face})">${officeActorSvg(s.id)}</span>
     </button>`;
   }).join('');
 
-  scene.innerHTML = `${officeBgSvg(d)}
+  scene.dataset.phase = officePhase;
+  // 晚上和傍晚：燈亮起來的位置（桌燈、螢幕、貨架、小豬、沙發、茶水機）
+  const glows = [[165, 200], [478, 290], [800, 210], [190, 820], [810, 1150], [547, 790]]
+    .map(([x, y]) => `<span class="of-glow" style="left:${x / 10}%;top:${(y / 13).toFixed(2)}%"></span>`).join('');
+  scene.innerHTML = `${officeBgSvg(d)}<div class="of-shade"></div>${glows}
     <button type="button" class="of-pigbtn mood-${d.mood}${officeSelected === 'piggy' ? ' selected' : ''}" data-office-id="piggy" aria-label="小豬（存錢筒）">
       <span class="of-name">小豬</span>${officePiggySvg(d)}
     </button>
     ${actorsHtml}`;
 
   const status = document.getElementById('office-status');
-  if (status) status.textContent = officeStatusText(d);
+  if (status) status.innerHTML = officeStatusText(d);
   const pause = document.getElementById('office-pause');
   if (pause) pause.textContent = officePaused ? '繼續' : '暫停';
 
@@ -894,8 +1197,9 @@ function drawOffice() {
       const ava = s.id === 'piggy' ? '<span class="of-ava of-ava-pig">🐷</span>' : `<span class="of-ava">${officeActorSvg(s.id)}</span>`;
       return `<button type="button" class="of-card${officeSelected === s.id ? ' selected' : ''}" data-office-id="${s.id}">
         ${ava}
-        <span class="of-card-main"><span class="of-card-top"><b>${s.name}</b><em class="of-tag tag-${s.tag}">${s.role}</em></span><small data-office-act="${s.id}">${esc(act)}</small></span>
-        <span class="of-card-num"><small>${label}</small><b data-office-num="${s.id}">${num}</b></span>
+        <span class="of-card-main"><span class="of-card-top"><b>${s.name}</b><em class="of-tag tag-${s.tag}">${s.role}</em></span>
+          <span class="of-card-num"><small>${label}</small><b data-office-num="${s.id}">${num}</b></span></span>
+        <small class="of-card-act" data-office-act="${s.id}">${esc(act)}</small>
       </button>`;
     }).join('');
   }
@@ -910,7 +1214,7 @@ function officeRefreshTexts() {
     if (el) el.textContent = officeActivity(s.id, d);
   });
   const status = document.getElementById('office-status');
-  if (status) status.textContent = officeStatusText(d);
+  if (status) status.innerHTML = officeStatusText(d);
 }
 
 function officeHush(id) {
@@ -964,6 +1268,13 @@ function officeTick(ts) {
   officeLastTs = ts;
   const d = officeData_;
   let changed = false;
+  // 每 30 秒確認一次時段，換時段就重畫（燈光、睡覺）
+  if (ts >= officePhaseCheckAt) {
+    officePhaseCheckAt = ts + 30000;
+    if (officePhaseNow() !== officePhase) { drawOffice(); officeRaf = requestAnimationFrame(officeTick); return; }
+  }
+  const night = officePhase === 'night';
+  officeMeetingTick(ts, d);
   const walking = Object.values(officeActors).filter(a => a.state === 'walk').length;
   let canStart = walking < 3;
 
@@ -996,18 +1307,22 @@ function officeTick(ts) {
         else { a.x += dx / dist * step; a.y += dy / dist * step; step = 0; }
       }
       if (!a.path.length) {
-        if (a.back) { a.state = 'seat'; a.zone = s.seat.zone; a.spot = null; a.back = false; a.face = 1; a.until = ts + 9000 + Math.random() * 12000; }
+        if (a.back) {
+          a.state = 'seat'; a.zone = s.seat.zone; a.spot = null; a.back = false; a.face = 1; a.until = ts + 9000 + Math.random() * 12000;
+          if (el && night) el.classList.add('sleeping');
+        }
         else { a.state = 'visit'; a.zone = OFFICE_SPOTS[a.spot].zone; a.until = ts + (a.job ? a.job.steps[a.job.i].stay : 3500 + Math.random() * 3000); }
         changed = true;
         if (el) el.classList.remove('walking');
         const stNow = a.job && a.state === 'visit' ? a.job.steps[a.job.i] : null;
         if (stNow && stNow.waitFor) { a.waiting = true; a.until = ts + 14000; }   // 等同伴到了再開始聊
         else {
-          if (d && a.state === 'visit' && !(stNow && stNow.fx === 'talk') && (stNow || ts >= officeQuietUntil)) officeSay(s.id, officeActivity(s.id, d));
+          if (d && a.state === 'visit' && !(stNow && (stNow.fx === 'talk' || stNow.fx === 'meet')) && (stNow || ts >= officeQuietUntil)) officeSay(s.id, officeActivity(s.id, d));
           if (stNow) officeJobFx(a.job);
         }
       }
       if (el) {
+        el.classList.remove('sleeping');
         el.style.left = (a.x / 10).toFixed(2) + '%';
         el.style.top = (a.y / 13).toFixed(2) + '%';
         el.style.zIndex = Math.round(a.y);
@@ -1023,6 +1338,7 @@ function officeTick(ts) {
         if (a.job.i + 1 < a.job.steps.length) a.job.i++;
         else {
           if (a.job.rec.type === 'settle') setTimeout(() => officeSay(s.id, '月底結算完成 ✓'), 0);
+          if (a.job.rec.type === 'love') setTimeout(() => officeSay(s.id, '每月的愛已存進小豬 ✓'), 0);
           a.job = null;
         }
       }
@@ -1039,6 +1355,7 @@ function officeTick(ts) {
         a.back = false;
         if (d) setTimeout(() => officeSay(s.id, st.go), 0);
       } else if (a.state === 'seat') {
+        if (night) { a.until = ts + 8000; return; }   // 晚上在座位上睡覺，不走動
         if (!canStart) { a.until = ts + 1500; return; }
         if (settleOn && member) { a.until = ts + 2000; return; }
         // 有事要忙的員工比較常待在座位上
@@ -1049,6 +1366,8 @@ function officeTick(ts) {
         const picks = jobBusy ? s.visits.filter(v => v !== 'desk' && v !== 'piggy' && v !== 'tea') : s.visits;
         if (!picks.length) { a.until = ts + 4000; return; }
         a.spot = picks[Math.floor(Math.random() * picks.length)];
+        // 早上大家愛去茶水間泡咖啡
+        if (officePhase === 'morning' && picks.includes('tea') && Math.random() < 0.5) a.spot = 'tea';
         const spot = OFFICE_SPOTS[a.spot];
         a.path = officePath(a, a.zone, spot, spot.zone);
         a.back = false;
@@ -1073,12 +1392,46 @@ function officeTick(ts) {
   }
   // 沒有人在跑腿時，每隔一陣子安排一段角色互動
   if (d && ts >= officeSkitAt) {
-    const busy = settleOn || Object.values(officeActors).some(a => a.job) || Object.values(officeJobs).some(q => q.length);
+    const busy = settleOn || officeMeeting || Object.values(officeActors).some(a => a.job) || Object.values(officeJobs).some(q => q.length);
     if (busy) officeSkitAt = ts + 3000;
     else { officeSkitAt = ts + 13000 + Math.random() * 9000; if (officeStartSkit(d, ts)) changed = true; }
   }
   if (changed) officeRefreshTexts();
   officeRaf = requestAnimationFrame(officeTick);
+}
+
+// 月會：等大家手上的事做完，所有人走到白板前；到齊（或等太久）就開始報告，報告完各自回座
+function officeMeetingTick(ts, d) {
+  const m = officeMeeting;
+  if (!m || !d || !officePrev || officePrev.none) return;
+  const ids = ['chart', 'book', 'stock', 'cash', 'elf', 'fox', 'dog'];
+  if (m.pending) {
+    const busy = Object.values(officeActors).some(a => a.job) || Object.values(officeJobs).some(q => q.length);
+    if (busy || officePhase === 'night') return;
+    m.pending = false; m.launchedAt = ts; m.ids = ids;
+    ids.forEach(id => officeJobs[id].push({ type: 'meeting', steps: [{ spot: 'meet_' + id, fx: 'meet', stay: 600000, go: '去白板前開月會', at: '開月會中 📋' }] }));
+    if (!m.force) { try { localStorage.setItem(OFFICE_MEET_PREFIX + officePrev.sheet, '1'); } catch (e) { /* ignore */ } }
+    return;
+  }
+  if (m.started) {
+    if (ts >= m.endAt) officeMeeting = null;
+    return;
+  }
+  const inPlace = id => { const a = officeActors[id]; return a.state === 'visit' && a.job && a.job.rec.type === 'meeting'; };
+  const here = m.ids.filter(inPlace);
+  if (here.length === m.ids.length || (here.length >= 3 && ts - m.launchedAt > 35000)) {
+    m.started = true;
+    const lines = officeMeetingLines(d).filter(l => here.includes(l.who));
+    officeJobFx({ i: 0, steps: [{ fx: 'talk', lines }], rec: { type: 'skit' } });
+    const end = ts + lines.length * 2100 + 2600;
+    m.endAt = end;
+    // 沒到的人取消，到了的人聽完再走
+    m.ids.forEach(id => {
+      const a = officeActors[id];
+      if (inPlace(id)) a.until = end;
+      else if (a.job && a.job.rec.type === 'meeting') a.until = ts;
+    });
+  }
 }
 
 function officeStart() {
@@ -1112,6 +1465,8 @@ function renderOffice() {
   }
   drawOffice();
   officeStart();
+  officeLoadPrev();
+  officeMaybeMeeting(false);
   if (!officeInvRequested) {
     officeInvRequested = true;
     Promise.resolve(loadInventory()).then(() => { if (officeVisible()) drawOffice(); }).catch(() => {});
@@ -1145,6 +1500,11 @@ document.addEventListener('click', e => {
     }, 80);
     return;
   }
+  if (e.target.closest('[data-office-meeting]')) {
+    officeSelected = null;
+    if (officeMaybeMeeting(true)) { drawOffice(); document.getElementById('office-scene').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+    return;
+  }
   const go = e.target.closest('[data-office-go]');
   if (go) {
     const name = go.dataset.officeGo;
@@ -1155,8 +1515,10 @@ document.addEventListener('click', e => {
   const hit = e.target.closest('[data-office-id]');
   if (hit) {
     const id = hit.dataset.officeId;
+    const inScene = !!hit.closest('#office-scene');   // 重畫前先記下來：重畫後原本的按鈕就不在畫面上了
     officeSelected = officeSelected === id ? null : id;
     drawOffice();
+    if (inScene) officeReact(id);
     if (officeSelected && hit.classList.contains('of-card')) {
       const detail = document.getElementById('office-detail');
       if (detail) detail.scrollIntoView({ block: 'nearest', behavior: 'smooth' });

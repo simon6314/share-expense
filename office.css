@@ -213,3 +213,18 @@
 @media (prefers-reduced-motion: reduce) {
   .of-actor.sleeping .of-fig svg, .of-actor.sleeping .of-fig::after, .of-actor.react .of-fig svg, .of-alarm, .of-star, .of-lantern { animation: none; }
 }
+
+/* 辦公室等級列 */
+.of-level { max-width: 640px; margin: 0 auto 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 7px 12px; border-radius: 10px;
+  background: linear-gradient(90deg, #fff6dc, #ffeef3); border: 1px solid #f2dca0; font-size: 12px; color: var(--text2); text-align: left; }
+.of-level[hidden] { display: none; }
+.of-level b { color: #9a6614; font-size: 13px; }
+.of-level-next { color: var(--text3); }
+/* 升級家具、換季的小動畫 */
+.of-fish { animation: of-swim 4s ease-in-out infinite; }
+@keyframes of-swim { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-26px); } }
+.of-paw { transform-box: fill-box; transform-origin: 50% 100%; animation: of-beckon 1.6s ease-in-out infinite; }
+@keyframes of-beckon { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-25deg); } }
+.of-fan { transform-box: fill-box; transform-origin: 0% 100%; animation: of-fanning 0.8s ease-in-out infinite; }
+@keyframes of-fanning { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-14deg); } }
+@media (prefers-reduced-motion: reduce) { .of-fish, .of-paw, .of-fan { animation: none; } }

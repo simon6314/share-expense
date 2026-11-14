@@ -25,6 +25,16 @@ let officePrevLoading = false;
 let officeMeeting = null;           // 月會：{ pending } → { ids, started, launchedAt }
 const OFFICE_MEET_PREFIX = 'shareExpense.office.meeting:';   // 每個月的月會開過了沒
 const OFFICE_EVENT_PREFIX = 'shareExpense.office.event:';    // 每天只演一次的事件（入帳、過期）
+const OFFICE_BIG = 5000;            // 單筆支出超過這個金額，大家會圍過來看
+// 辦公室升級：累積記帳筆數解鎖家具
+const OFFICE_LEVELS = [
+  { at: 50, name: '書櫃' }, { at: 150, name: '地毯' }, { at: 300, name: '魚缸' }, { at: 500, name: '招財貓' },
+];
+const OFFICE_STATS_KEY = 'shareExpense.office.stats';     // 各月份的筆數與記帳日期（下次打開先用）
+const OFFICE_LEVEL_KEY = 'shareExpense.office.level';     // 上次看到的等級（升級時慶祝）
+let officeStats = null;             // { sheets: { 'YYYY/M月': { count, days: ['YYYY-MM-DD'] } } }
+let officeStatsLoading = false;
+try { officeStats = JSON.parse(localStorage.getItem(OFFICE_STATS_KEY) || 'null'); } catch (e) { officeStats = null; }
 // 紀念日（MM-DD），填上後當天辦公室會掛滿愛心
 const OFFICE_ANNIVERSARY = '';
 // 農曆新年（初一）：前 10 天到元宵節掛燈籠
@@ -114,6 +124,63 @@ async function officeLoadPrev() {
     officePrevLoading = false;
   }
   if (officePrev && !officePrev.none && officeVisible()) { drawOffice(); officeMaybeMeeting(false); }
+}
+
+// 一個月份的筆數與記帳日期
+function officeSheetStats(sheet, recs) {
+  const m = String(sheet).match(/(\d{4})\/(\d{1,2})月/);
+  const year = m ? m[1] : String(new Date().getFullYear());
+  const real = (recs || []).filter(r => !isSummaryRow(r) && r.item !== '帳戶餘額' && r.owner !== '');
+  const days = [...new Set(real.map(r => toMMDD(r.date)).filter(Boolean).map(k => `${year}-${k.replace('/', '-')}`))];
+  return { count: real.length, days };
+}
+
+// 讀所有月份（有快取就用快取），算累積筆數；只在背景做，不擋畫面
+async function officeLoadStats() {
+  if (officeStatsLoading) return;
+  officeStatsLoading = true;
+  try {
+    const list = await apiCall({ action: 'getSheets' });
+    const vers = await getVersions();
+    const names = (list.sheets || []).filter(n => /\d{4}\/\d{1,2}月/.test(n));
+    const out = {};
+    for (const n of names) {
+      try { out[n] = officeSheetStats(n, await fetchMonth(n, vers, false)); } catch (e) { if (officeStats && officeStats.sheets[n]) out[n] = officeStats.sheets[n]; }
+    }
+    officeStats = { sheets: out };
+    try { localStorage.setItem(OFFICE_STATS_KEY, JSON.stringify(officeStats)); } catch (e) { /* ignore */ }
+    if (officeVisible()) drawOffice();
+  } catch (e) { /* 離線時沿用上次的統計 */ }
+  officeStatsLoading = false;
+}
+
+// 等級、累積筆數、連續記帳天數（目前月份用畫面上最新的資料）
+function officeLevelInfo() {
+  if (!officeStats) return null;
+  const sheets = { ...officeStats.sheets, [currentSheet()]: officeSheetStats(currentSheet(), records) };
+  const total = Object.values(sheets).reduce((t, v) => t + v.count, 0);
+  const days = new Set(Object.values(sheets).flatMap(v => v.days));
+  const key = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const day = new Date(); day.setHours(12, 0, 0, 0);
+  if (!days.has(key(day))) day.setDate(day.getDate() - 1);   // 今天還沒記，從昨天算起
+  let streak = 0;
+  while (days.has(key(day)) && streak < 400) { streak++; day.setDate(day.getDate() - 1); }
+  const level = OFFICE_LEVELS.filter(l => total >= l.at).length;
+  return { total, streak, level, next: OFFICE_LEVELS[level] || null, unlocked: OFFICE_LEVELS.slice(0, level).map(l => l.name) };
+}
+
+// 升級時：撒彩帶、大家喊一聲（每台裝置各一次）
+function officeCheckLevelUp(info) {
+  if (!info) return;
+  let prev = null;
+  try { const v = localStorage.getItem(OFFICE_LEVEL_KEY); prev = v === null ? null : parseInt(v, 10); localStorage.setItem(OFFICE_LEVEL_KEY, String(info.level)); } catch (e) { return; }
+  if (prev === null || info.level <= prev) return;
+  const name = OFFICE_LEVELS[info.level - 1].name;
+  setTimeout(() => {
+    officeBurst(500, 640, ['🎉', '🎊', '✨', '⭐'], 18);
+    officeSay('book', `辦公室升級了！多了${name} 🎉`);
+    setTimeout(() => officeSay('fox', '哇～好棒！'), 1600);
+  }, 1200);
 }
 
 // 這個月花得快不快：跟上個月同一天以前的支出比
@@ -227,7 +294,9 @@ function officeData() {
   const ratio = pool > 0 ? Math.max(0, Math.min(1, balance / pool)) : (balance > 0 ? 1 : 0);
   const mood = balance < 0 ? 'cry' : (ratio < 0.2 ? 'worry' : 'happy');
 
-  return { starting, income, arrived, expense, balance, pool, ratio, mood, entries, sorted, todayCount, love, settled, back, cats, items, alerts };
+  const biggest = realRecs.filter(r => r.expense >= OFFICE_BIG && !isPrepaid(r) && r.owner !== '').sort((a, b) => b.expense - a.expense)[0] || null;
+
+  return { starting, income, arrived, expense, balance, pool, ratio, mood, entries, sorted, todayCount, love, settled, back, cats, items, alerts, biggest };
 }
 
 // ── 角色與物件的 SVG ──────────────────────────────────────────
@@ -343,9 +412,23 @@ function officeStaffSvg(id) {
       </g>
     </g>`;
 }
+// 換季服裝：冬天（12–2 月）圍巾、黑柴穿背心；夏天（6–8 月）手拿小扇子
+function officeOutfit(id) {
+  const m = new Date().getMonth() + 1;
+  const winter = m === 12 || m <= 2, summer = m >= 6 && m <= 8;
+  if (winter) {
+    if (id === 'dog') return '<path d="M23 66 Q40 59 57 66 L58 79 Q40 86 22 79 Z" fill="#7fb6f0"/><path d="M26 72 Q40 67 54 72" stroke="#fff" stroke-width="2" fill="none" stroke-dasharray="3 3"/>';
+    const c = { book: '#ef7d7d', chart: '#f2b85c', stock: '#7fb6f0', cash: '#8fd3b0', elf: '#ef5f7a', fox: '#7fb6f0' }[id] || '#ef7d7d';
+    const y = id === 'elf' ? 55 : (id === 'fox' ? 54 : 56);
+    return `<path d="M23 ${y} Q40 ${y + 8} 57 ${y} L57 ${y + 7} Q40 ${y + 15} 23 ${y + 7} Z" fill="${c}"/>
+      <rect x="44" y="${y + 8}" width="8" height="15" rx="3" fill="${c}"/><path d="M45 ${y + 21} h6" stroke="#fff" stroke-width="1.6"/>`;
+  }
+  if (summer && id !== 'dog') return `<g class="of-fan"><path d="M60 70 L70 54 Q78 58 74 68 Z" fill="#9fd8cb" stroke="#fff" stroke-width="1.4"/><path d="M60 70 L66 79" stroke="#c9a27c" stroke-width="2.4" stroke-linecap="round"/></g>`;
+  return '';
+}
 function officeActorSvg(id) {
   const inner = (id === 'elf' || id === 'fox' || id === 'dog') ? officeCharSvg(id) : officeStaffSvg(id);
-  return `<svg viewBox="0 0 80 90" aria-hidden="true"><ellipse cx="40" cy="86" rx="20" ry="4" fill="rgba(90,70,50,0.18)"/>${inner}</svg>`;
+  return `<svg viewBox="0 0 80 90" aria-hidden="true"><ellipse cx="40" cy="86" rx="20" ry="4" fill="rgba(90,70,50,0.18)"/>${inner}${officeOutfit(id)}</svg>`;
 }
 
 // 小豬存錢筒：肚子裡的金幣堆到哪，就是餘額比例；餘額偏低會冒汗，變負數會哭、肚子空空
@@ -400,6 +483,46 @@ function officePiggySvg(d) {
   </svg>`;
 }
 
+
+// 辦公室升級：書櫃、地毯、魚缸、招財貓；連續記帳 7 天銀獎盃、30 天金獎盃
+function officeUpgradeSvg() {
+  const info = officeLevelInfo();
+  if (!info) return '';
+  const has = n => info.unlocked.includes(n);
+  let g = '';
+  if (has('書櫃')) {
+    const cols = ['#ef7d7d', '#7fb6f0', '#ffd66b', '#8fd3b0', '#c9a0e6', '#f4a261'];
+    g += `<rect x="26" y="262" width="34" height="210" rx="6" fill="#c9a27c"/>` +
+      [0, 1, 2, 3, 4, 5, 6, 7, 8].map(i => `<rect x="30" y="${268 + i * 22}" width="26" height="18" rx="3" fill="${cols[i % cols.length]}"/>`).join('');
+  }
+  if (has('魚缸')) g += `<g><rect x="372" y="1000" width="84" height="58" rx="10" fill="#bfe3f0" stroke="#8ec5dc" stroke-width="4"/>
+      <path d="M376 1046 h76 v8 h-76 Z" fill="#e8d7b5"/><path d="M390 1046 q-4 -14 2 -24 M400 1046 q4 -12 -2 -20" stroke="#8fd3b0" stroke-width="3" fill="none"/>
+      <g class="of-fish"><path d="M420 1020 q10 -8 18 0 q-8 8 -18 0 Z M438 1020 l7 -5 v10 Z" fill="#f4a261"/></g>
+      <circle cx="412" cy="1010" r="2.5" fill="#fff" opacity="0.8"/><circle cx="416" cy="1003" r="1.8" fill="#fff" opacity="0.8"/></g>`;
+  if (has('招財貓')) g += `<g transform="translate(300 1086)" class="of-lucky">
+      <ellipse cx="0" cy="22" rx="20" ry="16" fill="#fffaf2" stroke="#e8d7c0" stroke-width="2"/>
+      <circle cx="0" cy="0" r="17" fill="#fffaf2" stroke="#e8d7c0" stroke-width="2"/>
+      <path d="M-14 -8 L-12 -22 L-3 -14 Z M14 -8 L12 -22 L3 -14 Z" fill="#fffaf2" stroke="#e8d7c0" stroke-width="2"/>
+      <path d="M-7 -1 q2 -2 4 0 M3 -1 q2 -2 4 0" stroke="#3b2f2f" stroke-width="1.6" fill="none"/>
+      <path d="M-14 12 Q0 18 14 12" stroke="#ef5f7a" stroke-width="3" fill="none"/><circle cx="0" cy="16" r="3" fill="#ffd66b"/>
+      <g class="of-paw"><ellipse cx="18" cy="-6" rx="5" ry="8" fill="#fffaf2" stroke="#e8d7c0" stroke-width="2"/></g>
+      <rect x="-9" y="26" width="18" height="11" rx="2" fill="#ffd66b"/><text x="0" y="35" font-size="8" font-weight="700" text-anchor="middle" fill="#b9831c">千萬</text></g>`;
+  if (info.streak >= 7) {
+    const gold = info.streak >= 30;
+    g += `<g transform="translate(76 40)"><path d="M-14 0 h28 v6 q0 16 -14 18 q-14 -2 -14 -18 Z" fill="${gold ? '#ffd66b' : '#d6dde4'}" stroke="${gold ? '#d99a1e' : '#9fb0bf'}" stroke-width="2"/>
+      <path d="M-14 4 q-9 0 -8 8 q1 6 9 6 M14 4 q9 0 8 8 q-1 6 -9 6" fill="none" stroke="${gold ? '#d99a1e' : '#9fb0bf'}" stroke-width="2"/>
+      <rect x="-3" y="24" width="6" height="7" fill="${gold ? '#d99a1e' : '#9fb0bf'}"/><rect x="-10" y="31" width="20" height="6" rx="2" fill="#a9754f"/>
+      <text x="0" y="14" font-size="10" font-weight="700" text-anchor="middle" fill="${gold ? '#8a5a12' : '#56677a'}">${gold ? 30 : 7}</text></g>`;
+  }
+  return g;
+}
+
+// 地毯畫在家具下面（茶几下）
+function officeRugSvg() {
+  const info = officeLevelInfo();
+  if (!info || !info.unlocked.includes('地毯')) return '';
+  return `<ellipse cx="812" cy="985" rx="128" ry="74" fill="#f7c9a8"/><ellipse cx="812" cy="985" rx="110" ry="60" fill="none" stroke="#fff4e8" stroke-width="5" stroke-dasharray="10 8"/>`;
+}
 
 // 節日裝飾：聖誕樹、燈籠和福字、紀念日愛心
 function officeDecorSvg() {
@@ -469,6 +592,8 @@ function officeBgSvg(d) {
       <rect width="66" height="46" rx="8" fill="${p.arrived ? color : '#f1ece6'}" stroke="rgba(90,70,50,0.22)" stroke-width="2"/>
       <path d="M3 6 L33 27 L63 6" fill="none" stroke="rgba(90,70,50,0.25)" stroke-width="2.4"/>
       <path d="M33 22 c-6 -9 -16 -1 -9 6 l9 8 9 -8 c7 -7 -3 -15 -9 -6 Z" fill="${p.arrived ? '#ffffff' : '#d8cfc5'}"/>
+      <circle cx="62" cy="4" r="13" fill="#ffffff" stroke="rgba(90,70,50,0.2)" stroke-width="2"/>
+      <text x="62" y="10.5" font-size="17" text-anchor="middle">${p.name === '精靈' ? '🐎' : '🦊'}</text>
     </g></g>`;
   const desk = (x, y, w, tone) => `
     <rect x="${x}" y="${y + 12}" width="${w}" height="66" rx="14" fill="${tone[1]}"/>
@@ -490,7 +615,10 @@ function officeBgSvg(d) {
       <text x="64" y="537">記帳區</text><text x="652" y="537">倉庫</text>
       <text x="386" y="1258">金庫</text><text x="512" y="1258">休息區</text>
     </g>
-    <!-- 記帳區：白板、兩張桌子、盆栽 -->
+    <!-- 記帳區：白板、兩張桌子、盆栽；本月最大一筆貼在白板下 -->
+    ${d.biggest ? `<g transform="rotate(-3 505 225)"><rect x="420" y="196" width="170" height="56" rx="5" fill="#fff3a8" stroke="#e8d36a" stroke-width="2"/><circle cx="505" cy="200" r="6" fill="#ef5f7a"/>
+      <text x="505" y="222" font-size="18" font-weight="700" text-anchor="middle" fill="#8a6d1c">最大筆 ${fmt(d.biggest.expense)}</text>
+      <text x="505" y="244" font-size="17" text-anchor="middle" fill="#8a6d1c">${t(d.biggest.item, 8)}</text></g>` : ''}
     ${mv(30, `<rect x="296" y="34" width="296" height="124" rx="16" fill="#ffffff" stroke="${d.pace && d.pace.fast ? '#ef5f7a' : '#9fd8cb'}" stroke-width="8"/>${board}${d.pace && d.pace.fast ? `<g class="of-alarm"><rect x="372" y="-14" width="144" height="34" rx="17" fill="#ef5f7a"/><text x="444" y="10" font-size="22" font-weight="700" text-anchor="middle" fill="#fff">⚠ 花比較快</text></g>` : ''}`)}
     ${mv(51, `${desk(60, 108, 215, wood)}
     <path d="M118 150 Q140 138 162 148 Q184 138 206 150 L206 126 Q184 115 162 124 Q140 115 118 126 Z" fill="#ffffff" stroke="#d9c7b0" stroke-width="2"/>
@@ -519,8 +647,10 @@ function officeBgSvg(d) {
     <!-- 倉庫的垃圾桶、金庫門口的信箱 -->
     <g><rect x="776" y="478" width="44" height="54" rx="8" fill="#b9cbd6"/><rect x="770" y="470" width="56" height="12" rx="6" fill="#9fb4c4"/><path d="M788 492 v30 M798 492 v30 M808 492 v30" stroke="#9fb4c4" stroke-width="3" stroke-linecap="round"/></g>
     <g><rect x="470" y="600" width="12" height="52" fill="#c9a27c"/><rect x="452" y="574" width="48" height="34" rx="10" fill="#f08fb0"/><rect x="458" y="584" width="36" height="6" rx="3" fill="#c2557f"/><path d="M496 578 v-14 h10 v8 h-10" fill="#ffd66b"/></g>
+    ${officeUpgradeSvg()}
     ${officeDecorSvg()}
-    <!-- 休息區：茶水機、茶几、沙發、盆栽、黑柴的窩 -->
+    <!-- 休息區：地毯（升級）、茶水機、茶几、沙發、盆栽、黑柴的窩 -->
+    ${officeRugSvg()}
     ${mv(310, `<ellipse cx="575" cy="800" rx="64" ry="34" fill="#b9a48d"/><ellipse cx="575" cy="793" rx="64" ry="34" fill="#d7c4ae"/><ellipse cx="575" cy="790" rx="48" ry="23" fill="#f3e9db"/>
     <g transform="translate(628 824) rotate(-20)"><rect x="-11" y="-2.5" width="22" height="5" rx="2.5" fill="#fff"/><circle cx="-11" cy="-3" r="4" fill="#fff"/><circle cx="-11" cy="3" r="4" fill="#fff"/><circle cx="11" cy="-3" r="4" fill="#fff"/><circle cx="11" cy="3" r="4" fill="#fff"/></g>`)}
     ${mv(220, `<rect x="510" y="518" width="74" height="104" rx="14" fill="#cfe0f2"/><rect x="520" y="528" width="54" height="40" rx="8" fill="#f7fbff"/>
@@ -573,8 +703,9 @@ function officeDetailHtml(key, d) {
   const bars = d.cats.slice(0, 6).map(c => `<div class="of-bar-row"><span>${esc(c.name)}</span><i><em style="width:${Math.max(4, c.value / max * 100).toFixed(0)}%"></em></i><b>${fmt(c.value)}</b></div>`).join('');
   const pace = d.pace ? `<div class="of-row"><span>跟上月同期比</span><b class="${d.pace.pct > 0 ? 'of-exp' : 'of-inc'}">${d.pace.pct > 0 ? '+' : ''}${d.pace.pct}%（上月同期 ${fmt(d.pace.same)}）</b></div>` : '';
   const replay = officePrev && !officePrev.none && officePrev.sheet === currentSheet() ? '<button type="button" class="of-go" data-office-meeting>重播月會</button>' : '';
+  const big = d.biggest ? `<div class="of-row"><span>本月最大一筆</span><b class="of-exp">${esc(d.biggest.item)} ${fmt(d.biggest.expense)}</b></div>` : '';
   return `<h4>📊 白板 <small>小析負責</small></h4>
-    ${pace}${bars || '<p class="of-note">這個月還沒有支出。</p>'}
+    ${pace}${big}${bars || '<p class="of-note">這個月還沒有支出。</p>'}
     ${d.pace && d.pace.fast ? '<p class="of-note">這個月的支出速度比上個月快，白板會亮紅框提醒。</p>' : ''}
     <div class="of-actions">${replay}${go('analysis', '看分析')}</div>`;
 }
@@ -592,6 +723,10 @@ const OFFICE_SPOTS = {
   tea2:    { x: 738, y: 832, zone: 'D' },   // 茶水間的第二個位置（一起喝茶）
   mail:    { x: 412, y: 735, zone: 'C' },   // 金庫門口（收信）
   trash:   { x: 745, y: 545, zone: 'B' },   // 倉庫的垃圾桶旁
+  wow_stock: { x: 120, y: 445, zone: 'A' },   // 大筆支出：大家圍到記帳區
+  wow_cash:  { x: 235, y: 450, zone: 'A' },
+  wow_chart: { x: 350, y: 445, zone: 'A' },
+  wow_dog:   { x: 300, y: 545, zone: 'A' },
   meet_chart: { x: 252, y: 262, zone: 'A' },   // 月會：小析站在白板左邊報告
   meet_stock: { x: 115, y: 440, zone: 'A' },    // 後排
   meet_cash:  { x: 228, y: 440, zone: 'A' },
@@ -685,12 +820,31 @@ function officeActivity(id, d) {
   return o.count ? `在沙發休息・本月花了 ${fmt(o.expense)}` : '在沙發休息・這個月還沒有支出';
 }
 
+// 大筆支出：阿貨、阿庫、小析、黑柴圍到記帳區來看，小析記在白板上
+function officeQueueWow(item, amount) {
+  const name = String(item || '');
+  const plan = [
+    ['stock', 'wow_stock', '哇！💸'],
+    ['cash', 'wow_cash', `${fmt(amount)}！好大一筆`],
+    ['dog', 'wow_dog', '汪？！'],
+    ['chart', 'wow_chart', `「${name}」${fmt(amount)}，我記在白板上了 📌`],
+  ];
+  // 只有阿貨喊一聲，其他人安靜跑過去（免得對話框疊在一起）
+  plan.forEach(([id, spot, line]) => officeJobs[id].push({ type: 'wow', steps: [{ spot, fx: 'wow', stay: 5200, go: id === 'stock' ? '有大筆支出，快來看！' : '跑去看大筆支出', quiet: id !== 'stock', at: line }] }));
+  setTimeout(() => { if (officeActors.book && officeActors.book.state === 'seat') officeWakeSay('book', '哇，好大一筆！'); }, 2500);
+}
+
 // 每天一次的事件：每月的愛入帳當天、庫存有東西過期
 function officeDailyEvents(d) {
   if (!officeIsCurrentMonth()) return;
   d.love.filter(p => p.arrivedToday && p.amount > 0).forEach(p => {
     if (officeOnce('love:' + p.name)) officeJobs.cash.push({ type: 'love', name: p.name, amount: p.amount });
   });
+  const now = new Date();
+  const todayKey = String(now.getMonth() + 1).padStart(2, '0') + '/' + String(now.getDate()).padStart(2, '0');
+  const big = d.entries.filter(r => r.expense >= OFFICE_BIG && toMMDD(r.date) === todayKey && !(r.note && r.note.includes('先付')))
+    .sort((a, b) => b.expense - a.expense)[0];
+  if (big && officeOnce('big:' + big.item + ':' + big.expense)) officeQueueWow(big.item, big.expense);
   const expired = d.alerts.filter(a => a.text === '已過期');
   if (expired.length && officeOnce('expired:' + expired.map(a => a.name).join(','))) {
     officeJobs.stock.push({ type: 'expired', names: expired.slice(0, 3).map(a => a.name), total: expired.length });
@@ -699,7 +853,7 @@ function officeDailyEvents(d) {
 
 // ── 記帳後的跑腿：記帳區登記 → 金庫領錢（收入則是存錢）──────────
 function officeJobSteps(j) {
-  if (j.type === 'skit' || j.type === 'meeting') return j.steps;
+  if (j.type === 'skit' || j.type === 'meeting' || j.type === 'wow') return j.steps;
   if (j.type === 'love') {
     // 每月的愛入帳：阿庫到門口收信，再拿去投進小豬
     return [
@@ -915,6 +1069,7 @@ function officeNoteRecord(data) {
   // 確認這筆真的寫進去了
   if (!records.some(r => r.item === data.item && (income ? r.income : r.expense) === amount)) return;
   officeJobs[id].push({ item: String(data.item || ''), amount, income });
+  if (!income && amount >= OFFICE_BIG && officeOnce('big:' + String(data.item || '') + ':' + amount)) officeQueueWow(data.item, amount);
   if (officeJobs[id].length > 3) officeJobs[id].shift();
   const sheet = currentSheet();
   if (officeNewCount[sheet] !== undefined) {
@@ -987,9 +1142,9 @@ function officeReact(id) {
   if (id === 'dog') {
     officeDogPets++;
     const n = document.querySelector('[data-office-num="dog"]'); if (n) n.textContent = officeDogPets + ' 次';
-    officeFloat('🐾', false, { x: a.x, y: a.y - 30 });
+    officeFloat('🐾', false, { x: a.x, y: a.y - 75 });
   }
-  if (id === 'elf' || id === 'fox') officeFloat('💗', false, { x: a.x, y: a.y - 30 });
+  if (id === 'elf' || id === 'fox') officeFloat('💗', false, { x: a.x, y: a.y - 75 });
 }
 
 // 精靈和小狐狸靠在一起（各自往對方那邊傾）
@@ -1006,6 +1161,26 @@ function officeLean(ms) {
     clearTimeout(el._lean);
     el._lean = setTimeout(() => el.classList.remove('lean-r', 'lean-l'), ms);
   });
+}
+
+// 從某個位置噴出一把圖示（升級彩帶等）
+function officeBurst(cx, cy, icons, n) {
+  const scene = document.getElementById('office-scene');
+  if (!scene || officePaused) return;
+  for (let i = 0; i < n; i++) {
+    const el = document.createElement('span');
+    el.className = 'of-love';
+    el.textContent = icons[i % icons.length];
+    el.style.left = ((cx + (Math.random() - 0.5) * 300) / 10).toFixed(2) + '%';
+    el.style.top = (cy / 13).toFixed(2) + '%';
+    el.style.zIndex = '4100';
+    el.style.setProperty('--dx', ((Math.random() - 0.5) * 30).toFixed(1) + 'cqw');
+    el.style.setProperty('--dy', (-(10 + Math.random() * 25)).toFixed(1) + 'cqw');
+    el.style.setProperty('--s', (0.9 + Math.random() * 0.8).toFixed(2));
+    el.style.animationDelay = (i * 0.05).toFixed(2) + 's';
+    scene.appendChild(el);
+    setTimeout(() => el.remove(), 3200);
+  }
 }
 
 // 從兩人中間冒出愛心和粉紅泡泡
@@ -1061,14 +1236,15 @@ function officeJobFx(job) {
       // 換人講話時，先收起對方的對話框，才不會疊在一起
       [...new Set(st.lines.map(x => x.who))].filter(w => w !== l.who).forEach(officeHush);
       officeSay(l.who, l.text);
-      if (l.emoji) officeFloat(l.emoji, false, { x: o.x, y: o.y - 30 });
+      if (l.emoji) officeFloat(l.emoji, false, { x: o.x, y: o.y - 75 });
       if (l.pet) { officeDogPets++; const n = document.querySelector('[data-office-num="dog"]'); if (n) n.textContent = officeDogPets + ' 次'; }
       if (l.lean) officeLean(2600 + 2100);
       if (l.burst) officeLoveBurst();
-      if (l.heart) officeFloat('💕', false, { x: (officeActors.elf.x + officeActors.fox.x) / 2, y: officeActors.elf.y - 40 });
+      if (l.heart) officeFloat('💕', false, { x: (officeActors.elf.x + officeActors.fox.x) / 2, y: officeActors.elf.y - 75 });
     }, i * 2100));
     return;
   }
+  if (st.fx === 'wow') { const sp = OFFICE_SPOTS[st.spot]; officeFloat('💸', false, { x: sp.x, y: sp.y - 75 }); return; }
   if (st.fx === 'mail') { officeFloat('💌', false, OFFICE_SPOTS.mail); return; }
   if (st.fx === 'loveIn') {
     officeFloat('+' + fmt(st.amount), true);
@@ -1191,6 +1367,17 @@ function drawOffice() {
 
   const status = document.getElementById('office-status');
   if (status) status.innerHTML = officeStatusText(d);
+  const lvEl = document.getElementById('office-level');
+  const info = officeLevelInfo();
+  if (lvEl) {
+    lvEl.hidden = !info;
+    if (info) {
+      const next = info.next ? `再記 ${info.next.at - info.total} 筆解鎖${info.next.name}` : '家具都解鎖了 🎉';
+      const cup = info.streak >= 30 ? '🥇' : (info.streak >= 7 ? '🥈' : '🔥');
+      lvEl.innerHTML = `<b>🏢 Lv.${info.level + 1}</b><span>累積 ${info.total} 筆</span><span>${cup} 連續記帳 ${info.streak} 天</span><span class="of-level-next">${next}</span>`;
+    }
+  }
+  officeCheckLevelUp(info);
   const pause = document.getElementById('office-pause');
   if (pause) pause.textContent = officePaused ? '繼續' : '暫停';
 
@@ -1372,7 +1559,7 @@ function officeTick(ts) {
         a.spot = st.spot;
         a.path = officePath(a, a.zone, OFFICE_SPOTS[st.spot], OFFICE_SPOTS[st.spot].zone);
         a.back = false;
-        if (d) setTimeout(() => officeSay(s.id, st.go), 0);
+        if (d && !st.quiet) setTimeout(() => officeSay(s.id, st.go), 0);
       } else if (a.state === 'seat') {
         if (night) { a.until = ts + 8000; return; }   // 晚上在座位上睡覺，不走動
         if (!canStart) { a.until = ts + 1500; return; }
@@ -1428,7 +1615,7 @@ function officeMeetingTick(ts, d) {
     const busy = Object.values(officeActors).some(a => a.job) || Object.values(officeJobs).some(q => q.length);
     if (busy || officePhase === 'night') return;
     m.pending = false; m.launchedAt = ts; m.ids = ids;
-    ids.forEach(id => officeJobs[id].push({ type: 'meeting', steps: [{ spot: 'meet_' + id, fx: 'meet', stay: 600000, go: '去白板前開月會', at: '開月會中 📋' }] }));
+    ids.forEach(id => officeJobs[id].push({ type: 'meeting', steps: [{ spot: 'meet_' + id, fx: 'meet', stay: 600000, go: id === 'chart' ? '開會囉！大家到白板集合 📋' : '去白板前開月會', at: '開月會中 📋', quiet: id !== 'chart' }] }));
     if (!m.force) { try { localStorage.setItem(OFFICE_MEET_PREFIX + officePrev.sheet, '1'); } catch (e) { /* ignore */ } }
     return;
   }
@@ -1485,6 +1672,7 @@ function renderOffice() {
   drawOffice();
   officeStart();
   officeLoadPrev();
+  officeLoadStats();
   officeMaybeMeeting(false);
   if (!officeInvRequested) {
     officeInvRequested = true;

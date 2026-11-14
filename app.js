@@ -312,6 +312,7 @@ async function addRecord(data) {
     await apiCall({ action: 'add', sheet: currentSheet(), data: JSON.stringify(data), beforeRow: beforeRow || '' });
     showToast('已新增 ✓');
     await loadData();
+    if (typeof officeNoteRecord === 'function') officeNoteRecord(data);
   } catch(e) {
     setSyncStatus('err', '儲存失敗');
     showToast('儲存失敗，請重試');

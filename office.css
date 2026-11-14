@@ -38,7 +38,7 @@
 
 .of-say {
   position: absolute; left: 50%; bottom: 100%; margin-bottom: 3.2cqw; z-index: 5; pointer-events: none;
-  max-width: 36cqw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  width: max-content; max-width: 40cqw; white-space: normal; overflow-wrap: anywhere; text-align: center;
   background: #fff; color: #4a3b30; border-radius: 3cqw; padding: 0.8cqw 2cqw;
   font-size: clamp(10px, 2.8cqw, 14px); font-weight: 500; line-height: 1.35;
   box-shadow: 0 0.6cqw 1.8cqw rgba(90,70,50,0.25);

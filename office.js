@@ -427,8 +427,7 @@ function officeActivity(id, d) {
 
 // ── 記帳後的跑腿：記帳區登記 → 金庫領錢（收入則是存錢）──────────
 function officeJobSteps(j) {
-  const chars = [...j.item];
-  const name = chars.length > 8 ? chars.slice(0, 8).join('') + '…' : j.item;
+  const name = j.item;
   const amt = fmt(j.amount);
   return [
     { spot: 'desk', fx: 'book', stay: 3400, go: `去記帳區登記「${name}」`, at: `登記：${name} ${j.income ? '+' : '−'}${amt}` },

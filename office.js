@@ -12,7 +12,10 @@ let officeRaf = null;
 let officeLastTs = 0;
 let officeSayAt = 0;                // 下一次冒出對話框的時間
 let officeData_ = null;             // 最近一次整理好的資料
-const officeJobs = { elf: [], fox: [], cash: [] };   // 剛記的帳：等成員去跑一趟（記帳區 → 金庫）
+const officeJobs = { book: [], chart: [], stock: [], cash: [], elf: [], fox: [] };
+let officeSkitAt = 0;               // 下一次安排角色互動的時間
+let officeSkitLast = '';            // 上一次的互動，避免連續重複
+let officeSkitSeq = 0;   // 剛記的帳：等成員去跑一趟（記帳區 → 金庫）
 
 function officeVisible() {
   const tab = document.getElementById('tab-office');
@@ -363,6 +366,10 @@ function officeDetailHtml(key, d) {
 const OFFICE_COL = { A: 325, B: 700, C: 420, D: 620 };
 const OFFICE_HALL_Y = 445;
 const OFFICE_SPOTS = {
+  byChart: { x: 400, y: 322, zone: 'A' },   // 小析座位旁
+  byStock: { x: 815, y: 366, zone: 'B' },   // 阿貨座位旁
+  byCash:  { x: 252, y: 880, zone: 'C' },   // 阿庫座位旁
+  tea2:    { x: 738, y: 600, zone: 'D' },   // 茶水間的第二個位置（一起喝茶）
   giveElf: { x: 690, y: 800, zone: 'D' },   // 沙發前：把錢交給精靈
   giveFox: { x: 810, y: 772, zone: 'D' },   // 沙發前：把錢交給小狐狸
   tea:   { x: 620, y: 583, zone: 'D', go: '走去茶水間', at: '倒杯茶休息一下', rest: true },
@@ -435,6 +442,7 @@ function officeActivity(id, d) {
 
 // ── 記帳後的跑腿：記帳區登記 → 金庫領錢（收入則是存錢）──────────
 function officeJobSteps(j) {
+  if (j.type === 'skit') return j.steps;
   if (j.type === 'settle') {
     // 月底結算：阿庫到存錢筒領錢，再送到沙發交給兩人（金額以目前資料為準）
     const back = officeData_ ? officeData_.back.filter(b => b.amount > 0) : [];
@@ -452,6 +460,115 @@ function officeJobSteps(j) {
     { spot: 'desk', fx: 'book', stay: 3400, go: `去記帳區登記「${name}」`, at: `登記：${name} ${j.income ? '+' : '−'}${amt}` },
     { spot: 'piggy', fx: 'money', stay: 3200, go: j.income ? `帶 ${amt} 去金庫存` : `去金庫領 ${amt}`, at: j.income ? `存入 ${amt}` : `領出 ${amt}` },
   ];
+}
+
+// ── 平常的角色互動：找人對帳、送補貨提醒、一起喝茶、沙發聊天（台詞來自真實資料）──
+function officeSkits(d) {
+  const free = id => officeActors[id].state === 'seat' && !officeActors[id].job;
+  const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+  const talk = (spot, go, at, lines, extra = {}) => ({ spot, go, at, fx: 'talk', lines, stay: lines.length * 2100 + 1600, ...extra });
+  const top = d.cats[0], alert = d.alerts[0], latest = d.sorted[0];
+  const pct = Math.round(d.ratio * 100);
+  const moodLine = d.mood === 'cry' ? '糟糕，要趕快補錢' : (d.mood === 'worry' ? '要省一點了…' : '不錯耶，繼續保持');
+  const list = [];
+  const add = (key, ids, build) => { if (ids.every(free)) list.push({ key, ids, build }); };
+
+  add('book-chart', ['book', 'chart'], () => ({ book: [talk('byChart', '拿帳本去找小析', '跟小析更新圖表', [
+    { who: 'book', text: d.todayCount ? `今天記了 ${d.todayCount} 筆，圖表麻煩更新` : `這個月共 ${d.entries.length} 筆，幫我看一下` },
+    { who: 'chart', text: top ? `收到！目前${top.name}最多，${fmt(top.value)}` : '收到！等有支出我就畫圖' },
+    { who: 'book', text: '了解，謝啦' }])] }));
+
+  add('chart-book', ['chart', 'book'], () => ({ chart: [talk('desk', '去找小帳核對數字', '跟小帳核對數字', [
+    { who: 'chart', text: top ? `${top.name}這個月 ${fmt(top.value)}，幫我核對一下` : '最近沒有支出，帳本借我看看' },
+    { who: 'book', text: latest ? `最新一筆是「${latest.item}」，數字沒錯 ✓` : '帳本還是空的喔' }])] }));
+
+  add('cash-book', ['cash', 'book'], () => ({ cash: [talk('desk', '去找小帳對帳', '跟小帳對帳', [
+    { who: 'cash', text: `目前餘額 ${fmt(d.balance)}，跟你對一下` },
+    { who: 'book', text: `本月支出 ${fmt(d.expense)}，數字一樣 ✓` }])] }));
+
+  ['elf', 'fox'].forEach(m => {
+    const name = m === 'elf' ? '精靈' : '小狐狸', spot = m === 'elf' ? 'giveElf' : 'giveFox';
+    const o = d.owners[name], love = d.love.find(p => p.name === name);
+
+    add('stock-' + m, ['stock', m], () => ({ stock: [talk(spot, `去找${name}講補貨的事`, `跟${name}講補貨的事`, alert ? [
+      { who: 'stock', text: `${alert.name}${alert.text}，記得補貨喔` },
+      { who: m, text: d.alerts.length > 1 ? `好，還有 ${d.alerts.length - 1} 項也一起買` : '好，下次順便買' }] : [
+      { who: 'stock', text: d.items.length ? '庫存都夠，這週不用補貨' : '倉庫還空空的，要不要登記庫存？' },
+      { who: m, text: d.items.length ? '太好了 ✨' : '好，我找時間登記' }])] }));
+
+    add('cash-' + m, ['cash', m], () => ({ cash: [talk(spot, `去找${name}報告金庫狀況`, `跟${name}報告金庫狀況`, love && love.has && !love.arrived ? [
+      { who: 'cash', text: `${name}的每月的愛 ${love.date} 入帳喔` },
+      { who: m, text: '記得了！' }] : [
+      { who: 'cash', text: `存錢筒水位 ${pct}%，餘額 ${fmt(d.balance)}` },
+      { who: m, text: moodLine }])] }));
+
+    add(m + '-book', [m, 'book'], () => ({ [m]: [talk('desk', '去問小帳這個月花多少', '問小帳這個月花多少', [
+      { who: m, text: '我這個月花了多少？' },
+      { who: 'book', text: o.count ? `${fmt(o.expense)}，共 ${o.count} 筆` : '這個月還沒有支出喔' },
+      { who: m, text: o.count ? '好，心裡有數了' : '真的嗎，太棒了' }])] }));
+
+    add(m + '-stock', [m, 'stock'], () => ({ [m]: [talk('byStock', '去問阿貨家裡缺什麼', '問阿貨家裡缺什麼', [
+      { who: m, text: '家裡還缺什麼嗎？' },
+      { who: 'stock', text: d.alerts.length ? `${d.alerts.slice(0, 2).map(a => a.name).join('、')}要補${d.alerts.length > 2 ? `，共 ${d.alerts.length} 項` : ''}` : '目前都不缺' },
+      { who: m, text: d.alerts.length ? '好，我記下來' : '那就好' }])] }));
+  });
+
+  // 一起喝茶：兩位員工各自走到茶水間，都到了才開始聊
+  const staffLine = id => id === 'book' ? (d.todayCount ? `今天記了 ${d.todayCount} 筆` : '今天還沒有新的帳')
+    : id === 'chart' ? (top ? `${top.name}還是占最多` : '還沒有資料可以畫圖')
+    : id === 'stock' ? (d.alerts.length ? `還有 ${d.alerts.length} 項要補貨` : '貨架都整理好了')
+    : `存錢筒 ${pct}%`;
+  [pick([['book', 'cash'], ['chart', 'stock'], ['book', 'stock'], ['chart', 'cash']])].forEach(([a, b]) => {
+    add('tea-' + a + '-' + b, [a, b], () => ({
+      [a]: [talk('tea', '約同事去茶水間', '在茶水間聊天', [
+        { who: a, text: '休息一下，喝杯茶 ☕' },
+        { who: b, text: staffLine(b) },
+        { who: a, text: staffLine(a) },
+        { who: b, text: '辛苦了，回去繼續' }], { waitFor: b })],
+      [b]: [{ spot: 'tea2', go: '一起去茶水間', at: '在茶水間聊天', stay: 4 * 2100 + 1600, waitFor: a }],
+    }));
+  });
+
+  // 沙發聊天：兩人都坐著時直接聊，不用走動
+  if (free('elf') && free('fox')) {
+    const oe = d.owners['精靈'], of = d.owners['小狐狸'];
+    const chats = [[
+      { who: 'elf', text: `我這個月花了 ${fmt(oe.expense)}` },
+      { who: 'fox', text: oe.expense >= of.expense ? `我 ${fmt(of.expense)}，你比較多耶` : `我 ${fmt(of.expense)}，這次我比較多` },
+      { who: 'elf', text: '一起省一點 💪', heart: true }], [
+      { who: 'fox', text: `存錢筒有 ${pct}% 了` },
+      { who: 'elf', text: moodLine, heart: d.mood === 'happy' }]];
+    if (latest) chats.push([
+      { who: 'fox', text: `「${latest.item}」記了嗎？` },
+      { who: 'elf', text: '記了，小帳說記好了 ✓', heart: true }]);
+    if (alert) chats.push([
+      { who: 'elf', text: `${alert.name}${alert.text}，週末去買？` },
+      { who: 'fox', text: '好啊，順便逛逛', heart: true }]);
+    list.push({ key: 'sofa', ids: ['elf', 'fox'], sofa: () => pick(chats) });
+  }
+  return list;
+}
+
+function officeStartSkit(d, ts) {
+  let list = officeSkits(d);
+  if (list.length > 1) list = list.filter(k => k.key !== officeSkitLast);
+  if (!list.length) return false;
+  const k = list[Math.floor(Math.random() * list.length)];
+  officeSkitLast = k.key;
+  // 參與的人這段時間先不要自己走開
+  k.ids.forEach(id => { officeActors[id].until = Math.max(officeActors[id].until, ts + 30000); });
+  if (k.sofa) {
+    const lines = k.sofa();
+    officeJobFx({ i: 0, steps: [{ fx: 'talk', lines }], rec: { type: 'skit' } });
+    k.ids.forEach(id => { officeActors[id].until = ts + lines.length * 2100 + 4000 + Math.random() * 6000; });
+    return false;
+  }
+  const sid = ++officeSkitSeq;
+  const jobs = k.build();
+  Object.keys(jobs).forEach(id => officeJobs[id].push({ type: 'skit', sid, steps: jobs[id] }));
+  // 留在座位的人，聊完後再恢復自己的節奏
+  k.ids.filter(id => !jobs[id]).forEach(id => { officeActors[id].until = ts + 26000 + Math.random() * 6000; });
+  return true;
 }
 
 // app.js 新增紀錄成功後呼叫
@@ -505,6 +622,20 @@ function officeFloat(text, income, at) {
 
 function officeJobFx(job) {
   const st = job.steps[job.i], j = job.rec;
+  if (!st.fx) return;
+  if (st.fx === 'talk') {
+    // 一來一往的對話：每句隔 2.1 秒；對方已經走開就不講了
+    (st.lines || []).forEach((l, i) => setTimeout(() => {
+      if (!officeVisible() || officePaused) return;
+      const o = officeActors[l.who];
+      if (!o || o.state === 'walk') return;
+      // 換人講話時，先收起對方的對話框，才不會疊在一起
+      [...new Set(st.lines.map(x => x.who))].filter(w => w !== l.who).forEach(officeHush);
+      officeSay(l.who, l.text);
+      if (l.heart) officeFloat('💕', false, { x: (officeActors.elf.x + officeActors.fox.x) / 2, y: officeActors.elf.y - 40 });
+    }, i * 2100));
+    return;
+  }
   if (st.fx === 'settleOut') { officeFloat('−' + fmt(st.amount), false); return; }
   if (st.fx === 'give') {
     const to = officeActors[st.to];
@@ -569,7 +700,7 @@ function officeStatusText(d) {
   const seat = all.filter(a => a.state === 'seat').length;
   const walk = all.filter(a => a.state === 'walk').length;
   const rest = all.filter(a => a.state === 'visit').length;
-  const job = all.filter(a => a.job).length;
+  const job = all.filter(a => a.job && a.job.rec.type !== 'skit').length;
   return `${job ? `記帳跑腿 ${job} 人・` : ''}座位上 ${seat} 人・走動中 ${walk} 人・巡視休息 ${rest} 人・待補貨 ${d.alerts.length} 項・存錢筒 ${Math.round(d.ratio * 100)}%`;
 }
 
@@ -638,6 +769,14 @@ function officeRefreshTexts() {
   if (status) status.textContent = officeStatusText(d);
 }
 
+function officeHush(id) {
+  const el = document.querySelector(`.of-actor[data-office-id="${id}"] .of-say`);
+  if (!el) return;
+  clearTimeout(el._hide);
+  el.classList.remove('show');
+  el.parentElement.classList.remove('saying');
+}
+
 // 對話框以說話的人為中心；超出場景左右邊界時才往內推，小尾巴仍指著本人
 function officeSayFit(id) {
   const el = document.querySelector(`.of-actor[data-office-id="${id}"] .of-say`);
@@ -668,7 +807,8 @@ function officeSay(id, text) {
   if (nameEl) el.style.setProperty('--sayc', getComputedStyle(nameEl).color);
   officeSayFit(id);
   el.classList.add('show');
-  setTimeout(() => { el.classList.remove('show'); actor.classList.remove('saying'); }, 3200);
+  clearTimeout(el._hide);
+  el._hide = setTimeout(() => { el.classList.remove('show'); actor.classList.remove('saying'); }, 3200);
 }
 
 // ── 動畫迴圈：依時間移動員工 ──────────────────────────────────
@@ -694,6 +834,13 @@ function officeTick(ts) {
     if (settleOn && member && !a.job && a.state === 'visit') a.until = Math.min(a.until, ts);
     const q = officeJobs[s.id];
     const ready = !!(q && q.length) && (q[0].type !== 'settle' || membersSeated);
+    if (a.waiting && a.job && a.state === 'visit') {
+      const st = a.job.steps[a.job.i], o = officeActors[st.waitFor];
+      if (o && o.state === 'visit' && o.job && o.job.rec.sid === a.job.rec.sid) {
+        a.waiting = false; a.until = ts + st.stay;
+        officeJobFx(a.job);
+      }
+    }
     if (a.state === 'walk') {
       let step = OFFICE_SPEED * dt;
       while (step > 0 && a.path.length) {
@@ -709,8 +856,12 @@ function officeTick(ts) {
         else { a.state = 'visit'; a.zone = OFFICE_SPOTS[a.spot].zone; a.until = ts + (a.job ? a.job.steps[a.job.i].stay : 3500 + Math.random() * 3000); }
         changed = true;
         if (el) el.classList.remove('walking');
-        if (d && a.state === 'visit') officeSay(s.id, officeActivity(s.id, d));
-        if (a.job && a.state === 'visit') officeJobFx(a.job);
+        const stNow = a.job && a.state === 'visit' ? a.job.steps[a.job.i] : null;
+        if (stNow && stNow.waitFor) { a.waiting = true; a.until = ts + 14000; }   // 等同伴到了再開始聊
+        else {
+          if (d && a.state === 'visit' && !(stNow && stNow.fx === 'talk')) officeSay(s.id, officeActivity(s.id, d));
+          if (stNow) officeJobFx(a.job);
+        }
       }
       if (el) {
         el.style.left = (a.x / 10).toFixed(2) + '%';
@@ -724,6 +875,7 @@ function officeTick(ts) {
       const queue = ready ? q : null;
       // 這一站辦完：還有下一站就繼續，否則結束這趟
       if (a.job && a.state === 'visit') {
+        a.waiting = false;
         if (a.job.i + 1 < a.job.steps.length) a.job.i++;
         else {
           if (a.job.rec.type === 'settle') setTimeout(() => officeSay(s.id, '月底結算完成 ✓'), 0);
@@ -748,9 +900,9 @@ function officeTick(ts) {
         // 有事要忙的員工比較常待在座位上
         const busy = d && ((s.id === 'book' && d.todayCount > 0) || (s.id === 'stock' && !d.alerts.length));
         if (busy && Math.random() < 0.45) { a.until = ts + 6000 + Math.random() * 6000; return; }
-        // 有人在記帳跑腿時，其他人先不去記帳桌和存錢筒，免得擠在一起
+        // 有人在跑腿或互動時，其他人先不去記帳桌、存錢筒和茶水間，免得擠在一起
         const jobBusy = Object.values(officeActors).some(o => o.job) || Object.values(officeJobs).some(q => q.length);
-        const picks = jobBusy ? s.visits.filter(v => v !== 'desk' && v !== 'piggy') : s.visits;
+        const picks = jobBusy ? s.visits.filter(v => v !== 'desk' && v !== 'piggy' && v !== 'tea') : s.visits;
         if (!picks.length) { a.until = ts + 4000; return; }
         a.spot = picks[Math.floor(Math.random() * picks.length)];
         const spot = OFFICE_SPOTS[a.spot];
@@ -773,6 +925,12 @@ function officeTick(ts) {
     const seated = OFFICE_STAFF.filter(s => officeActors[s.id].state === 'seat');
     if (seated.length) { const s = seated[Math.floor(Math.random() * seated.length)]; officeSay(s.id, officeActivity(s.id, d)); }
   }
+  // 沒有人在跑腿時，每隔一陣子安排一段角色互動
+  if (d && ts >= officeSkitAt) {
+    const busy = settleOn || Object.values(officeActors).some(a => a.job) || Object.values(officeJobs).some(q => q.length);
+    if (busy) officeSkitAt = ts + 3000;
+    else { officeSkitAt = ts + 13000 + Math.random() * 9000; if (officeStartSkit(d, ts)) changed = true; }
+  }
   if (changed) officeRefreshTexts();
   officeRaf = requestAnimationFrame(officeTick);
 }
@@ -784,6 +942,7 @@ function officeStart() {
       // 第一次啟動時，把每個人的計時起點對齊到現在
       Object.values(officeActors).forEach(a => { if (a.until < 1e6) a.until += ts; });
       officeSayAt = ts + 1500;
+      officeSkitAt = ts + 5000;
       officeTick(ts);
     });
   }

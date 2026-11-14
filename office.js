@@ -360,7 +360,7 @@ function officeCharSvg(kind) {
       <rect x="27" y="79" width="10" height="8" rx="3.5" fill="#f6dcb9"/><rect x="43" y="79" width="10" height="8" rx="3.5" fill="#f6dcb9"/>
       <rect x="27" y="83.5" width="10" height="4" rx="2" fill="#8d6a55"/><rect x="43" y="83.5" width="10" height="4" rx="2" fill="#8d6a55"/>
       <g class="of-head">
-        <path d="M60 14 Q74 24 68 50 Q65 58 58 60 Q62 46 56 30 Z" fill="#2e2a30"/>
+        <path d="M58 15 Q70 20 67 35 Q65 41 59 42 Q61 32 55 25 Z" fill="#2e2a30"/>
         <path d="M22 20 L19 1 L34 12 Z" fill="#f6dcb9"/>
         <path d="M58 20 L61 1 L46 12 Z" fill="#f6dcb9"/>
         <path d="M23.5 15 L22 6.5 L29 11.5 Z" fill="#ffc9d6"/>

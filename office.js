@@ -351,16 +351,15 @@ function officeCharSvg(kind) {
         </g>
       </g>`;
   }
-  // 精靈：可愛的小馬（奶油色身體、黑色鬃毛、額頭白斑、大鼻子）
+  // 精靈：可愛的小馬（奶油色身體、頭頂黑色瀏海、咖啡色尾巴、額頭白斑、大鼻子）
   return `
     <g class="of-char of-elf">
-      <path class="of-tail" d="M57 66 Q80 62 77 84 Q70 76 66 80 Q66 72 57 72 Z" fill="#2e2a30"/>
+      <path class="of-tail" d="M57 66 Q80 62 77 84 Q70 76 66 80 Q66 72 57 72 Z" fill="#9a6440"/>
       <ellipse cx="40" cy="70" rx="19" ry="15.5" fill="#f6dcb9"/>
       <ellipse cx="40" cy="74" rx="10" ry="10.5" fill="#fff3e0"/>
       <rect x="27" y="79" width="10" height="8" rx="3.5" fill="#f6dcb9"/><rect x="43" y="79" width="10" height="8" rx="3.5" fill="#f6dcb9"/>
       <rect x="27" y="83.5" width="10" height="4" rx="2" fill="#8d6a55"/><rect x="43" y="83.5" width="10" height="4" rx="2" fill="#8d6a55"/>
       <g class="of-head">
-        <path d="M58 15 Q70 20 67 35 Q65 41 59 42 Q61 32 55 25 Z" fill="#2e2a30"/>
         <path d="M22 20 L19 1 L34 12 Z" fill="#f6dcb9"/>
         <path d="M58 20 L61 1 L46 12 Z" fill="#f6dcb9"/>
         <path d="M23.5 15 L22 6.5 L29 11.5 Z" fill="#ffc9d6"/>

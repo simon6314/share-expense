@@ -484,6 +484,7 @@ function renderAll() {
   if (document.getElementById('tab-annual').style.display !== 'none') renderAnnualChart();
   const islandTab = document.getElementById('tab-island');
   if (islandTab && islandTab.style.display !== 'none') renderIsland();
+  if (typeof officeVisible === 'function' && officeVisible()) drawOffice();
 }
 
 function getFiltered() {
@@ -1265,7 +1266,7 @@ function showAnnualAnalysis(year, cur, prev) {
 }
 
 function switchTab(name, el) {
-  ['records','analysis','members','annual','island','inventory'].forEach(t => {
+  ['records','analysis','members','annual','island','office','inventory'].forEach(t => {
     const tabEl = document.getElementById('tab-'+t);
     if (tabEl) tabEl.style.display = t===name ? '' : 'none';
   });
@@ -1282,6 +1283,8 @@ function switchTab(name, el) {
   if (name === 'members') renderMembers();
   if (name === 'annual') renderAnnualChart();
   if (name === 'island') setTimeout(renderIsland, 50);
+  if (name === 'office' && typeof renderOffice === 'function') renderOffice();
+  if (name !== 'office' && typeof officeStopBubbles === 'function') officeStopBubbles();
   if (name === 'inventory') loadInventory();
 }
 

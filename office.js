@@ -234,6 +234,13 @@ function officeBgSvg(d) {
     if (top3[i]) return box(672 + i * 96, 62, top3[i]);
     return d.items.length && !d.alerts.length ? box(672 + i * 96, 62, { level: 'ok', name: i === 0 ? '' : ' ' }) : box(672 + i * 96, 62, null);
   }).join('');
+  // 下排：第 4～6 項；超過 6 項時，最後一格改成「+N項」
+  const lowBoxes = [0, 1, 2].map(i => {
+    const al = d.alerts[3 + i];
+    if (!al) return box(672 + i * 96, 172, null);
+    if (i === 2 && d.alerts.length > 6) return box(672 + i * 96, 172, { level: al.level, name: `+${d.alerts.length - 5}項` });
+    return box(672 + i * 96, 172, al);
+  }).join('');
   const env = (x, p, color) => `
     <g transform="translate(${x} 532)"><g class="of-env ${p.arrived ? 'arrived' : ''}">
       <rect width="66" height="46" rx="8" fill="${p.arrived ? color : '#f1ece6'}" stroke="rgba(90,70,50,0.22)" stroke-width="2"/>
@@ -276,7 +283,7 @@ function officeBgSvg(d) {
     <rect x="656" y="46" width="300" height="92" rx="14" fill="#f8e3c6" stroke="#e3b98a" stroke-width="5"/>
     ${topBoxes}
     <rect x="656" y="156" width="300" height="92" rx="14" fill="#f8e3c6" stroke="#e3b98a" stroke-width="5"/>
-    ${[0, 1, 2].map(i => box(672 + i * 96, 172, null)).join('')}
+    ${lowBoxes}
     ${d.alerts.length ? `<circle cx="952" cy="50" r="24" fill="#ef5f7a"/><text x="952" y="60" font-size="28" font-weight="700" text-anchor="middle" fill="#fff">${d.alerts.length}</text>` : ''}
     ${desk(846, 268, 108, ['#d9efe6', '#b5dccd'])}
     <rect x="866" y="276" width="44" height="32" rx="6" fill="#ecd3ae" stroke="#d9bb8f" stroke-width="3"/><path d="M866 292 h44" stroke="#d9bb8f" stroke-width="3"/>

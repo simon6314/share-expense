@@ -412,6 +412,8 @@ const OFFICE_SPOTS = {
   byStock: { x: 815, y: 485, zone: 'B' },   // 阿貨座位旁
   byCash:  { x: 252, y: 1224, zone: 'C' },  // 阿庫座位旁
   tea2:    { x: 738, y: 832, zone: 'D' },   // 茶水間的第二個位置（一起喝茶）
+  hugFox:  { x: 793, y: 1219, zone: 'D' },  // 小狐狸身邊（精靈走過去抱抱）
+  hugElf:  { x: 827, y: 1219, zone: 'D' },  // 精靈身邊（小狐狸走過去抱抱）
   giveElf: { x: 690, y: 1112, zone: 'D' },  // 沙發前：把錢交給精靈
   giveFox: { x: 810, y: 1073, zone: 'D' },  // 沙發前：把錢交給小狐狸
   tea:   { x: 620, y: 808, zone: 'D', go: '走去茶水間', at: '倒杯茶休息一下', rest: true },
@@ -612,6 +614,26 @@ function officeSkits(d) {
       { who: 'elf', text: `${alert.name}${alert.text}，週末去買？` },
       { who: 'fox', text: '好啊，順便逛逛', heart: true }]);
     list.push({ key: 'sofa', ids: ['elf', 'fox'], sofa: () => pick(chats) });
+
+    // 愛的互動：沙發上親親，或走過去抱抱（burst＝冒出愛心和粉紅泡泡，lean＝兩人靠在一起）
+    const kisser = pick(['elf', 'fox']), kissed = kisser === 'elf' ? 'fox' : 'elf';
+    const nm = id => id === 'elf' ? '精靈' : '小狐狸';
+    list.push({ key: 'love-kiss', ids: ['elf', 'fox'], sofa: () => pick([[
+      { who: kisser, text: `${nm(kissed)}～` },
+      { who: kissed, text: '嗯？' },
+      { who: kisser, text: '啾 😘', lean: true, burst: true },
+      { who: kissed, text: pick(['（臉紅）我也愛你 💕', '再一個！', '討厭啦～ 💗']), burst: true }], [
+      { who: kisser, text: '今天也辛苦了' },
+      { who: kissed, text: '你也是，親一個 😘', lean: true, burst: true },
+      { who: kisser, text: '最喜歡你了 💖', burst: true }]]) });
+  }
+  if (free('elf') && free('fox')) {
+    const nm = id => id === 'elf' ? '精靈' : '小狐狸';
+    const mover = pick(['elf', 'fox']), other = mover === 'elf' ? 'fox' : 'elf';
+    add('love-hug', ['elf', 'fox'], () => ({ [mover]: [talk(mover === 'elf' ? 'hugFox' : 'hugElf', `走去抱${nm(other)}`, `抱抱${nm(other)}`, [
+      { who: mover, text: pick(['抱抱～', '想抱你一下', '充電時間到 🔋']) },
+      { who: other, text: pick(['來，抱緊緊 🤗', '好呀～', '抱抱補充能量']), lean: true, burst: true },
+      { who: mover, text: pick(['好溫暖 💕', '愛你 💗', '充飽電了 ⚡']), burst: true }])] }));
   }
   return list;
 }
@@ -620,6 +642,9 @@ function officeStartSkit(d, ts) {
   let list = officeSkits(d);
   if (list.length > 1) list = list.filter(k => k.key !== officeSkitLast);
   if (!list.length) return false;
+  // 精靈和小狐狸都有空時，三成機會是愛的互動
+  const love = list.filter(k => k.key.startsWith('love'));
+  if (love.length && Math.random() < 0.3) list = love;
   const k = list[Math.floor(Math.random() * list.length)];
   officeSkitLast = k.key;
   // 參與的人這段時間先不要自己走開
@@ -673,6 +698,47 @@ function officeNoteSettle() {
   if (!officeJobs.cash.some(j => j.type === 'settle')) officeJobs.cash.push({ type: 'settle' });
 }
 
+// 精靈和小狐狸靠在一起（各自往對方那邊傾）
+function officeLean(ms) {
+  const e = officeActors.elf, f = officeActors.fox;
+  const pairs = [['elf', e.x <= f.x ? 1 : -1], ['fox', e.x <= f.x ? -1 : 1]];
+  pairs.forEach(([id, dir]) => {
+    const el = document.querySelector(`.of-actor[data-office-id="${id}"]`);
+    if (!el) return;
+    // 角色若左右翻轉，旋轉方向也跟著反過來
+    const lean = dir * (officeActors[id].face || 1) > 0 ? 'lean-r' : 'lean-l';
+    el.classList.remove('lean-r', 'lean-l');
+    el.classList.add(lean);
+    clearTimeout(el._lean);
+    el._lean = setTimeout(() => el.classList.remove('lean-r', 'lean-l'), ms);
+  });
+}
+
+// 從兩人中間冒出愛心和粉紅泡泡
+function officeLoveBurst() {
+  const scene = document.getElementById('office-scene');
+  if (!scene || officePaused) return;
+  const e = officeActors.elf, f = officeActors.fox;
+  const cx = (e.x + f.x) / 2, cy = Math.min(e.y, f.y) - 80;
+  const hearts = ['💗', '💕', '💖', '💞', '❤️'];
+  for (let i = 0; i < 12; i++) {
+    const el = document.createElement('span');
+    const bubble = i % 3 === 2;
+    el.className = 'of-love' + (bubble ? ' bub' : '');
+    if (!bubble) el.textContent = hearts[i % hearts.length];
+    el.style.left = ((cx + (Math.random() - 0.5) * 70) / 10).toFixed(2) + '%';
+    // 疊在兩人身後冒出來，不會蓋住名牌和對話框
+    el.style.zIndex = String(Math.round(Math.min(e.y, f.y)) - 1);
+    el.style.top = (cy / 13).toFixed(2) + '%';
+    el.style.setProperty('--dx', ((Math.random() - 0.5) * 18).toFixed(1) + 'cqw');
+    el.style.setProperty('--dy', (-(8 + Math.random() * 14)).toFixed(1) + 'cqw');
+    el.style.setProperty('--s', (0.8 + Math.random() * 0.7).toFixed(2));
+    el.style.animationDelay = (i * 0.07).toFixed(2) + 's';
+    scene.appendChild(el);
+    setTimeout(() => el.remove(), 3000);
+  }
+}
+
 // 金額從存錢筒飄出來（支出）或飄進去（收入）；at 有給座標時改飄在那個位置
 function officeFloat(text, income, at) {
   const scene = document.getElementById('office-scene');
@@ -703,6 +769,8 @@ function officeJobFx(job) {
       officeSay(l.who, l.text);
       if (l.emoji) officeFloat(l.emoji, false, { x: o.x, y: o.y - 30 });
       if (l.pet) { officeDogPets++; const n = document.querySelector('[data-office-num="dog"]'); if (n) n.textContent = officeDogPets + ' 次'; }
+      if (l.lean) officeLean(2600 + 2100);
+      if (l.burst) officeLoveBurst();
       if (l.heart) officeFloat('💕', false, { x: (officeActors.elf.x + officeActors.fox.x) / 2, y: officeActors.elf.y - 40 });
     }, i * 2100));
     return;

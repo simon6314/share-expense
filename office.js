@@ -15,7 +15,8 @@ let officeData_ = null;             // 最近一次整理好的資料
 const officeJobs = { book: [], chart: [], stock: [], cash: [], elf: [], fox: [] };
 let officeSkitAt = 0;               // 下一次安排角色互動的時間
 let officeSkitLast = '';            // 上一次的互動，避免連續重複
-let officeSkitSeq = 0;   // 剛記的帳：等成員去跑一趟（記帳區 → 金庫）
+let officeSkitSeq = 0;
+let officeQuietUntil = 0;           // 互動或跑腿結束後 1.5 秒內，其他人不冒出平常的對話框   // 剛記的帳：等成員去跑一趟（記帳區 → 金庫）
 
 function officeVisible() {
   const tab = document.getElementById('tab-office');
@@ -624,6 +625,8 @@ function officeJobFx(job) {
   const st = job.steps[job.i], j = job.rec;
   if (!st.fx) return;
   if (st.fx === 'talk') {
+    // 對話期間（含最後一句停留的時間）加 1.5 秒，平常的對話框先不出現
+    officeQuietUntil = Math.max(officeQuietUntil, performance.now() + ((st.lines || []).length - 1) * 2100 + 3200 + 1500);
     // 一來一往的對話：每句隔 2.1 秒；對方已經走開就不講了
     (st.lines || []).forEach((l, i) => setTimeout(() => {
       if (!officeVisible() || officePaused) return;
@@ -859,7 +862,7 @@ function officeTick(ts) {
         const stNow = a.job && a.state === 'visit' ? a.job.steps[a.job.i] : null;
         if (stNow && stNow.waitFor) { a.waiting = true; a.until = ts + 14000; }   // 等同伴到了再開始聊
         else {
-          if (d && a.state === 'visit' && !(stNow && stNow.fx === 'talk')) officeSay(s.id, officeActivity(s.id, d));
+          if (d && a.state === 'visit' && !(stNow && stNow.fx === 'talk') && (stNow || ts >= officeQuietUntil)) officeSay(s.id, officeActivity(s.id, d));
           if (stNow) officeJobFx(a.job);
         }
       }
@@ -920,7 +923,9 @@ function officeTick(ts) {
   });
 
   // 坐在位子上的員工偶爾冒出對話框，說自己正在做什麼
-  if (d && ts >= officeSayAt) {
+  // 有人在跑腿或互動時先安靜，結束後再等 1.5 秒
+  if (Object.values(officeActors).some(a => a.job)) officeQuietUntil = Math.max(officeQuietUntil, ts + 1500);
+  if (d && ts >= officeSayAt && ts >= officeQuietUntil) {
     officeSayAt = ts + 4200;
     const seated = OFFICE_STAFF.filter(s => officeActors[s.id].state === 'seat');
     if (seated.length) { const s = seated[Math.floor(Math.random() * seated.length)]; officeSay(s.id, officeActivity(s.id, d)); }

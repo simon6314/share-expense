@@ -638,15 +638,35 @@ function officeRefreshTexts() {
   if (status) status.textContent = officeStatusText(d);
 }
 
+// 對話框以說話的人為中心；超出場景左右邊界時才往內推，小尾巴仍指著本人
+function officeSayFit(id) {
+  const el = document.querySelector(`.of-actor[data-office-id="${id}"] .of-say`);
+  const scene = document.getElementById('office-scene');
+  if (!el || !scene) return;
+  const W = scene.clientWidth, pad = W * 0.015;
+  const cx = officeActors[id].x / 1000 * W;
+  // 靠近左右邊界的人，對話框窄一點（多換行），才不會整個蓋到旁邊的人頭上
+  const room = 2 * (Math.min(cx, W - cx) - pad);
+  el.style.maxWidth = Math.max(W * 0.27, Math.min(W * 0.4, room)).toFixed(0) + 'px';
+  const half = el.offsetWidth / 2;
+  let dx = 0;
+  if (cx - half < pad) dx = pad - (cx - half);
+  else if (cx + half > W - pad) dx = (W - pad) - (cx + half);
+  // 尾巴不能跑出對話框
+  const lim = Math.max(0, half - W * 0.03);
+  dx = Math.max(-lim, Math.min(lim, dx));
+  el.style.setProperty('--dx', dx.toFixed(1) + 'px');
+}
+
 function officeSay(id, text) {
   const el = document.querySelector(`.of-actor[data-office-id="${id}"] .of-say`);
   if (!el) return;
   const actor = el.parentElement;
-  const x = officeActors[id].x;
-  actor.classList.toggle('edge-l', x < 240);
-  actor.classList.toggle('edge-r', x > 760);
   actor.classList.add('saying');
   el.textContent = text;
+  const nameEl = actor.querySelector('.of-name');
+  if (nameEl) el.style.setProperty('--sayc', getComputedStyle(nameEl).color);
+  officeSayFit(id);
   el.classList.add('show');
   setTimeout(() => { el.classList.remove('show'); actor.classList.remove('saying'); }, 3200);
 }
@@ -698,6 +718,7 @@ function officeTick(ts) {
         el.style.zIndex = Math.round(a.y);
         const fig = el.querySelector('.of-fig');
         if (fig) fig.style.transform = `scaleX(${a.face})`;
+        if (el.classList.contains('saying')) officeSayFit(s.id);
       }
     } else if (ts >= a.until || (!a.job && ready)) {
       const queue = ready ? q : null;

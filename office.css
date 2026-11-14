@@ -38,15 +38,20 @@
 
 .of-say {
   position: absolute; left: 50%; bottom: 100%; margin-bottom: 3.2cqw; z-index: 5; pointer-events: none;
-  width: max-content; max-width: 40cqw; white-space: normal; overflow-wrap: anywhere; text-align: center;
-  background: #fff; color: #4a3b30; border-radius: 3cqw; padding: 0.8cqw 2cqw;
+  width: max-content; max-width: 40cqw; white-space: normal; overflow-wrap: anywhere; text-align: center; text-wrap: balance;
+  background: #fff; color: #4a3b30; border-radius: 3cqw; padding: 0.8cqw 2cqw; border: 0.45cqw solid var(--sayc, #fff);
   font-size: clamp(10px, 2.8cqw, 14px); font-weight: 500; line-height: 1.35;
   box-shadow: 0 0.6cqw 1.8cqw rgba(90,70,50,0.25);
-  opacity: 0; transform: translate(-50%, 1cqw) scale(0.9); transition: opacity 0.25s ease, transform 0.25s ease;
+  opacity: 0; transform: translate(calc(-50% + var(--dx, 0px)), 1cqw) scale(0.9); transition: opacity 0.25s ease, transform 0.25s ease;
 }
-.of-say.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
-.of-actor.edge-l .of-say { transform: translate(-22%, 1cqw) scale(0.9); } .of-actor.edge-l .of-say.show { transform: translate(-22%, 0) scale(1); }
-.of-actor.edge-r .of-say { transform: translate(-78%, 1cqw) scale(0.9); } .of-actor.edge-r .of-say.show { transform: translate(-78%, 0) scale(1); }
+/* 小尾巴：永遠指著說話的人（對話框靠邊被推回來時也一樣） */
+.of-say::after {
+  content: ''; position: absolute; top: 100%; left: calc(50% - var(--dx, 0px)); margin: 0.3cqw 0 0 -1.5cqw;
+  border: 1.5cqw solid transparent; border-top-color: var(--sayc, #fff); border-bottom-width: 0;
+}
+/* 說話的人：名牌加上同色外框，一眼看出是誰在講 */
+.of-actor.saying .of-name { box-shadow: 0 0 0 0.45cqw currentColor; }
+.of-say.show { opacity: 1; transform: translate(calc(-50% + var(--dx, 0px)), 0) scale(1); }
 
 /* 下方細節與員工名單 */
 .of-detail {

@@ -1082,7 +1082,7 @@ function officeJobFx(job) {
     const to = officeActors[st.to];
     setTimeout(() => {
       officeFloat('+' + fmt(st.amount), true, to);
-      setTimeout(() => { if (to.state !== 'walk') officeSay(st.to, `收到 ${fmt(st.amount)}，謝謝阿庫`); }, 1300);
+      setTimeout(() => { if (to.state !== 'walk') officeWakeSay(st.to, `收到 ${fmt(st.amount)}，謝謝阿庫`); }, 1300);
     }, 600);
     return;
   }

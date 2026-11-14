@@ -372,6 +372,8 @@ async function updateTransfer(row, field, value) {
     await apiCall({ action: 'updateTransfer', sheet: currentSheet(), row, field, value: parseFloat(value) || 0 });
     setSyncStatus('ok', '已同步 · ' + new Date().toLocaleTimeString('zh-TW'));
     showToast('已更新 ✓');
+    // 填了轉回金額：辦公室排一趟月底結算（阿庫領錢交給兩人）
+    if (field === 'expense' && (parseFloat(value) || 0) > 0 && typeof officeNoteSettle === 'function') officeNoteSettle();
     
     // ⚡ 實時更新：當手動調整轉回金額時，即時更新首頁四大卡片的金額
     renderAll();

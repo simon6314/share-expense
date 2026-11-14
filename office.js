@@ -12,7 +12,7 @@ let officeRaf = null;
 let officeLastTs = 0;
 let officeSayAt = 0;                // 下一次冒出對話框的時間
 let officeData_ = null;             // 最近一次整理好的資料
-const officeJobs = { elf: [], fox: [] };   // 剛記的帳：等成員去跑一趟（記帳區 → 金庫）
+const officeJobs = { elf: [], fox: [], cash: [] };   // 剛記的帳：等成員去跑一趟（記帳區 → 金庫）
 
 function officeVisible() {
   const tab = document.getElementById('tab-office');
@@ -50,6 +50,11 @@ function officeData() {
   });
   const transferRecs = records.filter(r => r.item.includes('支出部分轉回'));
   const settled = transferRecs.some(r => r.expense > 0);
+  // 月底轉回給兩人的金額（「支出部分轉回」列的支出欄）
+  const back = ['精靈', '小狐狸'].map(name => {
+    const r = transferRecs.find(t => t.item.includes(name));
+    return { name, amount: r ? (r.expense || 0) : 0, row: r ? r.row : null };
+  });
 
   // 白板：支出分類
   const catMap = {};
@@ -79,7 +84,7 @@ function officeData() {
   const ratio = pool > 0 ? Math.max(0, Math.min(1, balance / pool)) : (balance > 0 ? 1 : 0);
   const mood = balance < 0 ? 'cry' : (ratio < 0.2 ? 'worry' : 'happy');
 
-  return { starting, income, arrived, expense, balance, pool, ratio, mood, entries, sorted, todayCount, love, settled, cats, items, alerts };
+  return { starting, income, arrived, expense, balance, pool, ratio, mood, entries, sorted, todayCount, love, settled, back, cats, items, alerts };
 }
 
 // ── 角色與物件的 SVG ──────────────────────────────────────────
@@ -328,7 +333,8 @@ function officeDetailHtml(key, d) {
       p.has ? `${fmt(p.amount)}（${p.arrived ? '已入帳' : p.date + ' 入帳'}）` : '尚未登記', p.has && p.arrived ? 'of-inc' : '')).join('');
     return `<h4>🏦 金庫 <small>阿庫負責</small></h4>
       ${love}${row('月底結算', d.settled ? '已完成' : '尚未結算')}
-      <div class="of-actions">${go('members', '看成員')}</div>`;
+      ${d.settled ? d.back.map(b => row(`${b.name === '精靈' ? '🐎' : '🦊'} 轉回${b.name}`, fmt(b.amount), 'of-exp')).join('') : ''}
+      <div class="of-actions">${d.back.some(b => b.row) ? `<button type="button" class="of-go" data-office-settle>${d.settled ? '修改結算' : '去結算'}</button>` : ''}${go('members', '看成員')}</div>`;
   }
   if (key === 'piggy') {
     const tip = d.mood === 'cry' ? '餘額是負的，存錢筒哭了。' : (d.mood === 'worry' ? '餘額剩不到兩成，存錢筒有點緊張。' : '存錢筒心情不錯。');
@@ -357,6 +363,8 @@ function officeDetailHtml(key, d) {
 const OFFICE_COL = { A: 325, B: 700, C: 420, D: 620 };
 const OFFICE_HALL_Y = 445;
 const OFFICE_SPOTS = {
+  giveElf: { x: 690, y: 800, zone: 'D' },   // 沙發前：把錢交給精靈
+  giveFox: { x: 810, y: 772, zone: 'D' },   // 沙發前：把錢交給小狐狸
   tea:   { x: 620, y: 583, zone: 'D', go: '走去茶水間', at: '倒杯茶休息一下', rest: true },
   board: { x: 325, y: 285, zone: 'A', go: '走去看白板', at: '看白板上的分類' },
   desk:  { x: 262, y: 300, zone: 'A', go: '走去記帳桌', at: '跟小帳對帳' },
@@ -427,6 +435,17 @@ function officeActivity(id, d) {
 
 // ── 記帳後的跑腿：記帳區登記 → 金庫領錢（收入則是存錢）──────────
 function officeJobSteps(j) {
+  if (j.type === 'settle') {
+    // 月底結算：阿庫到存錢筒領錢，再送到沙發交給兩人（金額以目前資料為準）
+    const back = officeData_ ? officeData_.back.filter(b => b.amount > 0) : [];
+    if (!back.length) return [];
+    const total = back.reduce((sum, b) => sum + b.amount, 0);
+    return [
+      { spot: 'piggy', fx: 'settleOut', amount: total, stay: 3200, go: '月底結算：去金庫領錢', at: `月底結算：領出 ${fmt(total)}` },
+      ...back.map(b => ({ spot: b.name === '精靈' ? 'giveElf' : 'giveFox', fx: 'give', to: b.name === '精靈' ? 'elf' : 'fox', amount: b.amount, stay: 3200,
+        go: `把 ${fmt(b.amount)} 送去給${b.name}`, at: `轉回${b.name} ${fmt(b.amount)}` })),
+    ];
+  }
   const name = j.item;
   const amt = fmt(j.amount);
   return [
@@ -465,21 +484,36 @@ function officeNoteRecord(data) {
   }
 }
 
-// 金額從存錢筒飄出來（支出）或飄進去（收入）
-function officeFloat(text, income) {
+// app.js 修改「支出部分轉回」的轉回金額後呼叫：排一趟月底結算（重複修改只排一趟）
+function officeNoteSettle() {
+  if (!officeJobs.cash.some(j => j.type === 'settle')) officeJobs.cash.push({ type: 'settle' });
+}
+
+// 金額從存錢筒飄出來（支出）或飄進去（收入）；at 有給座標時改飄在那個位置
+function officeFloat(text, income, at) {
   const scene = document.getElementById('office-scene');
   if (!scene) return;
   const el = document.createElement('span');
   el.className = 'of-float ' + (income ? 'inc' : 'exp');
   el.textContent = text;
+  if (at) { el.style.left = (at.x / 10).toFixed(2) + '%'; el.style.top = ((at.y - 110) / 9.4).toFixed(2) + '%'; }
   scene.appendChild(el);
-  const pig = scene.querySelector('.of-pigbtn');
+  const pig = at ? null : scene.querySelector('.of-pigbtn');
   if (pig) { pig.classList.add('poke'); setTimeout(() => pig.classList.remove('poke'), 700); }
   setTimeout(() => el.remove(), 2000);
 }
 
 function officeJobFx(job) {
   const st = job.steps[job.i], j = job.rec;
+  if (st.fx === 'settleOut') { officeFloat('−' + fmt(st.amount), false); return; }
+  if (st.fx === 'give') {
+    const to = officeActors[st.to];
+    setTimeout(() => {
+      officeFloat('+' + fmt(st.amount), true, to);
+      setTimeout(() => { if (to.state !== 'walk') officeSay(st.to, `收到 ${fmt(st.amount)}，謝謝阿庫`); }, 1300);
+    }, 600);
+    return;
+  }
   if (st.fx === 'book') {
     setTimeout(() => { if (officeActors.book.state === 'seat') officeSay('book', '收到，記好了 ✓'); }, 1400);
   } else {
@@ -629,9 +663,17 @@ function officeTick(ts) {
   const walking = Object.values(officeActors).filter(a => a.state === 'walk').length;
   let canStart = walking < 3;
 
+  // 月底結算進行中（或排隊中）：精靈和小狐狸回沙發坐好等阿庫送錢來
+  const settleOn = officeJobs.cash.some(j => j.type === 'settle') || !!(officeActors.cash.job && officeActors.cash.job.rec.type === 'settle');
+  const membersSeated = officeActors.elf.state === 'seat' && officeActors.fox.state === 'seat';
+
   OFFICE_STAFF.forEach(s => {
     const a = officeActors[s.id];
     const el = document.querySelector(`.of-actor[data-office-id="${s.id}"]`);
+    const member = s.id === 'elf' || s.id === 'fox';
+    if (settleOn && member && !a.job && a.state === 'visit') a.until = Math.min(a.until, ts);
+    const q = officeJobs[s.id];
+    const ready = !!(q && q.length) && (q[0].type !== 'settle' || membersSeated);
     if (a.state === 'walk') {
       let step = OFFICE_SPEED * dt;
       while (step > 0 && a.path.length) {
@@ -657,13 +699,21 @@ function officeTick(ts) {
         const fig = el.querySelector('.of-fig');
         if (fig) fig.style.transform = `scaleX(${a.face})`;
       }
-    } else if (ts >= a.until || (!a.job && officeJobs[s.id] && officeJobs[s.id].length)) {
-      const queue = officeJobs[s.id];
+    } else if (ts >= a.until || (!a.job && ready)) {
+      const queue = ready ? q : null;
       // 這一站辦完：還有下一站就繼續，否則結束這趟
       if (a.job && a.state === 'visit') {
-        if (a.job.i + 1 < a.job.steps.length) a.job.i++; else a.job = null;
+        if (a.job.i + 1 < a.job.steps.length) a.job.i++;
+        else {
+          if (a.job.rec.type === 'settle') setTimeout(() => officeSay(s.id, '月底結算完成 ✓'), 0);
+          a.job = null;
+        }
       }
-      if (!a.job && queue && queue.length) { const rec = queue.shift(); a.job = { rec, i: 0, steps: officeJobSteps(rec) }; }
+      if (!a.job && queue && queue.length) {
+        const rec = queue.shift(), steps = officeJobSteps(rec);
+        if (steps.length) a.job = { rec, i: 0, steps };
+        else if (ts < a.until) return;
+      }
       if (a.job) {
         // 記帳跑腿優先，不受同時走動人數限制
         const st = a.job.steps[a.job.i];
@@ -673,11 +723,12 @@ function officeTick(ts) {
         if (d) setTimeout(() => officeSay(s.id, st.go), 0);
       } else if (a.state === 'seat') {
         if (!canStart) { a.until = ts + 1500; return; }
+        if (settleOn && member) { a.until = ts + 2000; return; }
         // 有事要忙的員工比較常待在座位上
         const busy = d && ((s.id === 'book' && d.todayCount > 0) || (s.id === 'stock' && !d.alerts.length));
         if (busy && Math.random() < 0.45) { a.until = ts + 6000 + Math.random() * 6000; return; }
         // 有人在記帳跑腿時，其他人先不去記帳桌和存錢筒，免得擠在一起
-        const jobBusy = Object.values(officeActors).some(o => o.job) || officeJobs.elf.length || officeJobs.fox.length;
+        const jobBusy = Object.values(officeActors).some(o => o.job) || Object.values(officeJobs).some(q => q.length);
         const picks = jobBusy ? s.visits.filter(v => v !== 'desk' && v !== 'piggy') : s.visits;
         if (!picks.length) { a.until = ts + 4000; return; }
         a.spot = picks[Math.floor(Math.random() * picks.length)];
@@ -755,6 +806,17 @@ document.addEventListener('click', e => {
     openModal();
     const owner = add.dataset.officeAdd, sel = document.getElementById('f-owner');
     if (owner && sel) sel.value = owner;
+    return;
+  }
+  if (e.target.closest('[data-office-settle]')) {
+    // 跳到明細最下面的「支出部分轉回」列
+    const tabBtn = [...document.querySelectorAll('.tab')].find(t => (t.getAttribute('onclick') || '').includes("'records'"));
+    if (tabBtn) switchTab('records', tabBtn);
+    const rows = officeData_ ? officeData_.back.map(b => b.row).filter(Boolean) : [];
+    setTimeout(() => {
+      const el = rows.flatMap(r => ['transfer-result-' + r, 'transfer-result-m-' + r]).map(id => document.getElementById(id)).find(x => x && x.offsetParent !== null);
+      if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }, 80);
     return;
   }
   const go = e.target.closest('[data-office-go]');

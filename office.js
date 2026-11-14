@@ -107,26 +107,31 @@ function officeCharSvg(kind) {
         </g>
       </g>`;
   }
+  // 精靈：可愛的小馬（奶油色身體、水藍色鬃毛、額頭白斑、大鼻子）
   return `
     <g class="of-char of-elf">
-      <ellipse cx="40" cy="70" rx="19" ry="16" fill="#eef9f6"/>
-      <ellipse cx="40" cy="74" rx="10" ry="11" fill="#ffffff"/>
+      <path class="of-tail" d="M57 66 Q80 62 77 84 Q70 76 66 80 Q66 72 57 72 Z" fill="#6fd3e3"/>
+      <ellipse cx="40" cy="70" rx="19" ry="15.5" fill="#f6dcb9"/>
+      <ellipse cx="40" cy="74" rx="10" ry="10.5" fill="#fff3e0"/>
+      <rect x="27" y="79" width="10" height="8" rx="3.5" fill="#f6dcb9"/><rect x="43" y="79" width="10" height="8" rx="3.5" fill="#f6dcb9"/>
+      <rect x="27" y="83.5" width="10" height="4" rx="2" fill="#8d6a55"/><rect x="43" y="83.5" width="10" height="4" rx="2" fill="#8d6a55"/>
       <g class="of-head">
-        <path d="M21 24 L17 5 L33 15 Z" fill="#eef9f6"/>
-        <path d="M59 24 L63 5 L47 15 Z" fill="#eef9f6"/>
-        <path d="M22.5 19 L20.5 10 L28 15 Z" fill="#ffc9d6"/>
-        <path d="M57.5 19 L59.5 10 L52 15 Z" fill="#ffc9d6"/>
-        <ellipse cx="40" cy="36" rx="22" ry="20" fill="#f7fdfb"/>
-        <path d="M28 17 Q40 3 53 14 Q65 22 63 42 Q58 30 51 25 Q41 19 28 17 Z" fill="#6fd3e3"/>
-        <path d="M33 15 Q41 8 49 13 Q43 13 38 18 Z" fill="#a6e8f2"/>
-        <ellipse cx="40" cy="46" rx="12.5" ry="8.5" fill="#ffe6ee"/>
-        <circle cx="30.5" cy="34.5" r="3.2" fill="#2f3b45"/><circle cx="31.6" cy="33.4" r="1.1" fill="#fff"/>
-        <circle cx="49.5" cy="34.5" r="3.2" fill="#2f3b45"/><circle cx="50.6" cy="33.4" r="1.1" fill="#fff"/>
-        <circle cx="36" cy="45" r="1.1" fill="#d98ca3"/><circle cx="44" cy="45" r="1.1" fill="#d98ca3"/>
-        <path d="M36.5 49 Q40 51.6 43.5 49" fill="none" stroke="#b9728a" stroke-width="1.3" stroke-linecap="round"/>
-        <ellipse cx="23" cy="41" rx="3.6" ry="2.2" fill="#ff9fb0" opacity="0.55"/>
-        <ellipse cx="57" cy="41" rx="3.6" ry="2.2" fill="#ff9fb0" opacity="0.55"/>
-        <path d="M40 21 l1.5 3.2 3.5 0.4 -2.6 2.4 0.7 3.4 -3.1 -1.8 -3.1 1.8 0.7 -3.4 -2.6 -2.4 3.5 -0.4 Z" fill="#ffd66b"/>
+        <path d="M60 14 Q74 24 68 50 Q65 58 58 60 Q62 46 56 30 Z" fill="#6fd3e3"/>
+        <path d="M22 20 L19 1 L34 12 Z" fill="#f6dcb9"/>
+        <path d="M58 20 L61 1 L46 12 Z" fill="#f6dcb9"/>
+        <path d="M23.5 15 L22 6.5 L29 11.5 Z" fill="#ffc9d6"/>
+        <path d="M56.5 15 L58 6.5 L51 11.5 Z" fill="#ffc9d6"/>
+        <ellipse cx="40" cy="31" rx="20" ry="18" fill="#f6dcb9"/>
+        <path d="M36.5 15 Q40 13 43.5 15 L45 36 Q40 38 35 36 Z" fill="#fffaf2"/>
+        <ellipse cx="40" cy="47" rx="16.5" ry="11.5" fill="#fff1e2"/>
+        <path d="M27 14 Q38 2 51 9 Q44 10 41 17 Q36 12 33 22 Q29 18 27 14 Z" fill="#6fd3e3"/>
+        <path d="M33 10 Q40 5 47 9 Q41 9 38 13 Z" fill="#a6e8f2"/>
+        <circle cx="28" cy="32" r="3.5" fill="#2f3b45"/><circle cx="29.2" cy="30.8" r="1.2" fill="#fff"/>
+        <circle cx="52" cy="32" r="3.5" fill="#2f3b45"/><circle cx="53.2" cy="30.8" r="1.2" fill="#fff"/>
+        <ellipse cx="34" cy="46" rx="1.8" ry="2.6" fill="#d19a86"/><ellipse cx="46" cy="46" rx="1.8" ry="2.6" fill="#d19a86"/>
+        <path d="M35.5 52 Q40 55.4 44.5 52" fill="none" stroke="#b9728a" stroke-width="1.4" stroke-linecap="round"/>
+        <ellipse cx="22.5" cy="40" rx="3.6" ry="2.2" fill="#ff9fb0" opacity="0.6"/>
+        <ellipse cx="57.5" cy="40" rx="3.6" ry="2.2" fill="#ff9fb0" opacity="0.6"/>
       </g>
     </g>`;
 }
@@ -714,7 +719,8 @@ function officeStopBubbles() { officeStop(); }
 // 進入分頁時呼叫：記下這次比上次多幾筆、更新庫存、開始走動
 function renderOffice() {
   const sheet = currentSheet();
-  if (officeNewCount[sheet] === undefined) {
+  // 辦公室是進站的第一頁：資料載入後才記下筆數
+  if (officeNewCount[sheet] === undefined && records.length) {
     const count = records.filter(r => !isSummaryRow(r) && r.item !== '帳戶餘額').length;
     let prev = null;
     try { const v = localStorage.getItem(OFFICE_SEEN_PREFIX + sheet); prev = v === null ? null : parseInt(v, 10); } catch (e) { /* ignore */ }

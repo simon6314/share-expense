@@ -485,7 +485,7 @@ function renderAll() {
   if (document.getElementById('tab-annual').style.display !== 'none') renderAnnualChart();
   const islandTab = document.getElementById('tab-island');
   if (islandTab && islandTab.style.display !== 'none') renderIsland();
-  if (typeof officeVisible === 'function' && officeVisible()) drawOffice();
+  if (typeof officeVisible === 'function' && officeVisible()) renderOffice();
 }
 
 function getFiltered() {

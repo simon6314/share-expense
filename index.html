@@ -11,7 +11,7 @@
   
   <!-- 導入外部樣式表 (附帶版本號防止快取) -->
   <link rel="stylesheet" href="style.css?v=20261112_1200">
-<link rel="stylesheet" href="office.css?v=20261114_1300">
+<link rel="stylesheet" href="office.css?v=20261114_1400">
 </head>
 <body data-season="spring">
 
@@ -46,17 +46,17 @@
 </div>
 
 <div class="tabs">
-  <button class="tab active" onclick="switchTab('records',this)">明細</button>
+  <button class="tab active" onclick="switchTab('office',this)">辦公室</button>
+  <button class="tab" onclick="switchTab('records',this)">明細</button>
   <button class="tab" onclick="switchTab('analysis',this)">分析</button>
   <button class="tab" onclick="switchTab('members',this)">成員</button>
   <button class="tab" onclick="switchTab('annual',this)">年度</button>
   <button class="tab" onclick="switchTab('island',this)">小島</button>
-  <button class="tab" onclick="switchTab('office',this)">辦公室</button>
   <button class="tab" onclick="switchTab('inventory',this)">庫存</button>
 </div>
 
 <!-- RECORDS TAB -->
-<div id="tab-records" class="content">
+<div id="tab-records" class="content" style="display:none">
   <div class="toolbar">
     <input class="search-input" id="searchBox" placeholder="搜尋項目或備註…" oninput="renderRecords()">
     <select class="filter-select" id="ownerFilter" onchange="renderRecords()">
@@ -190,7 +190,7 @@
 </div>
 
 <!-- OFFICE TAB -->
-<div id="tab-office" class="content" style="display:none">
+<div id="tab-office" class="content">
   <div class="chart-wrap office-wrap">
     <h3>精靈 &amp; 小狐狸 💼 記帳辦公室</h3>
     <p>記一筆後，記帳的人會去記帳區登記，再到金庫領錢；沒事的時候大家休息或例行檢查。</p>
@@ -214,7 +214,7 @@
 <!-- Chart.js 庫 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <!-- 導入外部邏輯腳本 (附帶版本號防止快取) -->
-<script src="app.js?v=20261114_1300"></script>
-<script src="office.js?v=20261114_1300"></script>
+<script src="app.js?v=20261114_1400"></script>
+<script src="office.js?v=20261114_1400"></script>
 </body>
 </html>

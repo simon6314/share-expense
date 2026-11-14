@@ -244,3 +244,8 @@
 
 /* 角色個性 */
 .of-persona { margin: -2px 0 8px; padding: 6px 10px; border-radius: 8px; background: var(--surface2); font-size: 12px; line-height: 1.5; color: var(--text2); }
+
+/* 睡覺時閉上眼睛 */
+.of-eye-closed { display: none; }
+.of-actor.sleeping .of-eye { display: none; }
+.of-actor.sleeping .of-eye-closed { display: inline; }

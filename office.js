@@ -445,8 +445,8 @@ function officeCharSvg(kind) {
           <ellipse cx="40" cy="36" rx="24" ry="19" fill="#3b3b43"/>
           <path d="M16 37 Q26 51 40 44 Q54 51 64 37 Q63 56 40 56 Q17 56 16 37 Z" fill="#f3e3cc"/>
           <ellipse cx="30" cy="26.5" rx="3.6" ry="2.3" fill="#e2b98c"/><ellipse cx="50" cy="26.5" rx="3.6" ry="2.3" fill="#e2b98c"/>
-          <circle cx="30.5" cy="34" r="3.4" fill="#141418"/><circle cx="31.7" cy="32.8" r="1.2" fill="#fff"/>
-          <circle cx="49.5" cy="34" r="3.4" fill="#141418"/><circle cx="50.7" cy="32.8" r="1.2" fill="#fff"/>
+          <g class="of-eye"><circle cx="30.5" cy="34" r="3.4" fill="#141418"/><circle cx="31.7" cy="32.8" r="1.2" fill="#fff"/><circle cx="49.5" cy="34" r="3.4" fill="#141418"/><circle cx="50.7" cy="32.8" r="1.2" fill="#fff"/></g>
+          <g class="of-eye-closed"><path d="M26.7 34 Q30.5 37.2 34.3 34" fill="none" stroke="#141418" stroke-width="2.2" stroke-linecap="round"/><path d="M45.7 34 Q49.5 37.2 53.3 34" fill="none" stroke="#141418" stroke-width="2.2" stroke-linecap="round"/></g>
           <ellipse cx="40" cy="43" rx="3.2" ry="2.4" fill="#2a2326"/>
           <path d="M35.5 47 Q40 51.5 44.5 47" fill="none" stroke="#2a2326" stroke-width="1.4" stroke-linecap="round"/>
           <path d="M38 49.6 Q40 54 42 49.6 Z" fill="#f58aa0"/>
@@ -469,8 +469,8 @@ function officeCharSvg(kind) {
           <path d="M60.5 20 L63 9 L53 15 Z" fill="#5b3a29"/>
           <ellipse cx="40" cy="36" rx="24" ry="19" fill="#f6ad6d"/>
           <path d="M16 36 Q26 52 40 45 Q54 52 64 36 Q63 56 40 56 Q17 56 16 36 Z" fill="#fff6ec"/>
-          <circle cx="30.5" cy="34.5" r="3.2" fill="#3b2f2f"/><circle cx="31.6" cy="33.4" r="1.1" fill="#fff"/>
-          <circle cx="49.5" cy="34.5" r="3.2" fill="#3b2f2f"/><circle cx="50.6" cy="33.4" r="1.1" fill="#fff"/>
+          <g class="of-eye"><circle cx="30.5" cy="34.5" r="3.2" fill="#3b2f2f"/><circle cx="31.6" cy="33.4" r="1.1" fill="#fff"/><circle cx="49.5" cy="34.5" r="3.2" fill="#3b2f2f"/><circle cx="50.6" cy="33.4" r="1.1" fill="#fff"/></g>
+          <g class="of-eye-closed"><path d="M26.9 34.5 Q30.5 37.7 34.1 34.5" fill="none" stroke="#3b2f2f" stroke-width="1.8" stroke-linecap="round"/><path d="M45.9 34.5 Q49.5 37.7 53.1 34.5" fill="none" stroke="#3b2f2f" stroke-width="1.8" stroke-linecap="round"/></g>
           <ellipse cx="40" cy="43.5" rx="3" ry="2.2" fill="#3b2f2f"/>
           <path d="M36 47.5 Q40 51 44 47.5" fill="none" stroke="#3b2f2f" stroke-width="1.4" stroke-linecap="round"/>
           <ellipse cx="23.5" cy="42" rx="4" ry="2.4" fill="#ff9fb0" opacity="0.6"/>
@@ -496,8 +496,8 @@ function officeCharSvg(kind) {
         <ellipse cx="40" cy="47" rx="16.5" ry="11.5" fill="#fff1e2"/>
         <path d="M27 14 Q38 2 51 9 Q44 10 41 17 Q36 12 33 22 Q29 18 27 14 Z" fill="#2e2a30"/>
         <path d="M33 10 Q40 5 47 9 Q41 9 38 13 Z" fill="#5a5360"/>
-        <circle cx="28" cy="32" r="3.5" fill="#2f3b45"/><circle cx="29.2" cy="30.8" r="1.2" fill="#fff"/>
-        <circle cx="52" cy="32" r="3.5" fill="#2f3b45"/><circle cx="53.2" cy="30.8" r="1.2" fill="#fff"/>
+        <g class="of-eye"><circle cx="28" cy="32" r="3.5" fill="#2f3b45"/><circle cx="29.2" cy="30.8" r="1.2" fill="#fff"/><circle cx="52" cy="32" r="3.5" fill="#2f3b45"/><circle cx="53.2" cy="30.8" r="1.2" fill="#fff"/></g>
+        <g class="of-eye-closed"><path d="M24.2 32 Q28 35.2 31.8 32" fill="none" stroke="#2f3b45" stroke-width="1.9" stroke-linecap="round"/><path d="M48.2 32 Q52 35.2 55.8 32" fill="none" stroke="#2f3b45" stroke-width="1.9" stroke-linecap="round"/></g>
         <ellipse cx="34" cy="46" rx="1.8" ry="2.6" fill="#d19a86"/><ellipse cx="46" cy="46" rx="1.8" ry="2.6" fill="#d19a86"/>
         <path d="M35.5 52 Q40 55.4 44.5 52" fill="none" stroke="#b9728a" stroke-width="1.4" stroke-linecap="round"/>
         <ellipse cx="22.5" cy="40" rx="3.6" ry="2.2" fill="#ff9fb0" opacity="0.6"/>
@@ -529,8 +529,8 @@ function officeStaffSvg(id) {
       <g class="of-head">
         <ellipse cx="40" cy="38" rx="22" ry="21" fill="#ffe4d0"/>
         <path d="M17.5 38 Q15 13 40 13 Q65 13 62.5 38 Q57 24 40 24 Q23 24 17.5 38 Z" fill="${k.hair}"/>
-        <circle cx="31" cy="39" r="3" fill="#3b2f2f"/><circle cx="32" cy="38" r="1" fill="#fff"/>
-        <circle cx="49" cy="39" r="3" fill="#3b2f2f"/><circle cx="50" cy="38" r="1" fill="#fff"/>
+        <g class="of-eye"><circle cx="31" cy="39" r="3" fill="#3b2f2f"/><circle cx="32" cy="38" r="1" fill="#fff"/><circle cx="49" cy="39" r="3" fill="#3b2f2f"/><circle cx="50" cy="38" r="1" fill="#fff"/></g>
+        <g class="of-eye-closed"><path d="M27.6 39 Q31 42.2 34.4 39" fill="none" stroke="#3b2f2f" stroke-width="1.7" stroke-linecap="round"/><path d="M45.6 39 Q49 42.2 52.4 39" fill="none" stroke="#3b2f2f" stroke-width="1.7" stroke-linecap="round"/></g>
         <path d="M36 48 Q40 51.5 44 48" fill="none" stroke="#b9728a" stroke-width="1.5" stroke-linecap="round"/>
         <ellipse cx="24.5" cy="45" rx="3.8" ry="2.3" fill="#ff9fb0" opacity="0.6"/>
         <ellipse cx="55.5" cy="45" rx="3.8" ry="2.3" fill="#ff9fb0" opacity="0.6"/>

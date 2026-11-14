@@ -145,3 +145,8 @@
 @keyframes of-float-up { 0% { transform: translate(-50%, 0) scale(0.7); opacity: 0; } 18% { transform: translate(-50%, -3cqw) scale(1.1); opacity: 1; } 75% { opacity: 1; } 100% { transform: translate(-50%, -13cqw) scale(1); opacity: 0; } }
 @keyframes of-float-down { 0% { transform: translate(-50%, -13cqw) scale(1); opacity: 0; } 25% { opacity: 1; } 80% { transform: translate(-50%, -2cqw) scale(1.1); opacity: 1; } 100% { transform: translate(-50%, 1cqw) scale(0.6); opacity: 0; } }
 @keyframes of-poke { 0%, 100% { transform: scale(1, 1); } 40% { transform: scale(1.08, 0.9); } 70% { transform: scale(0.96, 1.06); } }
+
+/* 黑柴：比人小一點 */
+.of-actor.tag-dog { width: 9.6%; }
+.tag-dog .of-name { color: #5b4636; }
+.of-tag.tag-dog { background: #efe4d6; color: #5b4636; }

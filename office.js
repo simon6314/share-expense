@@ -12,7 +12,8 @@ let officeRaf = null;
 let officeLastTs = 0;
 let officeSayAt = 0;                // 下一次冒出對話框的時間
 let officeData_ = null;             // 最近一次整理好的資料
-const officeJobs = { book: [], chart: [], stock: [], cash: [], elf: [], fox: [] };
+const officeJobs = { book: [], chart: [], stock: [], cash: [], elf: [], fox: [], dog: [] };
+let officeDogPets = 0;              // 這次開啟期間黑柴被摸了幾次
 let officeSkitAt = 0;               // 下一次安排角色互動的時間
 let officeSkitLast = '';            // 上一次的互動，避免連續重複
 let officeSkitSeq = 0;
@@ -93,6 +94,33 @@ function officeData() {
 
 // ── 角色與物件的 SVG ──────────────────────────────────────────
 function officeCharSvg(kind) {
+  if (kind === 'dog') {
+    // 黑柴：黑色的毛、奶油色的臉頰和胸口、麻呂眉、捲尾巴
+    return `
+      <g class="of-char of-dog">
+        <g class="of-tail"><path d="M55 64 Q76 64 75 46 Q74 34 62 37 Q54 40 58 49 Q62 54 66 49 Q66 57 55 56 Z" fill="#34343b"/><path d="M62 37 Q55 40 58 49 Q60 43 66 41 Z" fill="#f3e3cc"/></g>
+        <ellipse cx="40" cy="70" rx="19" ry="16" fill="#34343b"/>
+        <ellipse cx="40" cy="75" rx="10.5" ry="11" fill="#f3e3cc"/>
+        <ellipse cx="30" cy="84.5" rx="6" ry="3.6" fill="#f3e3cc"/><ellipse cx="50" cy="84.5" rx="6" ry="3.6" fill="#f3e3cc"/>
+        <path d="M27 60 Q40 67 53 60 L52 64 Q40 70 28 64 Z" fill="#e8574f"/><circle cx="40" cy="68.5" r="2.6" fill="#ffd66b"/>
+        <g class="of-head">
+          <path d="M19 27 L15 6 L34 17 Z" fill="#34343b"/>
+          <path d="M61 27 L65 6 L46 17 Z" fill="#34343b"/>
+          <path d="M20.5 21 L18.5 11 L27.5 16 Z" fill="#e2b98c"/>
+          <path d="M59.5 21 L61.5 11 L52.5 16 Z" fill="#e2b98c"/>
+          <ellipse cx="40" cy="36" rx="24" ry="19" fill="#3b3b43"/>
+          <path d="M16 37 Q26 51 40 44 Q54 51 64 37 Q63 56 40 56 Q17 56 16 37 Z" fill="#f3e3cc"/>
+          <ellipse cx="30" cy="26.5" rx="3.6" ry="2.3" fill="#e2b98c"/><ellipse cx="50" cy="26.5" rx="3.6" ry="2.3" fill="#e2b98c"/>
+          <circle cx="30.5" cy="34" r="3.4" fill="#141418"/><circle cx="31.7" cy="32.8" r="1.2" fill="#fff"/>
+          <circle cx="49.5" cy="34" r="3.4" fill="#141418"/><circle cx="50.7" cy="32.8" r="1.2" fill="#fff"/>
+          <ellipse cx="40" cy="43" rx="3.2" ry="2.4" fill="#2a2326"/>
+          <path d="M35.5 47 Q40 51.5 44.5 47" fill="none" stroke="#2a2326" stroke-width="1.4" stroke-linecap="round"/>
+          <path d="M38 49.6 Q40 54 42 49.6 Z" fill="#f58aa0"/>
+          <ellipse cx="23.5" cy="43" rx="3.8" ry="2.3" fill="#ff9fb0" opacity="0.6"/>
+          <ellipse cx="56.5" cy="43" rx="3.8" ry="2.3" fill="#ff9fb0" opacity="0.6"/>
+        </g>
+      </g>`;
+  }
   if (kind === 'fox') {
     return `
       <g class="of-char of-fox">
@@ -178,7 +206,7 @@ function officeStaffSvg(id) {
     </g>`;
 }
 function officeActorSvg(id) {
-  const inner = (id === 'elf' || id === 'fox') ? officeCharSvg(id) : officeStaffSvg(id);
+  const inner = (id === 'elf' || id === 'fox' || id === 'dog') ? officeCharSvg(id) : officeStaffSvg(id);
   return `<svg viewBox="0 0 80 90" aria-hidden="true"><ellipse cx="40" cy="86" rx="20" ry="4" fill="rgba(90,70,50,0.18)"/>${inner}</svg>`;
 }
 
@@ -307,7 +335,9 @@ function officeBgSvg(d) {
       <path d="M200 790 q-22 -2 -20 -24 q2 -16 14 -22 l-5 -9 h22 l-5 9 q12 6 14 22 q2 22 -20 24 Z" fill="#e3b98a"/>
       <text x="200" y="778" font-size="22" font-weight="700" text-anchor="middle" fill="#8a5a2b">$</text>
     </g>
-    <!-- 休息區：茶水機、茶几、沙發、盆栽 -->
+    <!-- 休息區：茶水機、茶几、沙發、盆栽、黑柴的窩 -->
+    <ellipse cx="575" cy="800" rx="64" ry="34" fill="#b9a48d"/><ellipse cx="575" cy="793" rx="64" ry="34" fill="#d7c4ae"/><ellipse cx="575" cy="790" rx="48" ry="23" fill="#f3e9db"/>
+    <g transform="translate(628 824) rotate(-20)"><rect x="-11" y="-2.5" width="22" height="5" rx="2.5" fill="#fff"/><circle cx="-11" cy="-3" r="4" fill="#fff"/><circle cx="-11" cy="3" r="4" fill="#fff"/><circle cx="11" cy="-3" r="4" fill="#fff"/><circle cx="11" cy="3" r="4" fill="#fff"/></g>
     <rect x="510" y="518" width="74" height="104" rx="14" fill="#cfe0f2"/><rect x="520" y="528" width="54" height="40" rx="8" fill="#f7fbff"/>
     <rect x="534" y="582" width="26" height="24" rx="5" fill="#ffffff" stroke="#b9cde4" stroke-width="3"/>
     <path class="of-steam" d="M541 574 q-5 -8 0 -15 M553 574 q5 -8 0 -15" fill="none" stroke="#a9bfd8" stroke-width="3" stroke-linecap="round"/>
@@ -367,6 +397,7 @@ function officeDetailHtml(key, d) {
 const OFFICE_COL = { A: 325, B: 700, C: 420, D: 620 };
 const OFFICE_HALL_Y = 445;
 const OFFICE_SPOTS = {
+  byDog:   { x: 658, y: 770, zone: 'D' },   // 黑柴的窩旁邊
   byChart: { x: 400, y: 322, zone: 'A' },   // 小析座位旁
   byStock: { x: 815, y: 366, zone: 'B' },   // 阿貨座位旁
   byCash:  { x: 252, y: 880, zone: 'C' },   // 阿庫座位旁
@@ -386,6 +417,7 @@ const OFFICE_STAFF = [
   { id: 'cash',  name: '阿庫',   role: '出納', tag: 'cash',  seat: { x: 156, y: 878, zone: 'C' }, visits: ['piggy', 'desk', 'tea'] },
   { id: 'elf',   name: '精靈',   role: '成員', tag: 'elf',   seat: { x: 752, y: 862, zone: 'D' }, visits: ['piggy', 'shelf', 'tea', 'board'] },
   { id: 'fox',   name: '小狐狸', role: '成員', tag: 'fox',   seat: { x: 868, y: 862, zone: 'D' }, visits: ['piggy', 'tea', 'shelf', 'desk'] },
+  { id: 'dog',   name: '黑柴',   role: '吉祥物', tag: 'dog', seat: { x: 575, y: 806, zone: 'D' }, visits: ['piggy', 'shelf', 'board', 'tea'], speed: 210 },
 ];
 const officeActors = {};   // id -> { x, y, zone, state: 'seat'|'walk'|'visit', path, until, spot, back, face }
 
@@ -414,6 +446,11 @@ function officeActivity(id, d) {
   if (a && a.job && a.state !== 'seat') {
     const st = a.job.steps[a.job.i];
     return a.state === 'walk' ? st.go : st.at;
+  }
+  if (id === 'dog') {
+    if (a && a.state === 'walk') return a.back ? '跑回窩裡' : '在辦公室巡邏';
+    if (a && a.state === 'visit') return a.spot === 'piggy' ? '聞聞存錢筒' : (a.spot === 'shelf' ? '聞聞貨架上的箱子' : (a.spot === 'board' ? '歪頭看白板' : '在茶水間討零食'));
+    return '趴在窩裡打瞌睡 💤';
   }
   if (a && a.state === 'walk') return a.back ? '走回座位' : OFFICE_SPOTS[a.spot].go;
   if (a && a.state === 'visit') {
@@ -512,6 +549,25 @@ function officeSkits(d) {
       { who: m, text: '家裡還缺什麼嗎？' },
       { who: 'stock', text: d.alerts.length ? `${d.alerts.slice(0, 2).map(a => a.name).join('、')}要補${d.alerts.length > 2 ? `，共 ${d.alerts.length} 項` : ''}` : '目前都不缺' },
       { who: m, text: d.alerts.length ? '好，我記下來' : '那就好' }])] }));
+  });
+
+  // 黑柴：牠去找人玩，或大家到窩邊摸牠
+  const dogSpot = { book: 'desk', chart: 'byChart', stock: 'byStock', cash: 'byCash', elf: 'giveElf', fox: 'giveFox' };
+  const dogName = { book: '小帳', chart: '小析', stock: '阿貨', cash: '阿庫', elf: '精靈', fox: '小狐狸' };
+  const dogLine = id => id === 'book' ? (d.todayCount ? `乖～今天記了 ${d.todayCount} 筆，等等陪你玩` : '乖～今天還沒人記帳，陪你玩一下')
+    : id === 'chart' ? (top ? `你看，${top.name}花最多…你聽不懂吧` : '乖，來，摸摸頭')
+    : id === 'stock' ? (alert ? `${alert.name}${alert.text}，還好你的零食還有 🦴` : '來，給你零食 🦴')
+    : id === 'cash' ? '不可以咬鈔票喔，摸摸頭'
+    : id === 'elf' ? '黑柴過來，抱抱 💕' : '好乖好乖，握手！';
+  Object.keys(dogSpot).forEach(id => {
+    add('dog-' + id, ['dog', id], () => ({ dog: [talk(dogSpot[id], `跑去找${dogName[id]}玩`, `找${dogName[id]}玩`, [
+      { who: 'dog', text: '汪！' },
+      { who: id, text: dogLine(id), pet: true, emoji: id === 'stock' ? '🦴' : '' },
+      { who: 'dog', text: '汪汪 ♪', emoji: '💕' }])] }));
+    add(id + '-dog', [id, 'dog'], () => ({ [id]: [talk('byDog', '去窩邊找黑柴', '在窩邊摸黑柴', [
+      { who: id, text: pick(['黑柴～來摸摸', '黑柴，今天乖不乖？', '休息一下，找黑柴玩']), pet: true },
+      { who: 'dog', text: pick(['汪 ♪（搖尾巴）', '汪！（翻肚子）', '嗷嗚～']), emoji: '💕' },
+      { who: id, text: pick(['好療癒，回去工作了', '真乖，晚點再來', '摸一下精神都來了']) }])] }));
   });
 
   // 一起喝茶：兩位員工各自走到茶水間，都到了才開始聊
@@ -635,6 +691,8 @@ function officeJobFx(job) {
       // 換人講話時，先收起對方的對話框，才不會疊在一起
       [...new Set(st.lines.map(x => x.who))].filter(w => w !== l.who).forEach(officeHush);
       officeSay(l.who, l.text);
+      if (l.emoji) officeFloat(l.emoji, false, { x: o.x, y: o.y - 30 });
+      if (l.pet) { officeDogPets++; const n = document.querySelector('[data-office-num="dog"]'); if (n) n.textContent = officeDogPets + ' 次'; }
       if (l.heart) officeFloat('💕', false, { x: (officeActors.elf.x + officeActors.fox.x) / 2, y: officeActors.elf.y - 40 });
     }, i * 2100));
     return;
@@ -662,6 +720,7 @@ function officeMetric(id, d) {
   if (id === 'stock') return ['待補貨', d.alerts.length];
   if (id === 'cash') return ['已入帳', d.love.filter(p => p.has && p.arrived).length + '/2'];
   if (id === 'piggy') return ['水位', Math.round(d.ratio * 100) + '%'];
+  if (id === 'dog') return ['被摸', officeDogPets + ' 次'];
   return ['今日筆數', d.owners[id === 'elf' ? '精靈' : '小狐狸'].today];
 }
 
@@ -699,7 +758,7 @@ const OFFICE_DETAIL_KEY = { book: 'desk', cash: 'vault', stock: 'shelf', chart: 
 function officePos(a) { return `left:${(a.x / 10).toFixed(2)}%;top:${(a.y / 9.4).toFixed(2)}%;z-index:${Math.round(a.y)}`; }
 
 function officeStatusText(d) {
-  const all = Object.values(officeActors);
+  const all = Object.keys(officeActors).filter(k => k !== 'dog').map(k => officeActors[k]);
   const seat = all.filter(a => a.state === 'seat').length;
   const walk = all.filter(a => a.state === 'walk').length;
   const rest = all.filter(a => a.state === 'visit').length;
@@ -739,6 +798,10 @@ function drawOffice() {
   if (detail) {
     detail.hidden = !officeSelected;
     detail.innerHTML = !officeSelected ? ''
+      : officeSelected === 'dog' ? `<h4>🐕 黑柴 <small>吉祥物</small></h4>
+          <div class="of-row"><span>現在</span><b>${esc(officeActivity('dog', d))}</b></div>
+          <div class="of-row"><span>這次被摸</span><b>${officeDogPets} 次</b></div>
+          <p class="of-note">黑柴會在辦公室巡邏、找大家玩，大家有空也會去窩邊摸牠。</p>`
       : (officeSelected === 'elf' || officeSelected === 'fox' ? officeMemberDetail(officeSelected, d) : officeDetailHtml(OFFICE_DETAIL_KEY[officeSelected], d));
   }
 
@@ -754,7 +817,7 @@ function drawOffice() {
       return `<button type="button" class="of-card${officeSelected === s.id ? ' selected' : ''}" data-office-id="${s.id}">
         ${ava}
         <span class="of-card-main"><span class="of-card-top"><b>${s.name}</b><em class="of-tag tag-${s.tag}">${s.role}</em></span><small data-office-act="${s.id}">${esc(act)}</small></span>
-        <span class="of-card-num"><small>${label}</small><b>${num}</b></span>
+        <span class="of-card-num"><small>${label}</small><b data-office-num="${s.id}">${num}</b></span>
       </button>`;
     }).join('');
   }
@@ -845,7 +908,7 @@ function officeTick(ts) {
       }
     }
     if (a.state === 'walk') {
-      let step = OFFICE_SPEED * dt;
+      let step = (s.speed || OFFICE_SPEED) * dt;
       while (step > 0 && a.path.length) {
         const p = a.path[0];
         const dx = p.x - a.x, dy = p.y - a.y;

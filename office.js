@@ -2080,6 +2080,11 @@ function officeSayFit(id) {
   const lim = Math.max(0, half - W * 0.03);
   dx = Math.max(-lim, Math.min(lim, dx));
   el.style.setProperty('--dx', dx.toFixed(1) + 'px');
+  // 上方空間不夠（例如小帳坐在最上面，對話框又比較長）：改顯示在角色下方
+  el.classList.remove('below');
+  const actor = el.parentElement;
+  const space = actor.getBoundingClientRect().top - scene.getBoundingClientRect().top;
+  if (el.offsetHeight + W * 0.032 + 4 > space) el.classList.add('below');
 }
 
 function officeSay(id, text) {

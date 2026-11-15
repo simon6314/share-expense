@@ -257,3 +257,7 @@
 @keyframes of-orb { 0%, 100% { filter: drop-shadow(0 0 1px #c9b6f2); } 50% { filter: drop-shadow(0 0 3.5px #b18cf0); } }
 .of-stars { color: #e0a82e; letter-spacing: 1px; font-size: 11px; }
 @media (prefers-reduced-motion: reduce) { .of-badge-glow, .of-orb { animation: none; } }
+
+/* 上方空間不夠時，對話框改到角色下方，小尾巴朝上 */
+.of-say.below { bottom: auto; top: 100%; margin-bottom: 0; margin-top: 1.4cqw; }
+.of-say.below::after { top: auto; bottom: 100%; margin: 0 0 0.3cqw -1.5cqw; border-top-width: 0; border-bottom-width: 1.5cqw; border-top-color: transparent; border-bottom-color: var(--sayc, #fff); }

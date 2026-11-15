@@ -1014,6 +1014,15 @@ function officeInitActors() {
 function officePath(from, fz, to, tz) {
   const pts = [];
   const cf = OFFICE_COL[fz], ct = OFFICE_COL[tz];
+  // 在走廊上（H）：直接沿走廊走到目標房間的入口
+  if (fz === 'H' || tz === 'H') {
+    if (fz !== 'H') pts.push({ x: cf, y: from.y }, { x: cf, y: OFFICE_HALL_Y });
+    else pts.push({ x: from.x, y: OFFICE_HALL_Y });
+    if (tz !== 'H') pts.push({ x: ct, y: OFFICE_HALL_Y }, { x: ct, y: to.y });
+    else pts.push({ x: to.x, y: OFFICE_HALL_Y });
+    pts.push({ x: to.x, y: to.y });
+    return pts;
+  }
   if (fz === tz) {
     if (Math.abs(from.y - to.y) > 1) pts.push({ x: cf, y: from.y }, { x: cf, y: to.y });
   } else {
@@ -1021,6 +1030,47 @@ function officePath(from, fz, to, tz) {
   }
   pts.push({ x: to.x, y: to.y });
   return pts;
+}
+
+// 依座標判斷在哪一區（走廊是 H）
+function officeZoneAt(x, y) {
+  if (y < 560) return x < 620 ? 'A' : 'B';
+  if (y > 660) return x < 480 ? 'C' : 'D';
+  return 'H';
+}
+const OFFICE_ZONE_X = { A: [45, 595], B: [655, 955], C: [45, 455], D: [515, 955], H: [45, 955] };
+
+// 跑腿這一站要走去哪裡：固定地點，或「某個人現在的位置旁邊」
+function officeStepTarget(a, st) {
+  if (!st.follow) return OFFICE_SPOTS[st.spot];
+  const t = officeActors[st.follow];
+  const zone = officeZoneAt(t.x, t.y);
+  const side = a.x <= t.x ? -1 : 1;
+  const [lo, hi] = OFFICE_ZONE_X[zone];
+  let x = t.x + side * 72;
+  if (x < lo || x > hi) x = t.x - side * 72;
+  return { x: Math.max(lo, Math.min(hi, x)), y: t.y + 2, zone };
+}
+
+// 叫對方先別走開，等跑腿的人過來
+function officeHoldFor(st, ts, ms) {
+  if (!st.follow) return;
+  const t = officeActors[st.follow];
+  if (t && !t.job && t.state !== 'walk') t.until = Math.max(t.until, ts + ms);
+}
+
+// 出發去跑腿的這一站（從現在的位置直接出發）
+function officeGoStep(a, s, ts, d) {
+  const st = a.job.steps[a.job.i];
+  a.zone = officeZoneAt(a.x, a.y);
+  a.target = officeStepTarget(a, st);
+  a.spot = st.spot;
+  a.chase = 0;
+  a.path = officePath(a, a.zone, a.target, a.target.zone);
+  a.state = 'walk';
+  a.back = false;
+  officeHoldFor(st, ts, 25000);
+  if (d && !st.quiet) setTimeout(() => officeSay(s.id, st.go), 0);
 }
 
 // 每位員工、每種狀態正在做的事（文字來自真實資料）
@@ -1148,15 +1198,15 @@ function officeJobSteps(j) {
     const total = back.reduce((sum, b) => sum + b.amount, 0);
     return [
       { spot: 'piggy', fx: 'settleOut', amount: total, stay: 3200, go: '月底結算：去金庫領錢 😣', at: `領出 ${fmt(total)}…手在抖 😭` },
-      ...back.map(b => ({ spot: b.name === '精靈' ? 'giveElf' : 'giveFox', fx: 'give', to: b.name === '精靈' ? 'elf' : 'fox', amount: b.amount, stay: 3200,
+      ...back.map(b => ({ spot: b.name === '精靈' ? 'giveElf' : 'giveFox', follow: b.name === '精靈' ? 'elf' : 'fox', fx: 'give', to: b.name === '精靈' ? 'elf' : 'fox', amount: b.amount, stay: 3200,
         go: `把 ${fmt(b.amount)} 送去給${b.name}`, at: `轉回${b.name} ${fmt(b.amount)}` })),
     ];
   }
   const name = j.item;
   const amt = fmt(j.amount);
   return [
-    { spot: 'desk', fx: 'book', stay: 3400, go: `去記帳區登記「${name}」`, at: `登記：${name} ${j.income ? '+' : '−'}${amt}` },
-    { spot: 'piggy', fx: 'money', stay: 3200, go: j.income ? `帶 ${amt} 去金庫存` : `去金庫領 ${amt}`, at: j.income ? `存入 ${amt}` : `領出 ${amt}` },
+    { spot: 'desk', follow: 'book', fx: 'book', stay: 3400, go: `去找小帳登記「${name}」`, at: `登記：${name} ${j.income ? '+' : '−'}${amt}` },
+    { spot: 'piggy', follow: 'cash', fx: 'money', stay: 3200, go: j.income ? `帶 ${amt} 去找阿庫存錢` : `去找阿庫領 ${amt}`, at: j.income ? `存入 ${amt}` : `領出 ${amt}` },
   ];
 }
 
@@ -1553,10 +1603,10 @@ function officeJobFx(job) {
     return;
   }
   if (st.fx === 'book') {
-    setTimeout(() => { if (officeActors.book.state === 'seat') officeWakeSay('book', ['收到！一筆一筆…都對齊了 ✍️✨', '記好了！分毫不差 😤', '登記完成，好舒服 ✍️'][Math.floor(Math.random() * 3)]); }, 1400);
+    setTimeout(() => { if (officeActors.book.state !== 'walk') officeWakeSay('book', ['收到！一筆一筆…都對齊了 ✍️✨', '記好了！分毫不差 😤', '登記完成，好舒服 ✍️'][Math.floor(Math.random() * 3)]); }, 1400);
   } else {
     officeFloat((j.income ? '+' : '−') + fmt(j.amount), j.income);
-    setTimeout(() => { if (officeActors.cash.state === 'seat') officeWakeSay('cash', j.income ? ['進帳了！！快進來 😭💕', '錢錢回家了～✨'][Math.floor(Math.random() * 2)] : ['嗚…錢錢慢走 💸', '又要出去了…我的心 🩸', '好啦…出帳確認 😢'][Math.floor(Math.random() * 3)]); }, 1400);
+    setTimeout(() => { if (officeActors.cash.state !== 'walk') officeWakeSay('cash', j.income ? ['進帳了！！快進來 😭💕', '錢錢回家了～✨'][Math.floor(Math.random() * 2)] : ['嗚…錢錢慢走 💸', '又要出去了…我的心 🩸', '好啦…出帳確認 😢'][Math.floor(Math.random() * 3)]); }, 1400);
   }
 }
 
@@ -1791,15 +1841,19 @@ function officeTick(ts) {
     const a = officeActors[s.id];
     const el = document.querySelector(`.of-actor[data-office-id="${s.id}"]`);
     const member = s.id === 'elf' || s.id === 'fox';
-    if (settleOn && member && !a.job && a.state === 'visit') a.until = Math.min(a.until, ts);
     const q = officeJobs[s.id];
-    const ready = !!(q && q.length) && (q[0].type !== 'settle' || membersSeated);
+    const ready = !!(q && q.length);
     if (a.waiting && a.job && a.state === 'visit') {
       const st = a.job.steps[a.job.i], o = officeActors[st.waitFor];
       if (o && o.state === 'visit' && o.job && o.job.rec.sid === a.job.rec.sid) {
         a.waiting = false; a.until = ts + st.stay;
         officeJobFx(a.job);
       }
+    }
+    if (a.state === 'walk' && !a.job && ready && q[0].type !== 'skit') {
+      // 走到一半收到跑腿：不用先走回座位，直接從這裡出發
+      const rec = q.shift(), steps = officeJobSteps(rec);
+      if (steps.length) { a.job = { rec, i: 0, steps }; officeGoStep(a, s, ts, d); changed = true; }
     }
     if (a.state === 'walk') {
       let step = (s.speed || OFFICE_SPEED) * dt;
@@ -1811,12 +1865,34 @@ function officeTick(ts) {
         if (dist <= step) { a.x = p.x; a.y = p.y; a.path.shift(); step -= dist; }
         else { a.x += dx / dist * step; a.y += dy / dist * step; step = 0; }
       }
+      // 走到了，但要找的人已經走開：追過去（最多追三次）
+      if (!a.path.length && a.job && !a.back) {
+        const st = a.job.steps[a.job.i], t = st.follow && officeActors[st.follow];
+        if (t && Math.hypot(t.x - a.x, t.y - a.y) > 120 && a.chase < 3) {
+          a.chase++;
+          a.zone = officeZoneAt(a.x, a.y);
+          a.target = officeStepTarget(a, st);
+          a.path = officePath(a, a.zone, a.target, a.target.zone);
+          officeHoldFor(st, ts, 20000);
+        }
+      }
       if (!a.path.length) {
         if (a.back) {
           a.state = 'seat'; a.zone = s.seat.zone; a.spot = null; a.back = false; a.face = 1; a.until = ts + (9000 + Math.random() * 12000) * (s.rest || 1);   // 小狐狸坐不住、小帳很少離開座位
           if (el && night) el.classList.add('sleeping');
         }
-        else { a.state = 'visit'; a.zone = OFFICE_SPOTS[a.spot].zone; a.until = ts + (a.job ? a.job.steps[a.job.i].stay : 3500 + Math.random() * 3000); }
+        else {
+          a.state = 'visit';
+          a.zone = a.target ? a.target.zone : (OFFICE_SPOTS[a.spot] ? OFFICE_SPOTS[a.spot].zone : officeZoneAt(a.x, a.y));
+          a.until = ts + (a.job ? a.job.steps[a.job.i].stay : 3500 + Math.random() * 3000);
+          if (a.job) {
+            const st = a.job.steps[a.job.i];
+            officeHoldFor(st, ts, st.stay + 1500);
+            // 面向對方
+            const t = st.follow && officeActors[st.follow];
+            if (t) a.face = t.x < a.x ? -1 : 1;
+          }
+        }
         changed = true;
         if (el) el.classList.remove('walking');
         const stNow = a.job && a.state === 'visit' ? a.job.steps[a.job.i] : null;
@@ -1854,11 +1930,7 @@ function officeTick(ts) {
       }
       if (a.job) {
         // 記帳跑腿優先，不受同時走動人數限制
-        const st = a.job.steps[a.job.i];
-        a.spot = st.spot;
-        a.path = officePath(a, a.zone, OFFICE_SPOTS[st.spot], OFFICE_SPOTS[st.spot].zone);
-        a.back = false;
-        if (d && !st.quiet) setTimeout(() => officeSay(s.id, st.go), 0);
+        officeGoStep(a, s, ts, d);
       } else if (a.state === 'seat') {
         if (night) { a.until = ts + 8000; return; }   // 晚上在座位上睡覺，不走動
         if (!canStart) { a.until = ts + 1500; return; }
@@ -1874,6 +1946,7 @@ function officeTick(ts) {
         // 早上大家愛去茶水間泡咖啡
         if (officePhase === 'morning' && picks.includes('tea') && Math.random() < 0.5) a.spot = 'tea';
         const spot = OFFICE_SPOTS[a.spot];
+        a.target = spot;
         a.path = officePath(a, a.zone, spot, spot.zone);
         a.back = false;
       } else {

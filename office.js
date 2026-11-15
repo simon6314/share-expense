@@ -593,7 +593,8 @@ function officeRankOutfit(id, k) {
   if (k.lv !== k.max) return g;
   // 最高級的特別造型
   if (id === 'book') g += '<circle cx="31" cy="39" r="6.4" fill="none" stroke="#e0a82e" stroke-width="1.8"/><circle cx="49" cy="39" r="6.4" fill="none" stroke="#e0a82e" stroke-width="1.8"/><path d="M37.4 39 h5.2" stroke="#e0a82e" stroke-width="1.8"/>';
-  if (id === 'chart') g += '<ellipse class="of-halo" cx="40" cy="7" rx="15" ry="4" fill="none" stroke="#ffd66b" stroke-width="2.6"/>';
+  // 預言家：手捧會發光的水晶球
+  if (id === 'chart') g += '<g transform="translate(64 70)"><ellipse cx="0" cy="9" rx="8" ry="3" fill="#8a6ab8"/><circle class="of-orb" cx="0" cy="0" r="8.5" fill="#c9b6f2" stroke="#8a6ab8" stroke-width="1.4"/><circle cx="-2.8" cy="-3" r="2.4" fill="#fff" opacity="0.8"/><path d="M2 2 l1 -2.4 1 2.4 2.4 1 -2.4 1 -1 2.4 -1 -2.4 -2.4 -1 Z" fill="#fff6c9"/></g>';
   if (id === 'stock') g += '<path d="M17 27 Q18 9 40 9 Q62 9 63 27 Z" fill="#ffd66b"/><path d="M40 24 Q62 22 72 30 Q58 31 40 30 Z" fill="#e0a82e"/><path d="M36 14 l4 -3 4 3" stroke="#fff" stroke-width="1.6" fill="none"/>';
   if (id === 'cash') g += '<g transform="translate(64 74)"><path d="M-9 0 Q-11 -7 -4 -6 Q0 -10 4 -6 Q11 -7 9 0 Q0 4 -9 0 Z" fill="#ffd66b" stroke="#d99a1e" stroke-width="1.2"/><ellipse cx="0" cy="-6" rx="3.4" ry="2.4" fill="#ffe08a"/></g>';
   if (id === 'elf') g += '<path d="M33 56 L40 59 L33 62 Z M47 56 L40 59 L47 62 Z" fill="#ffd66b" stroke="#d99a1e" stroke-width="1"/><circle cx="40" cy="59" r="1.8" fill="#d99a1e"/>';   // 金色領結

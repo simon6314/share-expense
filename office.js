@@ -960,9 +960,30 @@ function officeBgSvg(d) {
     ${officeRugSvg()}
     ${mv(310, `<ellipse cx="575" cy="800" rx="64" ry="34" fill="#b9a48d"/><ellipse cx="575" cy="793" rx="64" ry="34" fill="#d7c4ae"/><ellipse cx="575" cy="790" rx="48" ry="23" fill="#f3e9db"/>
     <g transform="translate(628 824) rotate(-20)"><rect x="-11" y="-2.5" width="22" height="5" rx="2.5" fill="#fff"/><circle cx="-11" cy="-3" r="4" fill="#fff"/><circle cx="-11" cy="3" r="4" fill="#fff"/><circle cx="11" cy="-3" r="4" fill="#fff"/><circle cx="11" cy="3" r="4" fill="#fff"/></g>`)}
-    ${mv(220, `<rect x="510" y="518" width="74" height="104" rx="14" fill="#cfe0f2"/><rect x="520" y="528" width="54" height="40" rx="8" fill="#f7fbff"/>
-    <rect x="534" y="582" width="26" height="24" rx="5" fill="#ffffff" stroke="#b9cde4" stroke-width="3"/>
-    <path class="of-steam" d="M541 574 q-5 -8 0 -15 M553 574 q5 -8 0 -15" fill="none" stroke="#a9bfd8" stroke-width="3" stroke-linecap="round"/>`)}
+    ${mv(220, `<g class="of-coffee">
+      <ellipse cx="548" cy="626" rx="46" ry="6" fill="rgba(90,70,50,0.12)"/>
+      <!-- 側邊水箱 -->
+      <rect x="494" y="536" width="16" height="66" rx="5" fill="#d7ecf8" stroke="#a9cbe2" stroke-width="2"/>
+      <rect x="496" y="560" width="12" height="40" rx="3" fill="#9fd0f0" opacity="0.8"/><path d="M499 566 v28" stroke="#ffffff" stroke-width="1.6" opacity="0.8"/>
+      <!-- 機身 -->
+      <rect x="506" y="520" width="80" height="104" rx="12" fill="#e9eff5"/>
+      <rect x="506" y="520" width="80" height="104" rx="12" fill="none" stroke="#c5d2de" stroke-width="2"/>
+      <rect x="506" y="520" width="80" height="26" rx="12" fill="#5b6475"/><rect x="506" y="534" width="80" height="12" fill="#5b6475"/>
+      <rect x="513" y="526" width="28" height="13" rx="3" fill="#2f3845"/>
+      <text class="of-coffee-lcd" x="527" y="537" font-size="11" text-anchor="middle">${officePhase === 'morning' ? '☕' : '🍵'}</text>
+      <circle class="of-btn" cx="556" cy="533" r="4.4" fill="#ef7d7d"/><circle cx="571" cy="533" r="4.4" fill="#8fd3b0"/>
+      <!-- 沖泡頭、出水口、水流 -->
+      <rect x="528" y="550" width="36" height="11" rx="4" fill="#3e4a5a"/><rect x="541" y="560" width="10" height="7" rx="2" fill="#2f3845"/>
+      <rect class="of-drip" x="544.5" y="567" width="3" height="18" rx="1.5" fill="#8a5a3b"/>
+      <!-- 杯子（液面會跟著沖泡升高）-->
+      <clipPath id="ofCupClip"><path d="M533 584 h26 l-3 22 h-20 Z"/></clipPath>
+      <path d="M533 584 h26 l-3 22 h-20 Z" fill="#ffffff" stroke="#d9c7b0" stroke-width="2"/>
+      <g clip-path="url(#ofCupClip)"><rect class="of-fill" x="530" y="584" width="32" height="22" fill="${officePhase === 'morning' ? '#a9754f' : '#c9a27c'}"/></g>
+      <path d="M559 589 q8 0 7 7 q-1 5 -9 5" fill="none" stroke="#d9c7b0" stroke-width="2.4"/>
+      <!-- 滴水盤 -->
+      <rect x="518" y="606" width="56" height="9" rx="3" fill="#9aa8b6"/><path d="M526 610.5 h40" stroke="#c5d0db" stroke-width="2" stroke-dasharray="4 3"/>
+      <path class="of-steam" d="M540 578 q-5 -8 0 -15 M552 578 q5 -8 0 -15" fill="none" stroke="#a9bfd8" stroke-width="3" stroke-linecap="round"/>
+    </g>`)}
     ${mv(276, `<ellipse cx="812" cy="704" rx="72" ry="38" fill="#e3b98a"/><ellipse cx="812" cy="694" rx="72" ry="38" fill="#f4d9b6"/>
     <rect x="792" y="676" width="24" height="20" rx="5" fill="#ffffff" stroke="#d9c7b0" stroke-width="2.5"/><circle cx="838" cy="694" r="10" fill="#f79aae"/>`)}
     ${mv(328, `<rect x="672" y="792" width="276" height="96" rx="34" fill="#f3a9bf"/>
@@ -2117,6 +2138,10 @@ function officeTick(ts) {
   }
   const night = officePhase === 'night';
   officeMeetingTick(ts, d);
+  // 有人在茶水間（站著）：咖啡機開始沖泡
+  const brewing = Object.values(officeActors).some(a => a.state === 'visit' && (a.spot === 'tea' || a.spot === 'tea2'));
+  const sceneEl = document.getElementById('office-scene');
+  if (sceneEl && sceneEl.classList.contains('brewing') !== brewing) sceneEl.classList.toggle('brewing', brewing);
   const walking = Object.values(officeActors).filter(a => a.state === 'walk').length;
   let canStart = walking < 3;
 

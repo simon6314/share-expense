@@ -1377,6 +1377,16 @@ function officeSkits(d) {
 
   // ── 更多放閃 ──
   if (free('elf') && free('fox')) {
+    // 晚上：睡夢中的放閃（眼睛閉著、說夢話，一樣會冒愛心和粉紅泡泡）
+    if (officePhase === 'night') list.push({ key: 'love-night', ids: ['elf', 'fox'], sofa: () => pick([[
+      { who: 'fox', text: '（夢話）精靈…最喜歡你了… 💤💕', burst: true },
+      { who: 'elf', text: '（睡夢中把小狐狸抱緊一點）', lean: true, burst: true }], [
+      { who: 'elf', text: '（夢話）……預算…還有…你 💤' },
+      { who: 'fox', text: '（睡夢中蹭了蹭）嘿嘿… 💕', lean: true, burst: true }], [
+      { who: 'fox', text: '（翻身靠到精靈身上）💤', lean: true },
+      { who: 'elf', text: '（迷迷糊糊）……晚安，小狐狸 💕', burst: true }], [
+      { who: 'elf', text: '（夢話）明天…帶你去吃好料… 💤' },
+      { who: 'fox', text: '（夢話）耶…最愛精靈了… 💤💗', lean: true, burst: true }]]) });
     // 沙發上：靠肩膀、互相誇、紀念日行事曆、比心
     list.push({ key: 'love-lean', ids: ['elf', 'fox'], sofa: () => pick([[
       { who: 'fox', text: '（把頭靠在精靈肩膀上）好累喔～ 🥱', lean: true },
@@ -1567,7 +1577,7 @@ function officeStartSkit(d, ts) {
   if (!list.length) return false;
   // 晚上：大家在睡覺，只剩沙發上的悄悄話
   if (officePhase === 'night') {
-    list = list.filter(k => k.sofa && (k.key.startsWith('love') || k.key === 'sofa'));
+    list = list.filter(k => k.key === 'love-night' || k.key === 'sofa');
     if (!list.length || Math.random() < 0.5) return false;
   }
   // 花太快時，優先演提醒的那一段
@@ -1721,13 +1731,13 @@ function officeBurst(cx, cy, icons, n) {
 }
 
 // 從兩人中間冒出愛心和粉紅泡泡
-function officeLoveBurst() {
+function officeLoveBurst(count = 12) {
   const scene = document.getElementById('office-scene');
   if (!scene || officePaused) return;
   const e = officeActors.elf, f = officeActors.fox;
   const cx = (e.x + f.x) / 2, cy = Math.min(e.y, f.y) - 80;
   const hearts = ['💗', '💕', '💖', '💞', '❤️'];
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < count; i++) {
     const el = document.createElement('span');
     const bubble = i % 3 === 2;
     el.className = 'of-love' + (bubble ? ' bub' : '');
@@ -2187,7 +2197,8 @@ function officeTick(ts) {
   if (ts >= officeAmbientAt) {
     officeAmbientAt = ts + 14000 + Math.random() * 10000;
     const e = officeActors.elf, f = officeActors.fox;
-    if (e.state === 'seat' && f.state === 'seat' && !e.job && !f.job && !officePaused) officeFloat(Math.random() < 0.5 ? '💕' : '💗', false, { x: (e.x + f.x) / 2, y: e.y - 75 });
+    if (e.state === 'seat' && f.state === 'seat' && !e.job && !f.job && !officePaused && officePhase === 'night' && Math.random() < 0.4) officeLoveBurst(5);   // 睡在一起：飄出一小串粉紅泡泡
+    else if (e.state === 'seat' && f.state === 'seat' && !e.job && !f.job && !officePaused) officeFloat(Math.random() < 0.5 ? '💕' : '💗', false, { x: (e.x + f.x) / 2, y: e.y - 75 });
   }
   // 沒有人在跑腿時，每隔一陣子安排一段角色互動
   if (d && ts >= officeSkitAt) {

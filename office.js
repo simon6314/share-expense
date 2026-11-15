@@ -273,7 +273,7 @@ function officeCheckParty(info) {
   // 派對進行中先不安排別的互動
   officeSkitAt = Math.max(officeSkitAt, performance.now() + 18000);
   setTimeout(() => {
-    officeBurst(450, 330, ['🎉', '🎂', '🎊', '✨'], 18);
+    officeBurst(450, OFFICE_FLOOR.D - 120, ['🎉', '🎂', '🎊', '✨'], 18);
     officeJobFx({ i: 0, steps: [{ fx: 'talk', lines: [
       { who: 'chart', text: `辦公室 ${info.party} 週年快樂！🎂` },
       { who: 'chart', text: `這一年大家一共記了 ${info.yearCount} 筆` },
@@ -331,7 +331,7 @@ function officeCheckLevelUp(info) {
   if (prev === null || info.level <= prev) return;
   const name = OFFICE_LEVELS[info.level - 1].name;
   setTimeout(() => {
-    officeBurst(450, 620, ['🎉', '🎊', '✨', '⭐'], 18);
+    officeBurst(450, OFFICE_FLOOR.A - 160, ['🎉', '🎊', '✨', '⭐'], 18);
     officeSay('book', `辦公室升級了！多了${name} 🎉`);
     setTimeout(() => officeSay('fox', '哇～好棒！'), 1600);
   }, 1200);
@@ -742,7 +742,7 @@ function officeUpgradeSvg() {
       <circle cx="0" cy="2" r="8" fill="#ffd66b" stroke="#d99a1e" stroke-width="1.6"/><path d="M-3 2 h6" stroke="#b9831c" stroke-width="1.6"/></g>`).join('');
     if (info.medals.length > 7) g += `<text x="${116 + 7 * 22}" y="${OFFICE_FLOOR.A - 238}" font-size="16" font-weight="700" fill="#9a6614">+${info.medals.length - 7}</text>`;
   }
-  if (has('大電視')) g += `<g transform="translate(-500 ${OFFICE_TOP + 40 - 672})"><rect x="676" y="672" width="118" height="66" rx="8" fill="#3e4a5a"/><rect x="683" y="679" width="104" height="52" rx="5" fill="#9fd0f0"/>
+  if (has('大電視')) g += `<g transform="translate(-500 ${OFFICE_FLOOR.D - 260 - 672})"><rect x="676" y="672" width="118" height="66" rx="8" fill="#3e4a5a"/><rect x="683" y="679" width="104" height="52" rx="5" fill="#9fd0f0"/>
       <path d="M683 716 q26 -16 52 0 t52 0 v15 h-104 Z" fill="#8fd3b0"/><circle cx="760" cy="694" r="7" fill="#ffd66b"/><rect x="726" y="738" width="18" height="6" fill="#3e4a5a"/></g>`;
   if (has('走廊花園')) {
     const bed = (x, w) => `<rect x="${x}" y="588" width="${w}" height="44" rx="12" fill="#c9a27c"/><rect x="${x + 6}" y="592" width="${w - 12}" height="22" rx="8" fill="#8fd3b0"/>` +
@@ -759,7 +759,7 @@ function officeUpgradeSvg() {
       }
       return `<path d="${d}" fill="none" stroke="#a98f74" stroke-width="1.6"/>${bulbs}`;
     };
-    g += `<g class="of-lights">${['D', 'A', 'B', 'C'].map(z => line(40, 800, OFFICE_FLOOR[z] - 284)).join('')}</g>`;
+    g += `<g class="of-lights">${['C', 'D', 'A', 'B', 'E'].map(z => line(40, 800, OFFICE_FLOOR[z] - 284)).join('')}</g>`;
   }
   return g;
 }
@@ -820,8 +820,8 @@ function officeDecorSvg() {
       <path d="M${x - 8} 634 v18 M${x} 634 v22 M${x + 8} 634 v18" stroke="#ffd66b" stroke-width="2.4"/>
     </g>`;
     return `<g class="of-decor"><g transform="translate(0 ${OFFICE_FLOOR.D - 290 - 560})">${lantern(300)}${lantern(780)}</g>
-      <g transform="translate(116 ${OFFICE_FLOOR.C - 120}) rotate(45)"><rect x="-22" y="-22" width="44" height="44" rx="4" fill="#e8463e"/></g>
-      <text x="116" y="${OFFICE_FLOOR.C - 109}" font-size="28" font-weight="700" text-anchor="middle" fill="#ffd66b">福</text></g>`;
+      <g transform="translate(116 ${OFFICE_FLOOR.E - 120}) rotate(45)"><rect x="-22" y="-22" width="44" height="44" rx="4" fill="#e8463e"/></g>
+      <text x="116" y="${OFFICE_FLOOR.E - 109}" font-size="28" font-weight="700" text-anchor="middle" fill="#ffd66b">福</text></g>`;
   }
   if (h === 'anniv') {
     const hearts = [80, 200, 330, 560, 690, 820, 940].map((x, i) => `<path d="M${x} ${590 + (i % 2) * 18} c-8 -12 -24 -2 -14 10 l14 13 14 -13 c10 -12 -6 -22 -14 -10 Z" fill="${i % 2 ? '#f7a8c0' : '#ef5f7a'}"/>`).join('');
@@ -923,8 +923,9 @@ function officeBgSvg(d) {
     <path d="M${x + w / 2} ${y} v${h} M${x} ${y + h / 2} h${w}" stroke="#ffffff" stroke-width="5"/>${night ? `<circle cx="${x + 22}" cy="${y + 20}" r="2.4" fill="#fff6d6"/><circle cx="${x + 80}" cy="${y + 64}" r="2" fill="#fff6d6"/>` : `<path d="M${x + 14} ${y + h - 20} l26 -42" stroke="#ffffff" stroke-width="5" opacity="0.6"/>`}`;
   // 側面的桌子：桌面、桌腳
   const sideDesk = (x, w, z, top = '#e3b98a', leg = '#c99a6a') => `<rect x="${x}" y="${FL[z] - 82}" width="${w}" height="22" rx="6" fill="${top}"/><rect x="${x + 10}" y="${FL[z] - 60}" width="14" height="60" fill="${leg}"/><rect x="${x + w - 24}" y="${FL[z] - 60}" width="14" height="60" fill="${leg}"/>`;
-  const floors = [['D', '4F', '休息區'], ['A', '3F', '記帳區'], ['B', '2F', '倉庫'], ['C', '1F', '金庫']];
-  const wall = { D: ['#e9f2fc', '#c9d9ec'], A: ['#fff4e2', '#e8d2b0'], B: ['#e9f6f0', '#c4e2d4'], C: ['#fdebf1', '#efcbd8'] };
+  const floors = [['C', '5F', '金庫'], ['D', '4F', '休息區'], ['A', '3F', '記帳區'], ['B', '2F', '倉庫'], ['E', '1F', '會議室']];
+  const wall = { D: ['#e9f2fc', '#c9d9ec'], A: ['#fff4e2', '#e8d2b0'], B: ['#e9f6f0', '#c4e2d4'], C: ['#fdebf1', '#efcbd8'], E: ['#f1ecfb', '#d9cfee'] };
+  const N = floors.length;
 
   // 2F 貨架：三層木架；上層放需要注意的品項（左架 1–3、右架 4–6），其他放日用品
   const rack2 = x => `<rect x="${x}" y="${FL.B - 256}" width="12" height="256" fill="#b98a5c"/><rect x="${x + 288}" y="${FL.B - 256}" width="12" height="256" fill="#b98a5c"/>
@@ -950,7 +951,7 @@ function officeBgSvg(d) {
     <rect x="250" y="${TOP - 92}" width="500" height="58" rx="14" fill="#ffffff" stroke="#f3a0b8" stroke-width="5"/>
     <text x="500" y="${TOP - 52}" font-size="32" font-weight="800" text-anchor="middle" fill="#c2557f">精靈 &amp; 小狐狸 共同帳本大樓</text>
     <!-- 外牆與四個樓層 -->
-    <rect x="20" y="${TOP}" width="960" height="${4 * FH}" fill="#e6d3bd"/>
+    <rect x="20" y="${TOP}" width="960" height="${N * FH}" fill="#e6d3bd"/>
     ${floors.map(([z, f, name]) => `
       <rect x="36" y="${ceil(z) - 30}" width="780" height="${FH - 26}" rx="8" fill="${wall[z][0]}"/>
       <rect x="36" y="${FL[z]}" width="780" height="12" fill="${wall[z][1]}"/>
@@ -1007,10 +1008,16 @@ function officeBgSvg(d) {
     ${al.length ? `<circle cx="400" cy="${ceil('B') + 4}" r="24" fill="#ef5f7a"/><text x="400" y="${ceil('B') + 14}" font-size="28" font-weight="700" text-anchor="middle" fill="#fff">${al.length}</text>` : ''}
     <g><rect x="770" y="${FL.B - 62}" width="44" height="62" rx="8" fill="#b9cbd6"/><rect x="764" y="${FL.B - 70}" width="56" height="12" rx="6" fill="#9fb4c4"/><path d="M782 ${FL.B - 50} v40 M792 ${FL.B - 50} v40 M802 ${FL.B - 50} v40" stroke="#9fb4c4" stroke-width="3" stroke-linecap="round"/></g>
 
-    <!-- 1F 金庫：大門、信箱、信封（每月的愛）、窗、櫃台 -->
-    <rect x="56" y="${FL.C - 200}" width="120" height="200" rx="10" fill="#c99a6a"/><rect x="66" y="${FL.C - 190}" width="48" height="190" rx="6" fill="#e3b98a"/><rect x="118" y="${FL.C - 190}" width="48" height="190" rx="6" fill="#e3b98a"/>
-    <circle cx="108" cy="${FL.C - 92}" r="5" fill="#ffd66b"/><circle cx="124" cy="${FL.C - 92}" r="5" fill="#ffd66b"/>
-    <g><rect x="194" y="${FL.C - 120}" width="12" height="120" fill="#c9a27c"/><rect x="176" y="${FL.C - 160}" width="50" height="40" rx="10" fill="#f08fb0"/><rect x="183" y="${FL.C - 148}" width="36" height="6" rx="3" fill="#c2557f"/><path d="M222 ${FL.C - 156} v-14 h10 v8 h-10" fill="#ffd66b"/></g>
+    <!-- 5F 金庫：圓形金庫大門、信封（每月的愛）、窗、櫃台 -->
+    <g transform="translate(116 ${FL.C - 104})">
+      <rect x="-62" y="-98" width="124" height="202" rx="10" fill="#9aa8b6"/>
+      <circle cx="0" cy="0" r="54" fill="#c5d0db" stroke="#7d8a99" stroke-width="6"/>
+      <circle cx="0" cy="0" r="40" fill="#dfe5eb" stroke="#9aa8b6" stroke-width="3"/>
+      <circle cx="0" cy="0" r="9" fill="#7d8a99"/>
+      <path d="M0 -30 V30 M-30 0 H30 M-21 -21 L21 21 M21 -21 L-21 21" stroke="#7d8a99" stroke-width="4" stroke-linecap="round"/>
+      ${[-40, 40].map(y => `<rect x="-58" y="${y - 6}" width="10" height="12" rx="2" fill="#7d8a99"/>`).join('')}
+      <text x="0" y="86" font-size="18" font-weight="800" text-anchor="middle" fill="#ffffff">VAULT</text>
+    </g>
     ${env(250, ceil('C') + 30, d.love[0], '#7fd6e6')}${env(336, ceil('C') + 30, d.love[1], '#f7a8c0')}
     ${win(470, ceil('C') + 26, 100, 80)}
     ${sideDesk(570, 220, 'C', '#f8e1f0', '#e9c9e0')}
@@ -1020,9 +1027,27 @@ function officeBgSvg(d) {
       <text x="200" y="778" font-size="22" font-weight="700" text-anchor="middle" fill="#8a5a2b">$</text>
     </g>
 
+    <!-- 1F 會議室：大門、信箱、投影幕（月會時顯示上個月的摘要）、長桌、椅子、盆栽 -->
+    <rect x="56" y="${FL.E - 200}" width="120" height="200" rx="10" fill="#c99a6a"/><rect x="66" y="${FL.E - 190}" width="48" height="190" rx="6" fill="#e3b98a"/><rect x="118" y="${FL.E - 190}" width="48" height="190" rx="6" fill="#e3b98a"/>
+    <circle cx="108" cy="${FL.E - 92}" r="5" fill="#ffd66b"/><circle cx="124" cy="${FL.E - 92}" r="5" fill="#ffd66b"/>
+    <g><rect x="194" y="${FL.E - 120}" width="12" height="120" fill="#c9a27c"/><rect x="176" y="${FL.E - 160}" width="50" height="40" rx="10" fill="#f08fb0"/><rect x="183" y="${FL.E - 148}" width="36" height="6" rx="3" fill="#c2557f"/><path d="M222 ${FL.E - 156} v-14 h10 v8 h-10" fill="#ffd66b"/></g>
+    <rect x="300" y="${ceil('E') - 14}" width="340" height="8" rx="4" fill="#7d8a99"/>
+    <rect x="310" y="${ceil('E') - 8}" width="320" height="150" rx="6" fill="${officeMeeting && officeMeeting.started ? '#ffffff' : '#eef1f6'}" stroke="#c5d0db" stroke-width="3"/>
+    ${officeMeeting && officeMeeting.started && officePrev && !officePrev.none ? `
+      <text x="470" y="${ceil('E') + 26}" font-size="22" font-weight="800" text-anchor="middle" fill="#8a5fb5">📋 ${officePrev.month}月 月會</text>
+      <text x="470" y="${ceil('E') + 62}" font-size="20" font-weight="700" text-anchor="middle" fill="#5b6475">總支出 ${fmt(officePrev.total)}</text>
+      ${officePrev.top ? `<text x="470" y="${ceil('E') + 92}" font-size="18" text-anchor="middle" fill="#8a94a3">最多：${t(officePrev.top.name, 5)} ${fmt(officePrev.top.value)}</text>` : ''}
+      <text x="470" y="${ceil('E') + 122}" font-size="18" text-anchor="middle" fill="#8a94a3">共 ${officePrev.count} 筆</text>` : `
+      <text x="470" y="${ceil('E') + 70}" font-size="26" font-weight="700" text-anchor="middle" fill="#b8b0cc">會議室</text>
+      <text x="470" y="${ceil('E') + 102}" font-size="16" text-anchor="middle" fill="#c8c2d8">每月第一次打開時開月會</text>`}
+    ${[300, 390, 480, 570, 660].map(x => `<rect x="${x}" y="${FL.E - 100}" width="40" height="56" rx="8" fill="#b9a3e0"/><rect x="${x - 4}" y="${FL.E - 48}" width="48" height="12" rx="4" fill="#9a84c7"/><rect x="${x + 16}" y="${FL.E - 36}" width="8" height="36" fill="#7d6aa8"/>`).join('')}
+    <rect x="280" y="${FL.E - 76}" width="440" height="20" rx="8" fill="#e3b98a"/><rect x="300" y="${FL.E - 56}" width="14" height="56" fill="#c99a6a"/><rect x="686" y="${FL.E - 56}" width="14" height="56" fill="#c99a6a"/>
+    ${[350, 470, 590].map(x => `<rect x="${x}" y="${FL.E - 92}" width="22" height="16" rx="3" fill="#ffffff" stroke="#d9c7b0" stroke-width="2"/>`).join('')}
+    ${officePlantSvg(780, FL.E - 36, officeInfo_ ? officeInfo_.plant : 2)}
+
     <!-- 電梯井：每層一扇門和樓層燈 -->
-    <rect x="832" y="${TOP}" width="132" height="${4 * FH}" fill="#cdbba6"/>
-    <path d="M848 ${TOP} v${4 * FH} M948 ${TOP} v${4 * FH}" stroke="#b39f88" stroke-width="5"/>
+    <rect x="832" y="${TOP}" width="132" height="${N * FH}" fill="#cdbba6"/>
+    <path d="M848 ${TOP} v${N * FH} M948 ${TOP} v${N * FH}" stroke="#b39f88" stroke-width="5"/>
     ${floors.map(([z, f]) => `
       <rect x="840" y="${FL[z] - 166}" width="116" height="166" rx="6" fill="#9aa8b6"/>
       <rect x="846" y="${FL[z] - 160}" width="52" height="160" fill="#c5d0db"/><rect x="898" y="${FL[z] - 160}" width="52" height="160" fill="#c5d0db"/>
@@ -1034,8 +1059,8 @@ function officeBgSvg(d) {
     ${officeDecorSvg()}
     ${officePartySvg()}
     <!-- 地面 -->
-    <rect x="0" y="${TOP + 4 * FH}" width="1000" height="20" fill="#b9a48d"/><rect x="0" y="${TOP + 4 * FH + 20}" width="1000" height="${H - TOP - 4 * FH - 20}" fill="${night ? '#5f8a5c' : '#a8d8a0'}"/>
-    <rect x="56" y="${TOP + 4 * FH}" width="120" height="10" fill="#d9c7b0"/>
+    <rect x="0" y="${TOP + N * FH}" width="1000" height="20" fill="#b9a48d"/><rect x="0" y="${TOP + N * FH + 20}" width="1000" height="${H - TOP - N * FH - 20}" fill="${night ? '#5f8a5c' : '#a8d8a0'}"/>
+    <rect x="56" y="${TOP + N * FH}" width="120" height="10" fill="#d9c7b0"/><rect x="40" y="${TOP + N * FH + 4}" width="152" height="6" rx="3" fill="#efe3d3"/>
   </svg>`;
 }
 
@@ -1087,49 +1112,50 @@ function officeDetailHtml(key, d) {
 // ── 員工、座位與走動路線 ──────────────────────────────────────
 // 每一區有一條淨空的直走道（col），員工先橫向走到走道，再經中間走廊到另一區，不會穿過家具
 // 四層樓（側面）：每層樓高 330；地板線（腳站的高度）
-const OFFICE_TOP = 150, OFFICE_FH = 330, OFFICE_H = 1590, OFFICE_HS = OFFICE_H / 100;
-const OFFICE_FLOOR = { D: 450, A: 780, B: 1110, C: 1440 };        // D＝4F 休息區、A＝3F 記帳區、B＝2F 倉庫、C＝1F 金庫
-const OFFICE_FLOOR_NAME = { D: '4F', A: '3F', B: '2F', C: '1F' };
+const OFFICE_TOP = 150, OFFICE_FH = 330, OFFICE_H = 1920, OFFICE_HS = OFFICE_H / 100;
+// C＝5F 金庫、D＝4F 休息區、A＝3F 記帳區、B＝2F 倉庫、E＝1F 會議室（大門在 1F）
+const OFFICE_FLOOR = { C: 450, D: 780, A: 1110, B: 1440, E: 1770 };
+const OFFICE_FLOOR_NAME = { C: '5F', D: '4F', A: '3F', B: '2F', E: '1F' };
 const OFFICE_LIFT_X = 898, OFFICE_LIFT_DOOR = 860;              // 電梯廂中心、電梯門口
 // 電梯：一次載一個人，其他人在門口排隊
-const officeLift = { y: 1440, goal: 1440, phase: 'idle', rider: null, queue: [], until: 0 };
+const officeLift = { y: 1770, goal: 1770, phase: 'idle', rider: null, queue: [], until: 0 };
 const OFFICE_SPOTS = {
-  byDog:   { x: 410, y: 450, zone: 'D', go: '蹦蹦跳跳去找黑柴', at: '跑去逗黑柴玩 🐶' },  // 黑柴的窩旁邊
-  byChart: { x: 440, y: 780, zone: 'A' },    // 小析座位旁
-  byStock: { x: 480, y: 1110, zone: 'B' },   // 阿貨座位旁
-  byCash:  { x: 700, y: 1440, zone: 'C' },   // 阿庫座位旁
-  tea2:    { x: 240, y: 450, zone: 'D' },    // 茶水間的第二個位置（一起喝茶）
-  mail:    { x: 250, y: 1440, zone: 'C' },   // 1F 大門旁（收信）
-  trash:   { x: 735, y: 1110, zone: 'B' },   // 倉庫的垃圾桶旁
-  wow_stock: { x: 290, y: 780, zone: 'A' },  // 大筆支出：大家圍到記帳區
-  wow_cash:  { x: 360, y: 780, zone: 'A' },
-  wow_chart: { x: 430, y: 780, zone: 'A' },
-  wow_dog:   { x: 235, y: 780, zone: 'A' },
-  meet_chart: { x: 228, y: 780, zone: 'A' },  // 月會：小析站在白板前報告，大家排成一排
-  meet_stock: { x: 330, y: 780, zone: 'A' },
-  meet_cash:  { x: 410, y: 780, zone: 'A' },
-  meet_elf:   { x: 490, y: 780, zone: 'A' },
-  meet_book:  { x: 570, y: 780, zone: 'A' },
-  meet_fox:   { x: 650, y: 780, zone: 'A' },
-  meet_dog:   { x: 735, y: 780, zone: 'A' },
-  hugFox:  { x: 598, y: 434, zone: 'D' },    // 小狐狸身邊（精靈走過去抱抱）
-  hugElf:  { x: 592, y: 434, zone: 'D' },    // 精靈身邊（小狐狸走過去抱抱）
-  giveElf: { x: 470, y: 450, zone: 'D' },    // 沙發前：把錢交給精靈
-  giveFox: { x: 720, y: 450, zone: 'D' },    // 沙發前：把錢交給小狐狸
-  tea:   { x: 170, y: 450, zone: 'D', go: '走去茶水間', at: '倒杯茶休息一下', rest: true },
-  board: { x: 330, y: 780, zone: 'A', go: '走去看白板', at: '看白板上的分類' },
-  desk:  { x: 250, y: 780, zone: 'A', go: '走去記帳桌', at: '跟小帳對帳' },
-  shelf: { x: 210, y: 1110, zone: 'B', go: '走去貨架', at: '看看貨架' },
-  piggy: { x: 520, y: 1440, zone: 'C', go: '走去存錢筒', at: '看看存錢筒' },
+  byDog:   { x: 410, y: OFFICE_FLOOR.D, zone: 'D', go: '蹦蹦跳跳去找黑柴', at: '跑去逗黑柴玩 🐶' },  // 黑柴的窩旁邊
+  byChart: { x: 440, y: OFFICE_FLOOR.A, zone: 'A' },    // 小析座位旁
+  byStock: { x: 480, y: OFFICE_FLOOR.B, zone: 'B' },   // 阿貨座位旁
+  byCash:  { x: 700, y: OFFICE_FLOOR.C, zone: 'C' },   // 阿庫座位旁
+  tea2:    { x: 240, y: OFFICE_FLOOR.D, zone: 'D' },    // 茶水間的第二個位置（一起喝茶）
+  mail:    { x: 250, y: OFFICE_FLOOR.E, zone: 'E' },   // 1F 大門旁（收信）
+  trash:   { x: 735, y: OFFICE_FLOOR.B, zone: 'B' },   // 倉庫的垃圾桶旁
+  wow_stock: { x: 290, y: OFFICE_FLOOR.A, zone: 'A' },  // 大筆支出：大家圍到記帳區
+  wow_cash:  { x: 360, y: OFFICE_FLOOR.A, zone: 'A' },
+  wow_chart: { x: 430, y: OFFICE_FLOOR.A, zone: 'A' },
+  wow_dog:   { x: 235, y: OFFICE_FLOOR.A, zone: 'A' },
+  meet_chart: { x: 236, y: OFFICE_FLOOR.E, zone: 'E' },  // 月會：在 1F 會議室，小析站在投影幕旁報告
+  meet_stock: { x: 330, y: OFFICE_FLOOR.E, zone: 'E' },
+  meet_cash:  { x: 422, y: OFFICE_FLOOR.E, zone: 'E' },
+  meet_elf:   { x: 514, y: OFFICE_FLOOR.E, zone: 'E' },
+  meet_book:  { x: 606, y: OFFICE_FLOOR.E, zone: 'E' },
+  meet_fox:   { x: 698, y: OFFICE_FLOOR.E, zone: 'E' },
+  meet_dog:   { x: 786, y: OFFICE_FLOOR.E, zone: 'E' },
+  hugFox:  { x: 598, y: OFFICE_FLOOR.D - 16, zone: 'D' },    // 小狐狸身邊（精靈走過去抱抱）
+  hugElf:  { x: 592, y: OFFICE_FLOOR.D - 16, zone: 'D' },    // 精靈身邊（小狐狸走過去抱抱）
+  giveElf: { x: 470, y: OFFICE_FLOOR.D, zone: 'D' },    // 沙發前：把錢交給精靈
+  giveFox: { x: 720, y: OFFICE_FLOOR.D, zone: 'D' },    // 沙發前：把錢交給小狐狸
+  tea:   { x: 170, y: OFFICE_FLOOR.D, zone: 'D', go: '走去茶水間', at: '倒杯茶休息一下', rest: true },
+  board: { x: 330, y: OFFICE_FLOOR.A, zone: 'A', go: '走去看白板', at: '看白板上的分類' },
+  desk:  { x: 250, y: OFFICE_FLOOR.A, zone: 'A', go: '走去記帳桌', at: '跟小帳對帳' },
+  shelf: { x: 210, y: OFFICE_FLOOR.B, zone: 'B', go: '走去貨架', at: '看看貨架' },
+  piggy: { x: 520, y: OFFICE_FLOOR.C, zone: 'C', go: '走去存錢筒', at: '看看存錢筒' },
 };
 const OFFICE_STAFF = [
-  { id: 'book',  name: '小帳',   role: '記帳', tag: 'book',  seat: { x: 160, y: 780, zone: 'A' }, visits: ['tea', 'board'], rest: 1.6 },
-  { id: 'chart', name: '小析',   role: '分析', tag: 'chart', seat: { x: 520, y: 780, zone: 'A' }, visits: ['board', 'board', 'desk', 'tea'], rest: 1 },
-  { id: 'stock', name: '阿貨',   role: '倉管', tag: 'stock', seat: { x: 400, y: 1110, zone: 'B' }, visits: ['shelf', 'shelf', 'shelf', 'tea'], rest: 0.8 },
-  { id: 'cash',  name: '阿庫',   role: '出納', tag: 'cash',  seat: { x: 640, y: 1440, zone: 'C' }, visits: ['piggy', 'piggy', 'desk', 'tea'], rest: 1.1 },
-  { id: 'elf',   name: '精靈',   role: '成員', tag: 'elf',   seat: { x: 540, y: 434, zone: 'D' }, visits: ['board', 'board', 'desk', 'piggy', 'shelf'], rest: 1.5 },
-  { id: 'fox',   name: '小狐狸', role: '成員', tag: 'fox',   seat: { x: 650, y: 434, zone: 'D' }, visits: ['tea', 'tea', 'shelf', 'piggy', 'board', 'byDog', 'desk'], rest: 0.45 },
-  { id: 'dog',   name: '黑柴',   role: '吉祥物', tag: 'dog', seat: { x: 330, y: 436, zone: 'D' }, visits: ['giveElf', 'giveFox', 'giveFox', 'tea', 'piggy', 'board'], speed: 210, rest: 0.7 },
+  { id: 'book',  name: '小帳',   role: '記帳', tag: 'book',  seat: { x: 160, y: OFFICE_FLOOR.A, zone: 'A' }, visits: ['tea', 'board'], rest: 1.6 },
+  { id: 'chart', name: '小析',   role: '分析', tag: 'chart', seat: { x: 520, y: OFFICE_FLOOR.A, zone: 'A' }, visits: ['board', 'board', 'desk', 'tea'], rest: 1 },
+  { id: 'stock', name: '阿貨',   role: '倉管', tag: 'stock', seat: { x: 400, y: OFFICE_FLOOR.B, zone: 'B' }, visits: ['shelf', 'shelf', 'shelf', 'tea'], rest: 0.8 },
+  { id: 'cash',  name: '阿庫',   role: '出納', tag: 'cash',  seat: { x: 640, y: OFFICE_FLOOR.C, zone: 'C' }, visits: ['piggy', 'piggy', 'desk', 'tea'], rest: 1.1 },
+  { id: 'elf',   name: '精靈',   role: '成員', tag: 'elf',   seat: { x: 540, y: OFFICE_FLOOR.D - 16, zone: 'D' }, visits: ['board', 'board', 'desk', 'piggy', 'shelf'], rest: 1.5 },
+  { id: 'fox',   name: '小狐狸', role: '成員', tag: 'fox',   seat: { x: 650, y: OFFICE_FLOOR.D - 16, zone: 'D' }, visits: ['tea', 'tea', 'shelf', 'piggy', 'board', 'byDog', 'desk'], rest: 0.45 },
+  { id: 'dog',   name: '黑柴',   role: '吉祥物', tag: 'dog', seat: { x: 330, y: OFFICE_FLOOR.D - 14, zone: 'D' }, visits: ['giveElf', 'giveFox', 'giveFox', 'tea', 'piggy', 'board'], speed: 210, rest: 0.7 },
 ];
 const officeActors = {};   // id -> { x, y, zone, state: 'seat'|'walk'|'visit', path, until, spot, back, face }
 
@@ -1156,7 +1182,7 @@ function officeZoneAt(x, y) {
   Object.entries(OFFICE_FLOOR).forEach(([z, fy]) => { const dd = Math.abs(fy - y); if (dd < dist) { dist = dd; best = z; } });
   return best;
 }
-const OFFICE_ZONE_X = { A: [60, 800], B: [60, 800], C: [60, 800], D: [60, 800] };
+const OFFICE_ZONE_X = { A: [60, 800], B: [60, 800], C: [60, 800], D: [60, 800], E: [60, 800] };
 
 // 跑腿這一站要走去哪裡：固定地點，或「某個人現在的位置旁邊」
 function officeStepTarget(a, st) {
@@ -1177,10 +1203,11 @@ function officeHoldFor(st, ts, ms) {
   if (t && !t.job && t.state !== 'walk') t.until = Math.max(t.until, ts + ms);
 }
 
-// 電梯：從排隊的第一個人開始，先去接人、開門、載到目的樓層、開門讓人出來
+// 電梯：去接排隊的第一個人；同一層、要去同一樓的人一起上（最多四人），載到目的樓層再開門
 function officeLiftTick(ts, dt) {
   const L = officeLift;
   const SPEED = 680;
+  if (!L.riders) L.riders = [];
   if (L.phase === 'idle' && L.queue.length) {
     const id = L.queue[0], a = officeActors[id];
     if (!a || !a.path.length || !a.path[0].lift) { L.queue.shift(); return; }
@@ -1189,24 +1216,33 @@ function officeLiftTick(ts, dt) {
   if (L.phase === 'fetch' || L.phase === 'ride') {
     const dy = L.goal - L.y, step = SPEED * dt;
     L.y = Math.abs(dy) <= step ? L.goal : L.y + Math.sign(dy) * step;
-    const a = officeActors[L.rider];
-    if (L.phase === 'ride' && a) a.y = L.y;
+    if (L.phase === 'ride') L.riders.forEach(id => { officeActors[id].y = L.y; });
     if (L.y === L.goal) {
       if (L.phase === 'fetch') { L.phase = 'board'; L.until = ts + 320; }
       else { L.phase = 'exit'; L.until = ts + 280; }
     }
   } else if (L.phase === 'board' && ts >= L.until) {
-    const a = officeActors[L.rider];
-    if (!a || !a.path.length || !a.path[0].lift) { L.phase = 'idle'; L.rider = null; L.queue.shift(); return; }
-    a.lift = 'ride'; a.x = OFFICE_LIFT_X; a.face = 1;
-    L.phase = 'ride'; L.goal = a.path[0].y;
+    const first = officeActors[L.rider];
+    if (!first || !first.path.length || !first.path[0].lift) { L.phase = 'idle'; L.rider = null; L.queue.shift(); return; }
+    const target = first.path[0].y, here = L.y;
+    // 同一層、要去同一樓的人一起上
+    L.riders = L.queue.filter(id => {
+      const o = officeActors[id];
+      return o && o.lift === 'wait' && Math.abs(o.y - here) < 40 && o.path[0] && o.path[0].lift && o.path[0].y === target;
+    }).slice(0, 4);
+    if (!L.riders.includes(L.rider)) L.riders.unshift(L.rider);
+    L.riders.forEach((id, i) => { const o = officeActors[id]; o.lift = 'ride'; o.x = OFFICE_LIFT_X + [0, -26, 26, -13][i]; o.face = 1; });
+    L.queue = L.queue.filter(id => !L.riders.includes(id));
+    L.phase = 'ride'; L.goal = target;
     if (officeVisible()) officeRefreshTexts();
     // 其他排隊的人往前站
-    L.queue.slice(1).forEach((id, i) => { const o = officeActors[id]; if (o && o.lift === 'wait') o.x = OFFICE_LIFT_DOOR - i * 46; });
+    L.queue.forEach((id, i) => { const o = officeActors[id]; if (o && o.lift === 'wait' && Math.abs(o.y - here) < 40) o.x = OFFICE_LIFT_DOOR - i * 46; });
   } else if (L.phase === 'exit' && ts >= L.until) {
-    const a = officeActors[L.rider];
-    if (a) { a.path.shift(); a.lift = null; a.y = L.y; a.zone = officeZoneAt(a.x, a.y); }
-    L.queue.shift(); L.rider = null; L.phase = 'idle';
+    L.riders.forEach(id => {
+      const a = officeActors[id];
+      if (a) { a.path.shift(); a.lift = null; a.y = L.y; a.zone = officeZoneAt(a.x, a.y); }
+    });
+    L.riders = []; L.rider = null; L.phase = 'idle';
     if (officeVisible()) officeRefreshTexts();
   }
   const car = document.getElementById('of-lift');
@@ -1926,6 +1962,7 @@ function officeFloat(text, income, at) {
   if (at) { el.style.left = (at.x / 10).toFixed(2) + '%'; el.style.top = ((at.y - 130) / OFFICE_HS).toFixed(2) + '%'; }
   scene.appendChild(el);
   const pig = at ? null : scene.querySelector('.of-pigbtn');
+  if (!at) el.style.top = ((OFFICE_FLOOR.C - 150) / OFFICE_HS).toFixed(2) + '%';
   if (pig) { pig.classList.add('poke'); setTimeout(() => pig.classList.remove('poke'), 700); }
   setTimeout(() => el.remove(), 2000);
 }
@@ -2084,10 +2121,11 @@ function drawOffice() {
 
   scene.dataset.phase = officePhase;
   // 晚上和傍晚：燈亮起來的位置（桌燈、螢幕、貨架、小豬、沙發、茶水機）
-  const glows = [[160, 690], [520, 680], [400, 990], [360, 1350], [600, 370], [100, 370]]
+  const FLR = OFFICE_FLOOR;
+  const glows = [[160, FLR.A - 90], [520, FLR.A - 100], [400, FLR.B - 130], [360, FLR.C - 90], [600, FLR.D - 80], [100, FLR.D - 80], [470, FLR.E - 200]]
     .map(([x, y]) => `<span class="of-glow" style="left:${x / 10}%;top:${(y / OFFICE_HS).toFixed(2)}%"></span>`).join('');
   scene.innerHTML = `${officeBgSvg(d)}<div class="of-shade"></div>${glows}<div class="of-lift" id="of-lift" style="top:${((officeLift.y - 166) / OFFICE_HS).toFixed(2)}%"><span></span></div>
-    <button type="button" class="of-pigbtn mood-${d.mood}${officeSelected === 'piggy' ? ' selected' : ''}" data-office-id="piggy" aria-label="小豬（存錢筒）">
+    <button type="button" class="of-pigbtn mood-${d.mood}${officeSelected === 'piggy' ? ' selected' : ''}" data-office-id="piggy" aria-label="小豬（存錢筒）" style="top:${((OFFICE_FLOOR.C - 171) / OFFICE_HS).toFixed(2)}%">
       <span class="of-name">小豬</span>${officePiggySvg(d)}
     </button>
     ${actorsHtml}`;
@@ -2266,7 +2304,7 @@ function officeTick(ts) {
         a.lift = 'wait'; a.face = 1;
         if (!officeLift.queue.includes(s.id)) officeLift.queue.push(s.id);
         // 排隊：後到的人站在前一個人後面
-        const idx = officeLift.queue.indexOf(s.id) - (officeLift.rider && officeLift.queue[0] === officeLift.rider ? 1 : 0);
+        const idx = officeLift.queue.filter(id => officeActors[id] && Math.abs(officeActors[id].y - a.y) < 40).indexOf(s.id);
         a.x = OFFICE_LIFT_DOOR - Math.max(0, idx) * 46;
         officeRefreshTexts();
       }
@@ -2399,18 +2437,19 @@ function officeMeetingTick(ts, d) {
     const busy = Object.values(officeActors).some(a => a.job) || Object.values(officeJobs).some(q => q.length);
     if (busy || officePhase === 'night') return;
     m.pending = false; m.launchedAt = ts; m.ids = ids;
-    ids.forEach(id => officeJobs[id].push({ type: 'meeting', steps: [{ spot: 'meet_' + id, fx: 'meet', stay: 600000, go: id === 'chart' ? '開會囉！大家到白板集合 📋' : '去白板前開月會', at: '開月會中 📋', quiet: id !== 'chart' }] }));
+    ids.forEach(id => officeJobs[id].push({ type: 'meeting', steps: [{ spot: 'meet_' + id, fx: 'meet', stay: 600000, go: id === 'chart' ? '開會囉！大家到 1F 會議室集合 📋' : '去 1F 會議室開月會', at: '開月會中 📋', quiet: id !== 'chart' }] }));
     if (!m.force) { try { localStorage.setItem(OFFICE_MEET_PREFIX + officePrev.sheet, '1'); } catch (e) { /* ignore */ } }
     return;
   }
   if (m.started) {
-    if (ts >= m.endAt) officeMeeting = null;
+    if (ts >= m.endAt) { officeMeeting = null; if (officeVisible()) setTimeout(() => drawOffice(), 0); }
     return;
   }
   const inPlace = id => { const a = officeActors[id]; return a.state === 'visit' && a.job && a.job.rec.type === 'meeting'; };
   const here = m.ids.filter(inPlace);
   if (here.length === m.ids.length || (here.length >= 3 && ts - m.launchedAt > 35000)) {
     m.started = true;
+    setTimeout(() => { if (officeVisible()) drawOffice(); }, 0);
     const lines = officeMeetingLines(d).filter(l => here.includes(l.who));
     officeJobFx({ i: 0, steps: [{ fx: 'talk', lines }], rec: { type: 'skit' } });
     const end = ts + lines.length * 2100 + 2600;

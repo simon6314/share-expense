@@ -13,7 +13,7 @@
 
 .office-scene {
   position: relative; width: 100%; max-width: 640px; margin: 0 auto;
-  aspect-ratio: 1000 / 1590; container-type: inline-size;
+  aspect-ratio: 1000 / 1920; container-type: inline-size;
   border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden;
   background: #f6ead8; user-select: none; -webkit-user-select: none;
 }
@@ -29,7 +29,7 @@
 .of-actor.selected .of-fig, .of-pigbtn.selected svg { filter: drop-shadow(0 0 1.4cqw rgba(247,154,174,1)); }
 .of-actor:focus-visible, .of-pigbtn:focus-visible { outline: 2px solid #22d3ee; outline-offset: 2px; border-radius: 8px; }
 .of-actor.saying { z-index: 3000 !important; }
-.of-pigbtn { left: 23%; top: 79.8%; width: 26%; z-index: 720; }
+.of-pigbtn { left: 23%; top: 14.6%; width: 26%; z-index: 720; }
 
 .of-name {
   position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); margin-bottom: -0.6cqw;
@@ -146,7 +146,7 @@
 .of-quick { max-width: 640px; margin: 0 auto 8px; display: flex; gap: 8px; }
 .of-quick button { flex: 1; min-width: 0; padding: 9px 8px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 14px; font-weight: 600; cursor: pointer; }
 .of-quick button:active { transform: scale(0.98); }
-.of-float { position: absolute; left: 36%; top: 80%; z-index: 4000; pointer-events: none; white-space: nowrap; font-family: 'DM Mono', monospace; font-weight: 700; font-size: 5cqw; text-shadow: 0 0 0.6cqw #fff, 0 0 0.6cqw #fff, 0 0 1cqw #fff; animation: of-float-up 1.9s ease-out forwards; }
+.of-float { position: absolute; left: 36%; top: 15.6%; z-index: 4000; pointer-events: none; white-space: nowrap; font-family: 'DM Mono', monospace; font-weight: 700; font-size: 5cqw; text-shadow: 0 0 0.6cqw #fff, 0 0 0.6cqw #fff, 0 0 1cqw #fff; animation: of-float-up 1.9s ease-out forwards; }
 .of-float.exp { color: var(--expense); }
 .of-float.inc { color: var(--income); animation-name: of-float-down; }
 .of-pigbtn.poke svg { animation: of-poke 0.6s ease-in-out; transform-origin: 50% 100%; }
@@ -276,7 +276,7 @@
 @media (prefers-reduced-motion: reduce) { .office-scene.brewing .of-coffee .of-drip, .office-scene.brewing .of-coffee .of-btn, .office-scene.brewing .of-coffee-lcd { animation: none; } }
 
 /* 電梯廂：跟著電梯上下，到站時亮燈 */
-.of-lift { position: absolute; left: 84.2%; width: 11.2%; height: 10.44%; box-sizing: border-box; pointer-events: none;
+.of-lift { position: absolute; left: 84.2%; width: 11.2%; height: 8.65%; box-sizing: border-box; pointer-events: none;
   background: linear-gradient(#fff6e8, #ffe9c4); border: 0.5cqw solid #e0a82e; border-radius: 1cqw; box-shadow: 0 0.6cqw 1.4cqw rgba(90,70,50,0.25); }
 .of-lift span { position: absolute; left: 0; right: 0; top: 0; height: 2.2cqw; line-height: 2.2cqw; background: #e0a82e; color: #fff; font-size: 1.6cqw; font-weight: 800; text-align: center; }
 .of-lift.open { box-shadow: 0 0 2.4cqw rgba(255,214,107,0.9); }

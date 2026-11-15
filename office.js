@@ -693,9 +693,29 @@ function officeUpgradeSvg() {
   const has = n => info.unlocked.includes(n);
   let g = '';
   if (has('書櫃')) {
-    const cols = ['#ef7d7d', '#7fb6f0', '#ffd66b', '#8fd3b0', '#c9a0e6', '#f4a261'];
-    g += `<rect x="26" y="262" width="34" height="210" rx="6" fill="#c9a27c"/>` +
-      [0, 1, 2, 3, 4, 5, 6, 7, 8].map(i => `<rect x="30" y="${268 + i * 22}" width="26" height="18" rx="3" fill="${cols[i % cols.length]}"/>`).join('');
+    const cols = ['#ef7d7d', '#7fb6f0', '#ffd66b', '#8fd3b0', '#c9a0e6', '#f4a261', '#9aa8b6'];
+    const shelfY = [262, 318, 374, 430];   // 每一層的頂端（每層高 52）
+    // 一排書：寬度、高度輪流變化；k 決定起始顏色
+    const books = (y, k, n, x0 = 32) => {
+      let x = x0, out = '';
+      for (let i = 0; i < n; i++) {
+        const w = [7, 9, 6, 8, 10][(i + k) % 5], h = [40, 46, 36, 44, 42][(i + k * 2) % 5];
+        out += `<rect x="${x}" y="${y + 50 - h}" width="${w}" height="${h}" rx="1.5" fill="${cols[(i + k) % cols.length]}"/><path d="M${x + 1.5} ${y + 54 - h} h${w - 3}" stroke="#ffffff" stroke-width="1.4" opacity="0.6"/>`;
+        x += w + 1;
+      }
+      return out;
+    };
+    g += `<g>
+      <rect x="22" y="252" width="64" height="236" rx="5" fill="#a9754f"/>
+      <rect x="27" y="257" width="54" height="226" rx="3" fill="#6f4a30"/>
+      ${shelfY.map(y => `<rect x="24" y="${y + 50}" width="60" height="6" rx="2" fill="#c99a6a"/>`).join('')}
+      ${books(shelfY[0], 0, 6)}
+      ${books(shelfY[1], 2, 3)}<path d="M64 ${shelfY[1] + 50} l12 -40 l7 2 l-12 40 Z" fill="#7fb6f0"/>
+      ${[0, 1, 2].map(i => `<rect x="${32 + i * 15}" y="${shelfY[2] + 8}" width="13" height="42" rx="2" fill="${['#5f9ee6', '#ef7d7d', '#49b07f'][i]}"/><rect x="${34 + i * 15}" y="${shelfY[2] + 16}" width="9" height="12" rx="1.5" fill="#ffffff"/><text x="${38.5 + i * 15}" y="${shelfY[2] + 25}" font-size="7" font-weight="700" text-anchor="middle" fill="#4a3b30">${['帳', '本', '冊'][i]}</text>`).join('')}
+      <path d="M72 ${shelfY[2] + 50} q-6 -14 0 -24 q6 10 0 24 Z" fill="#8fd3b0"/><rect x="66" y="${shelfY[2] + 40}" width="12" height="10" rx="2" fill="#f4b99a"/>
+      ${books(shelfY[3], 4, 3)}
+      <rect x="58" y="${shelfY[3] + 18}" width="20" height="32" rx="2" fill="#ffffff" stroke="#d9b48a" stroke-width="2"/><path d="M62 ${shelfY[3] + 40} l4 -6 4 4 3 -3 3 5 Z" fill="#8fd3b0"/><circle cx="72" cy="${shelfY[3] + 27}" r="2.4" fill="#ffd66b"/>
+    </g>`;
   }
   if (has('魚缸')) g += `<g><rect x="372" y="1000" width="84" height="58" rx="10" fill="#bfe3f0" stroke="#8ec5dc" stroke-width="4"/>
       <path d="M376 1046 h76 v8 h-76 Z" fill="#e8d7b5"/><path d="M390 1046 q-4 -14 2 -24 M400 1046 q4 -12 -2 -20" stroke="#8fd3b0" stroke-width="3" fill="none"/>
@@ -814,27 +834,64 @@ function officeBgSvg(d) {
   // 白板：前三大支出
   const max = d.cats.length ? d.cats[0].value : 1;
   const barColor = ['#f79aae', '#7fd6e6', '#ffd66b'];
+  const short = v => v >= 10000 ? `$${(v / 10000).toFixed(v >= 100000 ? 0 : 1)}萬` : `$${Math.round(v).toLocaleString()}`;
   const board = d.cats.slice(0, 3).map((c, i) => `
-    <text x="318" y="${76 + i * 34}" font-size="27" fill="#6b5a4c">${t(c.name, 4)}</text>
-    <rect x="436" y="${56 + i * 34}" width="136" height="20" rx="10" fill="#f3ece3"/>
-    <rect x="436" y="${56 + i * 34}" width="${Math.max(14, 136 * c.value / max).toFixed(0)}" height="20" rx="10" fill="${barColor[i]}"/>`).join('')
-    || '<text x="445" y="104" font-size="27" text-anchor="middle" fill="#a8978a">還沒有支出</text>';
+    <text x="306" y="${70 + i * 32}" font-size="23" font-weight="600" fill="#5b6475">${t(c.name, 4)}</text>
+    <rect x="402" y="${54 + i * 32}" width="106" height="17" rx="8.5" fill="#eef1f4"/>
+    <rect x="402" y="${54 + i * 32}" width="${Math.max(12, 106 * c.value / max).toFixed(0)}" height="17" rx="8.5" fill="${barColor[i]}"/>
+    <path d="M406 ${58 + i * 32} h${Math.max(4, 106 * c.value / max - 12).toFixed(0)}" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <text x="586" y="${69 + i * 32}" font-size="18" font-weight="600" text-anchor="end" fill="#8a94a3">${short(c.value)}</text>`).join('')
+    || '<text x="444" y="100" font-size="25" text-anchor="middle" fill="#a8978a">還沒有支出 ✏️</text>';
+  // 白板外框、標題、磁鐵、筆槽（畫在 mv(30) 的座標裡）
+  const boardFrame = alarm => `
+    <rect x="288" y="26" width="312" height="140" rx="10" fill="#c3ccd6"/>
+    <rect x="291" y="29" width="306" height="134" rx="8" fill="#dfe5eb"/>
+    <rect x="297" y="35" width="294" height="118" rx="5" fill="#ffffff" stroke="${alarm ? '#ef5f7a' : '#e6ebf0'}" stroke-width="${alarm ? 6 : 2}"/>
+    <path d="M304 42 L330 42" stroke="#f3f5f8" stroke-width="5" stroke-linecap="round"/>
+    <rect x="404" y="18" width="80" height="20" rx="6" fill="#9aa8b6"/><text x="444" y="33" font-size="14" font-weight="700" text-anchor="middle" fill="#ffffff">本月支出</text>
+    <circle cx="303" cy="41" r="5" fill="#ef7d7d"/><circle cx="585" cy="41" r="5" fill="#7fb6f0"/>
+    <rect x="318" y="164" width="252" height="9" rx="4" fill="#aeb9c4"/>
+    <rect x="334" y="158" width="26" height="7" rx="3.5" fill="#ef5f7a"/><rect x="334" y="158" width="7" height="7" rx="2" fill="#c2405b"/>
+    <rect x="366" y="158" width="26" height="7" rx="3.5" fill="#5f9ee6"/><rect x="366" y="158" width="7" height="7" rx="2" fill="#3f78bd"/>
+    <rect x="398" y="158" width="26" height="7" rx="3.5" fill="#49b07f"/><rect x="398" y="158" width="7" height="7" rx="2" fill="#2f8a5e"/>
+    <rect x="520" y="156" width="34" height="10" rx="3" fill="#3e4a5a"/><rect x="520" y="156" width="34" height="4" rx="2" fill="#7d8a99"/>`;
   // 貨架：上排放需要注意的品項，下排是一般貨
-  const box = (x, y, a) => {
-    const fill = !a ? '#ecd3ae' : (a.level === 'red' ? '#ffd3d9' : (a.level === 'warn' ? '#ffe8bd' : '#cdeee3'));
-    const stroke = !a ? '#d9bb8f' : (a.level === 'red' ? '#f08f9f' : (a.level === 'warn' ? '#f2b85c' : '#8fd3b0'));
-    return `<g${a && a.level === 'red' ? ' class="of-alert"' : ''}><rect x="${x}" y="${y}" width="86" height="58" rx="10" fill="${fill}" stroke="${stroke}" stroke-width="3"/>
-      ${a ? `<text x="${x + 43}" y="${y + 39}" font-size="26" text-anchor="middle" fill="#5b4636">${a.name ? t(a.name, 3) : '✓'}</text>` : ''}</g>`;
+  // 空位：放一些日用品（依位置輪流），看起來像真的貨架
+  const filler = (x, y, k) => [
+    `<rect x="${x + 10}" y="${y + 18}" width="26" height="38" rx="4" fill="#ffffff" stroke="#d8cfc5" stroke-width="2"/><ellipse cx="${x + 23}" cy="${y + 18}" rx="13" ry="4" fill="#f1ece6" stroke="#d8cfc5" stroke-width="2"/>
+     <rect x="${x + 42}" y="${y + 18}" width="26" height="38" rx="4" fill="#ffffff" stroke="#d8cfc5" stroke-width="2"/><ellipse cx="${x + 55}" cy="${y + 18}" rx="13" ry="4" fill="#f1ece6" stroke="#d8cfc5" stroke-width="2"/>`,
+    `<rect x="${x + 14}" y="${y + 14}" width="22" height="42" rx="6" fill="#9fd8cb"/><rect x="${x + 19}" y="${y + 6}" width="12" height="10" rx="3" fill="#5fb89f"/>
+     <rect x="${x + 44}" y="${y + 24}" width="28" height="32" rx="5" fill="#f7c9a8"/><rect x="${x + 48}" y="${y + 30}" width="20" height="10" rx="2" fill="#ffffff" opacity="0.8"/>`,
+    `<rect x="${x + 8}" y="${y + 30}" width="70" height="26" rx="5" fill="#cfe0f2"/><rect x="${x + 14}" y="${y + 12}" width="58" height="20" rx="5" fill="#e3ecf6"/>
+     <path d="M${x + 43} ${y + 12} v44" stroke="#b9cde4" stroke-width="2"/>`,
+  ][k % 3];
+  const box = (x, y, a, k = 0) => {
+    if (!a) return filler(x, y, k);
+    const tag = a.level === 'red' ? '#ef5f7a' : (a.level === 'warn' ? '#f2b85c' : '#49b07f');
+    return `<g${a.level === 'red' ? ' class="of-alert"' : ''}>
+      <rect x="${x}" y="${y + 2}" width="86" height="56" rx="4" fill="#e3b98a" stroke="#c99a6a" stroke-width="2"/>
+      <path d="M${x} ${y + 12} h86" stroke="#c99a6a" stroke-width="2"/>
+      <rect x="${x + 37}" y="${y + 2}" width="12" height="56" fill="#f3dfc0" opacity="0.85"/>
+      <rect x="${x + 7}" y="${y + 17}" width="72" height="34" rx="5" fill="#ffffff" stroke="${tag}" stroke-width="2.4"/>
+      <rect x="${x + 7}" y="${y + 17}" width="72" height="7" rx="3" fill="${tag}"/>
+      <text x="${x + 43}" y="${y + 46}" font-size="21" font-weight="600" text-anchor="middle" fill="#4a3b30">${a.name && a.name.trim() ? t(a.name, 3) : '✓'}</text></g>`;
   };
+  // 木頭層架：背板、左右立柱、上下層板
+  const rack = y => `
+    <rect x="656" y="${y + 2}" width="300" height="90" rx="4" fill="#ecd6b8"/>
+    <path d="M660 ${y + 30} h292 M660 ${y + 60} h292" stroke="#e3c9a5" stroke-width="2"/>
+    <rect x="650" y="${y - 4}" width="12" height="104" rx="3" fill="#b98a5c"/><rect x="950" y="${y - 4}" width="12" height="104" rx="3" fill="#b98a5c"/>
+    <rect x="650" y="${y - 6}" width="312" height="9" rx="3" fill="#c99a6a"/>
+    <rect x="650" y="${y + 90}" width="312" height="10" rx="3" fill="#a9754f"/><rect x="650" y="${y + 90}" width="312" height="3" fill="#d9b48a"/>`;
   const top3 = d.alerts.slice(0, 3);
   const topBoxes = [0, 1, 2].map(i => {
     if (top3[i]) return box(672 + i * 96, 62, top3[i]);
-    return d.items.length && !d.alerts.length ? box(672 + i * 96, 62, { level: 'ok', name: i === 0 ? '' : ' ' }) : box(672 + i * 96, 62, null);
+    return d.items.length && !d.alerts.length ? box(672 + i * 96, 62, { level: 'ok', name: '' }) : box(672 + i * 96, 62, null, i);
   }).join('');
   // 下排：第 4～6 項；超過 6 項時，最後一格改成「+N項」
   const lowBoxes = [0, 1, 2].map(i => {
     const al = d.alerts[3 + i];
-    if (!al) return box(672 + i * 96, 172, null);
+    if (!al) return box(672 + i * 96, 172, null, i + 1);
     if (i === 2 && d.alerts.length > 6) return box(672 + i * 96, 172, { level: al.level, name: `+${d.alerts.length - 5}項` });
     return box(672 + i * 96, 172, al);
   }).join('');
@@ -867,10 +924,10 @@ function officeBgSvg(d) {
       <text x="386" y="1258">金庫</text><text x="512" y="1258">休息區</text>
     </g>
     <!-- 記帳區：白板、兩張桌子、盆栽；本月最大一筆貼在白板下 -->
-    ${d.biggest ? `<g transform="rotate(-3 505 225)"><rect x="420" y="196" width="170" height="56" rx="5" fill="#fff3a8" stroke="#e8d36a" stroke-width="2"/><circle cx="505" cy="200" r="6" fill="#ef5f7a"/>
+    ${d.biggest ? `<g transform="translate(0 8) rotate(-3 505 225)"><rect x="420" y="196" width="170" height="56" rx="5" fill="#fff3a8" stroke="#e8d36a" stroke-width="2"/><circle cx="505" cy="200" r="6" fill="#ef5f7a"/>
       <text x="505" y="222" font-size="18" font-weight="700" text-anchor="middle" fill="#8a6d1c">最大筆 ${fmt(d.biggest.expense)}</text>
       <text x="505" y="244" font-size="17" text-anchor="middle" fill="#8a6d1c">${t(d.biggest.item, 8)}</text></g>` : ''}
-    ${mv(30, `<rect x="296" y="34" width="296" height="124" rx="16" fill="#ffffff" stroke="${d.pace && d.pace.fast ? '#ef5f7a' : '#9fd8cb'}" stroke-width="8"/>${board}${d.pace && d.pace.fast ? `<g class="of-alarm"><rect x="372" y="-14" width="144" height="34" rx="17" fill="#ef5f7a"/><text x="444" y="10" font-size="22" font-weight="700" text-anchor="middle" fill="#fff">⚠ 花比較快</text></g>` : ''}`)}
+    ${mv(30, `${boardFrame(d.pace && d.pace.fast)}${board}${d.pace && d.pace.fast ? `<g class="of-alarm"><rect x="372" y="-14" width="144" height="34" rx="17" fill="#ef5f7a"/><text x="444" y="10" font-size="22" font-weight="700" text-anchor="middle" fill="#fff">⚠ 花比較快</text></g>` : ''}`)}
     ${mv(51, `${desk(60, 108, 215, wood)}
     <path d="M118 150 Q140 138 162 148 Q184 138 206 150 L206 126 Q184 115 162 124 Q140 115 118 126 Z" fill="#ffffff" stroke="#d9c7b0" stroke-width="2"/>
     <path d="M162 124 L162 148 M128 132 Q140 127 154 132 M170 132 Q184 127 198 132" fill="none" stroke="#9fd8cb" stroke-width="2.4" stroke-linecap="round"/>
@@ -881,9 +938,9 @@ function officeBgSvg(d) {
     <path d="M450 216 l10 -9 9 5 12 -13 12 8 10 -10" fill="none" stroke="#f79aae" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>`)}
     ${officePlantSvg(550, 410, officeInfo_ ? officeInfo_.plant : 2)}
     <!-- 倉庫：兩排貨架、小推車桌 -->
-    ${mv(29, `<rect x="656" y="46" width="300" height="92" rx="14" fill="#f8e3c6" stroke="#e3b98a" stroke-width="5"/>${topBoxes}
+    ${mv(29, `${rack(46)}${topBoxes}
     ${d.alerts.length ? `<circle cx="952" cy="50" r="26" fill="#ef5f7a"/><text x="952" y="61" font-size="30" font-weight="700" text-anchor="middle" fill="#fff">${d.alerts.length}</text>` : ''}`)}
-    ${mv(73, `<rect x="656" y="156" width="300" height="92" rx="14" fill="#f8e3c6" stroke="#e3b98a" stroke-width="5"/>${lowBoxes}`)}
+    ${mv(73, `${rack(156)}${lowBoxes}`)}
     ${mv(115, `${desk(846, 268, 108, ['#d9efe6', '#b5dccd'])}
     <rect x="866" y="276" width="44" height="32" rx="6" fill="#ecd3ae" stroke="#d9bb8f" stroke-width="3"/><path d="M866 292 h44" stroke="#d9bb8f" stroke-width="3"/>`)}
     <!-- 金庫：小豬存錢筒（另外畫成按鈕）、兩個信封（每月的愛）、櫃台 -->

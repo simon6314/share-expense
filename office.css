@@ -249,3 +249,11 @@
 .of-eye-closed { display: none; }
 .of-actor.sleeping .of-eye { display: none; }
 .of-actor.sleeping .of-eye-closed { display: inline; }
+
+/* 職位：發光徽章、光環、成就裡的星星 */
+.of-badge-glow { filter: drop-shadow(0 0 1.6px #ffd66b); animation: of-badge 1.8s ease-in-out infinite; }
+@keyframes of-badge { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+.of-halo { animation: of-halo 2.4s ease-in-out infinite; }
+@keyframes of-halo { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.5px); } }
+.of-stars { color: #e0a82e; letter-spacing: 1px; font-size: 11px; }
+@media (prefers-reduced-motion: reduce) { .of-badge-glow, .of-halo { animation: none; } }

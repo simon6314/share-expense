@@ -14,7 +14,29 @@ let officeSayAt = 0;                // 下一次冒出對話框的時間
 let officeData_ = null;             // 最近一次整理好的資料
 const officeJobs = { book: [], chart: [], stock: [], cash: [], elf: [], fox: [], dog: [] };
 const OFFICE_PETS_KEY = 'shareExpense.office.pets';       // 黑柴累積被摸的次數
-const OFFICE_PROMO_KEY = 'shareExpense.office.promo';     // 已經慶祝過的升職
+const OFFICE_RANK_KEY = 'shareExpense.office.rank';       // 每個人上次看到的職位等級（升職時慶祝）
+// 職位層級：by＝看哪個數字，ranks＝[職稱, 門檻]
+const OFFICE_RANKS = {
+  book:  { by: 'total',  unit: '筆', label: '累積記帳', ranks: [['實習記帳員', 0], ['記帳員', 300], ['資深記帳師', 1000], ['記帳主任', 2000], ['傳說帳神', 5000]] },
+  chart: { by: 'months', unit: '個月', label: '有紀錄的月份', ranks: [['實習分析師', 0], ['分析師', 6], ['首席分析師', 12], ['數據長', 24], ['預言家', 36]] },
+  stock: { by: 'items',  unit: '項', label: '庫存登記', ranks: [['倉管助理', 0], ['倉管', 10], ['倉庫主管', 20], ['物流總監', 40]] },
+  cash:  { by: 'medals', unit: '枚', label: '省錢獎章', ranks: [['出納', 0], ['金庫主管', 3], ['財務長', 6], ['金庫守護神', 12]] },
+  dog:   { by: 'pets',   unit: '次', label: '被摸', ranks: [['吉祥物', 0], ['人氣吉祥物', 50], ['皇冠吉祥物', 100], ['辦公室之王', 300], ['傳說柴神', 1000]] },
+  elf:   { by: 'settled', unit: '個月', label: '完成月底結算', ranks: [['理財新手', 0], ['預算規劃師', 3], ['財務總監', 12], ['家庭 CFO', 24]] },
+  fox:   { by: 'fun',    unit: '筆', label: '吃喝玩樂的紀錄', ranks: [['生活玩家', 0], ['美食探險家', 30], ['享樂大師', 100], ['人生體驗長', 300]] },
+};
+// 小狐狸的「吃喝玩樂」分類
+const OFFICE_FUN_CATS = ['餐飲', '飲料', '住宿旅遊', '景點', '表演展覽', '相片'];
+
+// 某人目前的職位：{ lv（0 起算）, max, title, value, next: [職稱, 門檻] | null }
+function officeRankOf(id, info) {
+  const r = OFFICE_RANKS[id];
+  if (!r || !info) return null;
+  const value = info.rankValues[r.by] || 0;
+  let lv = 0;
+  r.ranks.forEach(([, at], i) => { if (value >= at) lv = i; });
+  return { lv, max: r.ranks.length - 1, title: r.ranks[lv][0], value, next: r.ranks[lv + 1] || null, unit: r.unit, label: r.label };
+}
 let officeDogPets = 0;
 try { officeDogPets = parseInt(localStorage.getItem(OFFICE_PETS_KEY) || '0', 10) || 0; } catch (e) { officeDogPets = 0; }
 let officeInfo_ = null;             // 最近一次算好的等級、獎盃、升職
@@ -23,7 +45,7 @@ function officePet() {
   officeDogPets++;
   try { localStorage.setItem(OFFICE_PETS_KEY, String(officeDogPets)); } catch (e) { /* ignore */ }
   const n = document.querySelector('[data-office-num="dog"]'); if (n) n.textContent = officeDogPets + ' 次';
-  if (officeDogPets === 100 && officeVisible()) setTimeout(() => drawOffice(), 300);   // 戴上小皇冠
+  if ([50, 100, 300, 1000].includes(officeDogPets) && officeVisible()) setTimeout(() => drawOffice(), 300);   // 升職：換裝
 }
 let officeSkitAt = 0;               // 下一次安排角色互動的時間
 let officeSkitLast = '';            // 上一次的互動，避免連續重複
@@ -145,7 +167,9 @@ function officeSheetStats(sheet, recs) {
   const real = (recs || []).filter(r => !isSummaryRow(r) && r.item !== '帳戶餘額' && r.owner !== '');
   const days = [...new Set(real.map(r => toMMDD(r.date)).filter(Boolean).map(k => `${year}-${k.replace('/', '-')}`))];
   const expense = real.filter(r => r.expense > 0 && !(r.note && r.note.includes('先付'))).reduce((t, r) => t + r.expense, 0);
-  return { count: real.length, days, expense, y: m ? +m[1] : 0, m: m ? +(String(sheet).match(/\/(\d{1,2})月/) || [0, 0])[1] : 0 };
+  const settled = (recs || []).some(r => /支出部分轉回/.test(r.item) && r.expense > 0);
+  const fun = real.filter(r => r.owner === '小狐狸' && r.expense > 0 && OFFICE_FUN_CATS.includes(categorize(r.item))).length;
+  return { count: real.length, days, expense, settled, fun, y: m ? +m[1] : 0, m: m ? +(String(sheet).match(/\/(\d{1,2})月/) || [0, 0])[1] : 0 };
 }
 
 // 讀所有月份（有快取就用快取），算累積筆數；只在背景做，不擋畫面
@@ -204,17 +228,16 @@ function officeLevelInfo() {
   const yearAgo = curIdx - 12;
   const yearCount = Object.values(sheets).filter(v => v.y && v.y * 12 + v.m > yearAgo).reduce((t, v) => t + v.count, 0);
 
-  // 員工升職
+  // 職位用的數字
   const items = Array.isArray(inventory) ? inventory.length : 0;
-  const promo = {};
-  if (total >= 1000) promo.book = '資深記帳師';
-  if (months >= 12) promo.chart = '首席分析師';
-  if (items >= 20) promo.stock = '倉庫主管';
-  if (medals.length >= 3) promo.cash = '金庫主管';
-  if (officeDogPets >= 100) promo.dog = '皇冠吉祥物';
+  const rankValues = {
+    total, months, items, medals: medals.length, pets: officeDogPets,
+    settled: Object.values(sheets).filter(v => v.settled).length,
+    fun: Object.values(sheets).reduce((t, v) => t + (v.fun || 0), 0),
+  };
 
   return { total, streak, level, next: OFFICE_LEVELS[level] || null, unlocked: OFFICE_LEVELS.slice(0, level).map(l => l.name),
-    months, plant, medals, first, party, yearCount, promo };
+    months, plant, medals, first, party, yearCount, rankValues };
 }
 
 // 成就一覽（點等級列打開）
@@ -226,9 +249,13 @@ function officeAchievementsHtml(info) {
     .map(([n, name]) => row(`${info.streak >= n ? '✅' : '🔒'} ${name}`, `連續 ${n} 天`, info.streak >= n ? 'of-inc' : '')).join('');
   const plantName = ['', '小芽', '長葉子', '茂盛', '開花', '結果'][info.plant];
   const plantNext = info.plant >= 5 ? '已經結果了 🍊' : `第 ${[0, 3, 6, 12, 24][info.plant]} 個月長成「${['', '長葉子', '茂盛', '開花', '結果'][info.plant]}」`;
-  const promos = [['book', '小帳', '資深記帳師', '累積 1000 筆'], ['chart', '小析', '首席分析師', '使用滿 12 個月'], ['stock', '阿貨', '倉庫主管', '庫存登記 20 項'],
-    ['cash', '阿庫', '金庫主管', '省錢獎章 3 枚'], ['dog', '黑柴', '戴小皇冠', '被摸 100 次']]
-    .map(([id, name, title, need]) => row(`${info.promo[id] ? '✅' : '🔒'} ${name}・${title}`, need, info.promo[id] ? 'of-inc' : '')).join('');
+  const nameOf = { book: '小帳', chart: '小析', stock: '阿貨', cash: '阿庫', elf: '精靈', fox: '小狐狸', dog: '黑柴' };
+  const promos = Object.keys(OFFICE_RANKS).map(id => {
+    const k = officeRankOf(id, info);
+    const stars = '★'.repeat(k.lv) + '☆'.repeat(k.max - k.lv);
+    const next = k.next ? `下一級「${k.next[0]}」還差 ${k.next[1] - k.value} ${k.unit}` : '已經到頂了 👑';
+    return `<div class="of-row"><span>${nameOf[id]}・<b>${k.title}</b> <small class="of-stars">${stars}</small></span><b class="${k.next ? '' : 'of-inc'}">${next}</b></div>`;
+  }).join('');
   return `<h4>🏆 辦公室成就 <small>Lv.${info.level + 1}</small></h4>
     <div class="of-sub">家具（累積 ${info.total} 筆）</div>${levels}
     <div class="of-sub">連續記帳獎盃（目前 ${info.streak} 天）</div>${cups}
@@ -264,23 +291,35 @@ function officeCup(streak) {
   return null;
 }
 
-// 升職時慶祝一次（每台裝置各一次）
+// 升職時慶祝（每升一級一次；每台裝置各自記）
 function officeCheckPromo(info) {
   if (!info) return;
-  let seen = {};
-  try { seen = JSON.parse(localStorage.getItem(OFFICE_PROMO_KEY) || 'null'); } catch (e) { return; }
-  const first = seen === null;
-  seen = seen || {};
-  const fresh = Object.keys(info.promo).filter(id => !seen[id]);
-  fresh.forEach(id => { seen[id] = 1; });
-  try { localStorage.setItem(OFFICE_PROMO_KEY, JSON.stringify(seen)); } catch (e) { return; }
-  if (first || !fresh.length) return;   // 第一次打開：直接顯示，不慶祝
-  const id = fresh[0];
-  setTimeout(() => {
-    const a = officeActors[id];
-    if (a) officeBurst(a.x, a.y - 120, ['🎉', '⭐', '✨'], 10);
-    officeSay(id, id === 'dog' ? '汪汪！（戴上小皇冠 👑）' : `升職了！我現在是${info.promo[id]} 🎉`);
-  }, 2600);
+  let seen = null;
+  try { seen = JSON.parse(localStorage.getItem(OFFICE_RANK_KEY) || 'null'); } catch (e) { return; }
+  const now = {};
+  Object.keys(OFFICE_RANKS).forEach(id => { now[id] = officeRankOf(id, info).lv; });
+  try { localStorage.setItem(OFFICE_RANK_KEY, JSON.stringify(now)); } catch (e) { return; }
+  if (!seen) return;   // 第一次打開：直接顯示，不慶祝
+  const up = Object.keys(now).filter(id => now[id] > (seen[id] || 0));
+  if (!up.length) return;
+  // 同時升職的人輪流慶祝（最多三位，每位隔 3.5 秒）
+  up.slice(0, 3).forEach((id, i) => {
+    const title = officeRankOf(id, info).title;
+    const line = {
+      book: `升職了！我是${title}了…手在發抖 ✍️😭`,
+      chart: `${title}！數據證明我很優秀 📈🥹`,
+      stock: `我…我當上${title}了？不會出錯吧 😱✨`,
+      cash: `${title}…我終於可以管更多錢了 😭💰`,
+      elf: `${title}，照計畫達成 📋✨`,
+      fox: `耶～我是${title}！去吃好料慶祝 🎉🍜`,
+      dog: `汪汪汪！（升上${title}，瘋狂轉圈）🌀👑`,
+    }[id];
+    setTimeout(() => {
+      const a = officeActors[id];
+      if (a) officeBurst(a.x, a.y - 120, ['🎉', '⭐', '✨'], 12);
+      officeSay(id, line);
+    }, 2600 + i * 3500);
+  });
 }
 
 // 升級時：撒彩帶、大家喊一聲（每台裝置各一次）
@@ -538,15 +577,36 @@ function officeStaffSvg(id) {
       </g>
     </g>`;
 }
+// 職位的外觀：徽章 銅 → 銀 → 金星 → 發光金星；黑柴是皇冠和披風；最高級有特別造型
+function officeRankOutfit(id, k) {
+  let g = '';
+  if (id === 'dog') {
+    if (k.lv >= 3) g += '<path d="M23 60 Q16 76 25 86 L31 64 Z M57 60 Q64 76 55 86 L49 64 Z" fill="#c2405b"/>';   // 披風
+    if (k.lv >= 4) g += '<path d="M27 13 L30 1 L35 8 L40 0 L45 8 L50 1 L53 13 Z" fill="#ffd66b" stroke="#d99a1e" stroke-width="1.4"/><circle cx="40" cy="6" r="2" fill="#ef5f7a"/><circle cx="32" cy="9" r="1.4" fill="#7fb6f0"/><circle cx="48" cy="9" r="1.4" fill="#8fd3b0"/>';
+    else if (k.lv >= 2) g += '<path d="M32 12 L34 4 L37 9 L40 3 L43 9 L46 4 L48 12 Z" fill="#ffd66b" stroke="#d99a1e" stroke-width="1.2"/>';
+    else g += '<circle cx="40" cy="72" r="3.6" fill="#d9925b" stroke="#b46b38" stroke-width="1"/>';   // 人氣吉祥物：銅鈴
+    return g;
+  }
+  // 胸前徽章
+  const tier = [null, ['#e0a271', '#b46b38'], ['#e3e9ef', '#9fb0bf'], ['#ffd66b', '#d99a1e'], ['#ffd66b', '#d99a1e']][Math.min(k.lv, 4)];
+  g += `<path class="${k.lv >= 4 || (k.lv === k.max && k.max === 3) ? 'of-badge-glow' : ''}" d="M49 64 l2.2 4.4 4.8 0.7 -3.5 3.4 0.8 4.8 -4.3 -2.3 -4.3 2.3 0.8 -4.8 -3.5 -3.4 4.8 -0.7 Z" fill="${tier[0]}" stroke="${tier[1]}" stroke-width="1"/>`;
+  if (k.lv !== k.max) return g;
+  // 最高級的特別造型
+  if (id === 'book') g += '<circle cx="31" cy="39" r="6.4" fill="none" stroke="#e0a82e" stroke-width="1.8"/><circle cx="49" cy="39" r="6.4" fill="none" stroke="#e0a82e" stroke-width="1.8"/><path d="M37.4 39 h5.2" stroke="#e0a82e" stroke-width="1.8"/>';
+  if (id === 'chart') g += '<ellipse class="of-halo" cx="40" cy="7" rx="15" ry="4" fill="none" stroke="#ffd66b" stroke-width="2.6"/>';
+  if (id === 'stock') g += '<path d="M17 27 Q18 9 40 9 Q62 9 63 27 Z" fill="#ffd66b"/><path d="M40 24 Q62 22 72 30 Q58 31 40 30 Z" fill="#e0a82e"/><path d="M36 14 l4 -3 4 3" stroke="#fff" stroke-width="1.6" fill="none"/>';
+  if (id === 'cash') g += '<g transform="translate(64 74)"><path d="M-9 0 Q-11 -7 -4 -6 Q0 -10 4 -6 Q11 -7 9 0 Q0 4 -9 0 Z" fill="#ffd66b" stroke="#d99a1e" stroke-width="1.2"/><ellipse cx="0" cy="-6" rx="3.4" ry="2.4" fill="#ffe08a"/></g>';
+  if (id === 'elf') g += '<path d="M33 56 L40 59 L33 62 Z M47 56 L40 59 L47 62 Z" fill="#ffd66b" stroke="#d99a1e" stroke-width="1"/><circle cx="40" cy="59" r="1.8" fill="#d99a1e"/>';   // 金色領結
+  if (id === 'fox') g += '<ellipse cx="31" cy="22" rx="6" ry="4" fill="#2f2f38"/><ellipse cx="49" cy="22" rx="6" ry="4" fill="#2f2f38"/><path d="M37 21 h6" stroke="#2f2f38" stroke-width="1.6"/><path d="M28 21 l3 -1.6" stroke="#fff" stroke-width="1" opacity="0.6"/>';   // 推到頭上的墨鏡
+  return g;
+}
+
 // 換季服裝：冬天（12–2 月）圍巾、黑柴穿背心；夏天（6–8 月）手拿小扇子
 function officeOutfit(id) {
   let add = '';
   const info = officeInfo_;
-  if (info && info.promo[id]) {
-    add += id === 'dog'
-      ? '<path d="M30 8 L33 -1 L37 6 L40 -3 L43 6 L47 -1 L50 8 Z" fill="#ffd66b" stroke="#d99a1e" stroke-width="1.4"/><circle cx="40" cy="4" r="1.8" fill="#ef5f7a"/>'
-      : '<path d="M49 64 l2.2 4.4 4.8 0.7 -3.5 3.4 0.8 4.8 -4.3 -2.3 -4.3 2.3 0.8 -4.8 -3.5 -3.4 4.8 -0.7 Z" fill="#ffd66b" stroke="#d99a1e" stroke-width="1"/>';
-  }
+  const k = officeRankOf(id, info);
+  if (k && k.lv > 0) add += officeRankOutfit(id, k);
   if (info && info.party) {
     const c = { book: '#f7a8c0', chart: '#9fd0f0', stock: '#ffd66b', cash: '#8fd3b0', elf: '#c9a0e6', fox: '#ef7d7d', dog: '#9fd0f0' }[id] || '#f7a8c0';
     add += `<path d="M33 17 L40 1 L47 17 Z" fill="${c}" stroke="#fff" stroke-width="1.2"/><circle cx="40" cy="2" r="2.6" fill="#ffd66b"/>`;
@@ -1622,7 +1682,7 @@ function drawOffice() {
       : officeSelected === 'level' ? officeAchievementsHtml(officeInfo_)
       : officeSelected === 'dog' ? `<h4>🐕 黑柴 <small>吉祥物</small></h4>
           <div class="of-row"><span>現在</span><b>${esc(officeActivity('dog', d))}</b></div>
-          <div class="of-row"><span>累積被摸</span><b>${officeDogPets} 次${officeDogPets >= 100 ? '（戴上小皇冠 👑）' : `（再 ${100 - officeDogPets} 次戴小皇冠）`}</b></div>
+          <div class="of-row"><span>累積被摸</span><b>${officeDogPets} 次</b></div>
           <p class="of-note">黑柴會在辦公室巡邏、找大家玩，大家有空也會去窩邊摸牠。</p>`
       : (officeSelected === 'elf' || officeSelected === 'fox' ? officeMemberDetail(officeSelected, d) : officeDetailHtml(OFFICE_DETAIL_KEY[officeSelected], d));
     if (OFFICE_PERSONA[officeSelected]) detail.innerHTML = detail.innerHTML.replace('</h4>', `</h4><p class="of-persona">💭 ${OFFICE_PERSONA[officeSelected]}</p>`);
@@ -1637,7 +1697,8 @@ function drawOffice() {
         ? (d.mood === 'cry' ? `透支 ${fmt(-d.balance)}…肚子空空，你們不愛我了嗎 😭` : (d.mood === 'worry' ? `剩 ${fmt(d.balance)}…金幣變少了，嗚嗚 🥺` : `${fmt(d.balance)}！我好圓！好有錢！哼哼 ✨`))
         : officeActivity(s.id, d);
       const ava = s.id === 'piggy' ? '<span class="of-ava of-ava-pig">🐷</span>' : `<span class="of-ava">${officeActorSvg(s.id)}</span>`;
-      const role = officeInfo_ && officeInfo_.promo[s.id] ? officeInfo_.promo[s.id] : s.role;
+      const rk = officeRankOf(s.id, officeInfo_);
+      const role = rk ? rk.title : s.role;
       return `<button type="button" class="of-card${officeSelected === s.id ? ' selected' : ''}" data-office-id="${s.id}">
         ${ava}
         <span class="of-card-main"><span class="of-card-top"><b>${s.name}</b><em class="of-tag tag-${s.tag}">${role}</em></span>

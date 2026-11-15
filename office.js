@@ -50,6 +50,7 @@ function officePet() {
 let officeSkitAt = 0;               // 下一次安排角色互動的時間
 let officeSkitLast = '';            // 上一次的互動，避免連續重複
 let officeSkitSeq = 0;
+let officeAmbientAt = 0;            // 精靈和小狐狸坐在一起時，偶爾冒出小愛心
 let officeQuietUntil = 0;           // 互動或跑腿結束後 1.5 秒內，其他人不冒出平常的對話框
 let officePhase = 'day';            // 依實際時間：morning / day / evening / night
 let officePhaseCheckAt = 0;
@@ -1363,6 +1364,57 @@ function officeSkits(d) {
       { who: 'fox', text: '來！抱緊緊～什麼事都會好起來的 🤗', lean: true, burst: true },
       { who: 'elf', text: '嗯……謝謝你 💕', burst: true }])] }));
   }
+  // ── 更多放閃 ──
+  if (free('elf') && free('fox')) {
+    // 沙發上：靠肩膀、互相誇、紀念日行事曆、比心
+    list.push({ key: 'love-lean', ids: ['elf', 'fox'], sofa: () => pick([[
+      { who: 'fox', text: '（把頭靠在精靈肩膀上）好累喔～ 🥱', lean: true },
+      { who: 'elf', text: '……靠著吧，我的行程表空出來了', burst: true },
+      { who: 'fox', text: '嘿嘿，最喜歡這裡了 💕', burst: true }], [
+      { who: 'elf', text: '（偷偷靠過去）……' , lean: true },
+      { who: 'fox', text: '咦？精靈在撒嬌！！😳💕', burst: true },
+      { who: 'elf', text: '……只是有點冷而已', burst: true }]]) });
+    list.push({ key: 'love-praise', ids: ['elf', 'fox'], sofa: () => pick([[
+      { who: 'elf', text: '……你今天，很可愛' },
+      { who: 'fox', text: '哇！！精靈誇我！！要截圖起來 😭📸', burst: true },
+      { who: 'elf', text: '……我只是陳述事實 😳', heart: true }], [
+      { who: 'fox', text: '精靈好聰明，什麼都規劃得好好的 🥰' },
+      { who: 'elf', text: '……因為想跟你過好日子', burst: true },
+      { who: 'fox', text: '嗚嗚我要哭了 😭💕', lean: true, burst: true }]]) });
+    list.push({ key: 'love-plan', ids: ['elf', 'fox'], sofa: () => pick([[
+      { who: 'elf', text: '我把我們的紀念日都排進行事曆了 📅' },
+      { who: 'fox', text: '連這個都有排？你也太浪漫了吧 🥹💕', burst: true },
+      { who: 'elf', text: '還有提醒，提前三天、一天、當天各一次 ⏰', heart: true }], [
+      { who: 'fox', text: '我們以後要去好多地方玩！🌏✈️' },
+      { who: 'elf', text: '旅遊基金的試算表我已經開好了 📊' },
+      { who: 'fox', text: '這就是我愛你的原因 💕', lean: true, burst: true }]]) });
+    list.push({ key: 'love-heart', ids: ['elf', 'fox'], sofa: () => [
+      { who: 'fox', text: '精靈～看這裡！🫶' },
+      { who: 'elf', text: '……（默默比了一半的心）🫶', lean: true, burst: true },
+      { who: 'fox', text: '合起來就是一顆完整的愛心了！💖', burst: true }] });
+  }
+  // 走去拿點心餵對方、幫對方買飲料
+  add('love-feed', ['fox', 'elf'], () => ({ fox: [
+    { spot: 'tea', go: '偷偷溜去茶水間 🍰', at: '挑精靈喜歡的口味…', stay: 2600 },
+    talk('hugElf', '拿著點心跑去找精靈', '餵精靈吃點心', [
+      { who: 'fox', text: '精靈～啊～張嘴 🍰' },
+      { who: 'elf', text: '……（被餵）……好吃 😳', lean: true, burst: true },
+      { who: 'fox', text: '嘿嘿，我挑的最好吃吧 😆💕', burst: true }], { follow: 'elf' })] }));
+  add('love-gift', ['elf', 'fox'], () => ({ elf: [
+    { spot: 'tea', go: '走去茶水間', at: '照著備忘錄調飲料…', stay: 2600 },
+    talk('hugFox', '端著飲料走去找小狐狸', '送飲料給小狐狸', [
+      { who: 'elf', text: '你的半糖去冰，照你的習慣 🧋' },
+      { who: 'fox', text: '你記得我的甜度！！😭💕', lean: true, burst: true },
+      { who: 'elf', text: '……你的資料我都記著 📋', burst: true }], { follow: 'fox' })] }));
+  // 一起去茶水間約會（兩人都到了才開始）
+  add('love-date', ['fox', 'elf'], () => ({
+    fox: [talk('tea', '牽著精靈去茶水間 💕', '茶水間約會中', [
+      { who: 'fox', text: '約會時間～ ☕💕' },
+      { who: 'elf', text: '……十分鐘，我排好了 ⏰' },
+      { who: 'fox', text: '十分鐘也好，只要跟你一起 🥰', burst: true },
+      { who: 'elf', text: '（臉紅）……那十五分鐘好了', burst: true }], { waitFor: 'elf' })],
+    elf: [{ spot: 'tea2', go: '被小狐狸牽去茶水間', at: '茶水間約會中', stay: 4 * 2100 + 1600, waitFor: 'fox' }],
+  }));
   return list;
 }
 
@@ -1372,15 +1424,15 @@ function officeStartSkit(d, ts) {
   if (!list.length) return false;
   // 晚上：大家在睡覺，只剩沙發上的悄悄話
   if (officePhase === 'night') {
-    list = list.filter(k => k.key === 'love-kiss' || k.key === 'sofa');
+    list = list.filter(k => k.sofa && (k.key.startsWith('love') || k.key === 'sofa'));
     if (!list.length || Math.random() < 0.5) return false;
   }
   // 花太快時，優先演提醒的那一段
   const paceSkit = list.find(k => k.key === 'pace');
   if (paceSkit && Math.random() < 0.4) list = [paceSkit];
-  // 精靈和小狐狸都有空時，三成機會是愛的互動
+  // 精靈和小狐狸都有空時，一半以上的機會是放閃
   const love = list.filter(k => k.key.startsWith('love'));
-  if (love.length && Math.random() < 0.3) list = love;
+  if (love.length && Math.random() < 0.55) list = love;   // 常常放閃
   const k = list[Math.floor(Math.random() * list.length)];
   officeSkitLast = k.key;
   // 參與的人這段時間先不要自己走開
@@ -1582,6 +1634,24 @@ function officeJobFx(job) {
       if (l.burst) officeLoveBurst();
       if (l.heart) officeFloat('💕', false, { x: (officeActors.elf.x + officeActors.fox.x) / 2, y: officeActors.elf.y - 75 });
     }, i * 2100));
+    // 精靈和小狐狸放閃完，旁邊有人被閃到
+    const lines = st.lines || [];
+    const couple = lines.some(l => l.burst) && lines.every(l => l.who === 'elf' || l.who === 'fox');
+    if (couple && officePhase !== 'night' && Math.random() < 0.7) {
+      setTimeout(() => {
+        const pool = ['book', 'chart', 'stock', 'cash', 'dog'].filter(id => officeActors[id] && officeActors[id].state !== 'walk' && !officeActors[id].job);
+        if (!pool.length || !officeVisible()) return;
+        const id = pool[Math.floor(Math.random() * pool.length)];
+        const say = {
+          book: ['又在放閃了…我帳都記歪了 🙈', '請不要在辦公室放閃 😑✍️'],
+          chart: ['放閃指數突破新高 📈💕', '這條曲線…是戀愛的形狀 🥹'],
+          stock: ['好閃！我要去倉庫拿墨鏡 😎', '閃到我眼睛了啦 😵‍💫'],
+          cash: ['放閃不用錢…這是好事 💰', '單身的我在旁邊默默數錢 🥲'],
+          dog: ['汪…（被閃到，躲回窩裡）🙈', '汪汪！（也想要抱抱）🥺'],
+        }[id];
+        officeSay(id, say[Math.floor(Math.random() * say.length)]);
+      }, lines.length * 2100 + 600);
+    }
     return;
   }
   if (st.fx === 'wow') { const sp = OFFICE_SPOTS[st.spot]; officeFloat('💸', false, { x: sp.x, y: sp.y - 75 }); return; }
@@ -1967,6 +2037,12 @@ function officeTick(ts) {
     officeSayAt = ts + 4200;
     const seated = OFFICE_STAFF.filter(s => officeActors[s.id].state === 'seat');
     if (seated.length) { const s = seated[Math.floor(Math.random() * seated.length)]; officeSay(s.id, officeActivity(s.id, d)); }
+  }
+  // 精靈和小狐狸都坐在沙發上時，偶爾冒出一顆小愛心
+  if (ts >= officeAmbientAt) {
+    officeAmbientAt = ts + 14000 + Math.random() * 10000;
+    const e = officeActors.elf, f = officeActors.fox;
+    if (e.state === 'seat' && f.state === 'seat' && !e.job && !f.job && !officePaused) officeFloat(Math.random() < 0.5 ? '💕' : '💗', false, { x: (e.x + f.x) / 2, y: e.y - 75 });
   }
   // 沒有人在跑腿時，每隔一陣子安排一段角色互動
   if (d && ts >= officeSkitAt) {

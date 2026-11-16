@@ -75,6 +75,88 @@ const OFFICE_ANNIVERSARY = '';
 // 農曆新年（初一）：前 10 天到元宵節掛燈籠
 const OFFICE_CNY = { 2026: '02-17', 2027: '02-06', 2028: '01-26', 2029: '02-13', 2030: '02-03', 2031: '01-23', 2032: '02-11' };
 
+// ── 戶外天氣：每 6 小時隨機一種（同一時段大家看到的一樣）；點狀態列的天氣可以換 ──
+const OFFICE_WX_KEY = 'shareExpense.office.weather';
+const OFFICE_WEATHER = {
+  sunny:   { icon: '☀️', name: '晴天' },
+  cloudy:  { icon: '☁️', name: '陰天' },
+  rain:    { icon: '🌧️', name: '雨天' },
+  snow:    { icon: '❄️', name: '下雪' },
+  typhoon: { icon: '🌀', name: '颱風天' },
+};
+const OFFICE_WX_ORDER = ['sunny', 'cloudy', 'rain', 'snow', 'typhoon'];
+function officeWxBlock() {
+  const n = new Date();
+  return `${n.getFullYear()}-${n.getMonth() + 1}-${n.getDate()}-${Math.floor(n.getHours() / 6)}`;
+}
+function officeWeather() {
+  const block = officeWxBlock();
+  try {
+    const o = JSON.parse(localStorage.getItem(OFFICE_WX_KEY) || 'null');
+    if (o && o.block === block && OFFICE_WEATHER[o.wx]) return o.wx;
+  } catch (e) { /* ignore */ }
+  // 依日期和時段算出固定的亂數；下雪只在 12–2 月、颱風只在 6–10 月
+  let h = 0;
+  for (const c of block) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  const r = ((h * 2654435761) >>> 0) / 4294967296;
+  const m = new Date().getMonth() + 1;
+  const w = { sunny: 40, cloudy: 25, rain: 20, snow: (m === 12 || m <= 2) ? 15 : 0, typhoon: (m >= 6 && m <= 10) ? 8 : 0 };
+  const total = Object.values(w).reduce((a, b) => a + b, 0);
+  let acc = 0;
+  for (const k of OFFICE_WX_ORDER) { acc += w[k] / total; if (r < acc) return k; }
+  return 'sunny';
+}
+function officeSetWeather(wx) {
+  try { localStorage.setItem(OFFICE_WX_KEY, JSON.stringify({ block: officeWxBlock(), wx })); } catch (e) { /* ignore */ }
+}
+// 各角色看到這種天氣會說的話
+const OFFICE_WX_LINES = {
+  sunny: {
+    book: ['太陽好大，帳本要收好不要曬到 ✍️', '晴天心情好，記帳也特別順 😌'],
+    chart: ['晴天的時候，飲料支出會上升 12% 📈', '陽光充足，數據也很漂亮 ✨'],
+    stock: ['好天氣！來把倉庫通通風 📦', '可以把衛生紙拿出去曬…不對 😅'],
+    cash: ['天氣好，大家不要出去亂花錢喔 💰', '晴天…最危險的花錢日 😰'],
+    elf: ['曬被子的好日子，行程我排好了 📋', '紫外線很強，防曬我準備好了 🧴'],
+    fox: ['天氣超好！！我們出去玩啦 ☀️😆', '這種天氣就是要去吃冰！🍧'],
+    dog: ['汪汪！（想出去散步）☀️', '（在窗邊曬太陽）汪～'] },
+  cloudy: {
+    book: ['陰陰的，適合在家對帳 ✍️', '天氣灰灰的…帳本也灰灰的 😶'],
+    chart: ['雲量 80%，跟我的心情一樣 📉', '陰天的曲線…比較平 😐'],
+    stock: ['會不會等等下雨？傘夠不夠 😣', '陰天要注意受潮 📦💦'],
+    cash: ['陰天待在家，省錢 💰', '天氣不好，錢錢也要乖乖待著'],
+    elf: ['可能會下雨，我先帶了一把傘，備用的也帶了 ☂️', '我查過了，降雨機率 40% 📊'],
+    fox: ['陰陰的好想睡喔 😪', '這種天氣最適合窩在沙發追劇 📺'],
+    dog: ['（趴著不想動）嗚～', '汪…（打哈欠）'] },
+  rain: {
+    book: ['下雨天最適合記帳了 ✍️☔', '雨聲好療癒，記帳記得好專心'],
+    chart: ['雨量數據…好想畫成圖 🌧️📈', '雨天外送支出會上升，我先預告 📊'],
+    stock: ['雨傘夠嗎？雨衣呢？我去數一下 ☂️😰', '下雨了！倉庫有沒有漏水 😱'],
+    cash: ['下雨天不出門最省錢 💰', '外送…外送費好貴 😭'],
+    elf: ['我有帶傘，還帶了備用傘 ☂️', '雨天的行程改成室內版了 📋'],
+    fox: ['下雨了…不能出去玩 😢', '下雨天就是要吃火鍋！🍲'],
+    dog: ['（看著窗外的雨）嗚…', '汪…（不想出門尿尿）'] },
+  snow: {
+    book: ['下雪了…手好冰，字都寫歪了 🥶✍️', '暖氣費要記一筆 ✍️'],
+    chart: ['氣溫 -2 度，暖暖包支出暴增 📈🥶', '雪花的形狀…好像圓餅圖 ❄️📊'],
+    stock: ['暖暖包！暖暖包夠不夠！😱', '倉庫好冰…我要多穿一件 🧣'],
+    cash: ['暖氣…開還是不開…好掙扎 💰🥶', '下雪不要出門，省錢又安全'],
+    elf: ['記得穿暖，我準備了暖暖包和熱可可 🧤☕', '雪天行程我做了 A、B 兩案 📋'],
+    fox: ['下雪了！！去堆雪人！！⛄😆', '雪好美～精靈快來看！❄️💕'],
+    dog: ['汪汪汪！（在雪地裡打滾）❄️', '（尾巴狂搖，想出去玩雪）'] },
+  typhoon: {
+    book: ['颱風天…帳還是要記 ✍️💪', '停電之前趕快把帳記好 😰'],
+    chart: ['風速數據破表了 🌀📈😱', '颱風天泡麵支出 +300% 📊'],
+    stock: ['泡麵！手電筒！電池！全部清點！😱🏃', '颱風要來了，倉庫要補貨 📦💨'],
+    cash: ['颱風天哪裡都不能去…省到錢了 💰', '窗戶膠帶要錢嗎…😣'],
+    elf: ['防颱清單我列好了：水、電池、泡麵、手電筒 📋', '颱風假！但我已經安排好在家的行程了 🗂️'],
+    fox: ['颱風假耶！！可以在家耍廢了 😆', '外面好可怕…精靈抱抱 🥺'],
+    dog: ['嗚嗚…（躲到沙發後面）😨', '（被風聲嚇到）汪？！'] },
+};
+function officeWxLine(id) {
+  const lines = (OFFICE_WX_LINES[officeWeather()] || {})[id];
+  return lines ? lines[Math.floor(Math.random() * lines.length)] : null;
+}
+
 // 白天和晚上：依實際時間
 function officePhaseNow() {
   const h = new Date().getHours();
@@ -914,11 +996,27 @@ function officeBgSvg(d) {
   const ceil = z => FL[z] - FH + 38;           // 該樓層天花板的 y
   const night = officePhase === 'night';
   // 天空依時段變化
-  const sky = { morning: ['#ffd9b8', '#fff4e4'], day: ['#bfe3ff', '#fff3e0'], evening: ['#ffa98a', '#ffe0b8'], night: ['#1b2150', '#3b3f72'] }[officePhase] || ['#bfe3ff', '#fff3e0'];
-  const sun = night
+  const wx = officeWeather();
+  const grey = wx === 'cloudy' || wx === 'rain' || wx === 'typhoon';
+  let sky = { morning: ['#ffd9b8', '#fff4e4'], day: ['#bfe3ff', '#fff3e0'], evening: ['#ffa98a', '#ffe0b8'], night: ['#1b2150', '#3b3f72'] }[officePhase] || ['#bfe3ff', '#fff3e0'];
+  if (grey && !night) sky = wx === 'typhoon' ? ['#6f7a8c', '#9aa4b2'] : (wx === 'rain' ? ['#9aa7b8', '#cdd4dd'] : ['#c3ccd8', '#e8ebef']);
+  if (wx === 'snow' && !night) sky = ['#d6e2ee', '#f4f7fa'];
+  const sunOk = wx === 'sunny' || (wx === 'cloudy' && !night) || (wx === 'snow' && night);
+  const sun = !sunOk ? '' : night
     ? '<circle cx="120" cy="66" r="34" fill="#fff6d6"/><circle cx="134" cy="56" r="30" fill="#1b2150"/>' + [[300, 40], [420, 80], [700, 30], [820, 70], [560, 60]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.6" fill="#fff6d6"/>`).join('')
     : `<circle cx="${officePhase === 'evening' ? 860 : 110}" cy="${officePhase === 'morning' || officePhase === 'evening' ? 90 : 66}" r="40" fill="${officePhase === 'evening' ? '#ff8a5c' : '#ffd66b'}"/><circle cx="${officePhase === 'evening' ? 860 : 110}" cy="${officePhase === 'morning' || officePhase === 'evening' ? 90 : 66}" r="56" fill="#ffd66b" opacity="0.25"/>`;
-  const clouds = night ? '' : '<g fill="#ffffff" opacity="0.9"><ellipse cx="640" cy="60" rx="70" ry="22"/><ellipse cx="600" cy="46" rx="40" ry="26"/><ellipse cx="300" cy="36" rx="50" ry="16"/></g>';
+  const cloud = (x, y, k, c) => `<g fill="${c}"><ellipse cx="${x}" cy="${y}" rx="${70 * k}" ry="${22 * k}"/><ellipse cx="${x - 40 * k}" cy="${y - 14 * k}" rx="${40 * k}" ry="${26 * k}"/><ellipse cx="${x + 30 * k}" cy="${y - 10 * k}" rx="${34 * k}" ry="${22 * k}"/></g>`;
+  const cc = night ? (grey ? '#4a5078' : '') : (wx === 'typhoon' ? '#5d6676' : (wx === 'rain' ? '#7d8796' : (wx === 'cloudy' ? '#b3bcc8' : '#ffffff')));
+  const clouds = !cc ? '' : `<g class="of-clouds${wx === 'typhoon' ? ' fast' : ''}">${wx === 'sunny'
+    ? cloud(640, 80, 1, cc) + cloud(320, 56, 0.7, cc)
+    : cloud(160, 70, 1.3, cc) + cloud(470, 50, 1.5, cc) + cloud(780, 80, 1.3, cc) + cloud(330, 130, 1.1, cc) + cloud(650, 140, 1.2, cc)}</g>`;
+  // 遠方的城市（屋頂後面）、鳥
+  const skyline = `<g fill="${night ? '#2c3363' : (grey ? '#aab3c0' : '#c9dcee')}" opacity="0.9">
+    <rect x="0" y="${OFFICE_TOP - 140}" width="90" height="110"/><rect x="100" y="${OFFICE_TOP - 100}" width="70" height="70"/><rect x="190" y="${OFFICE_TOP - 170}" width="60" height="140"/>
+    <rect x="740" y="${OFFICE_TOP - 120}" width="80" height="90"/><rect x="830" y="${OFFICE_TOP - 180}" width="70" height="150"/><rect x="910" y="${OFFICE_TOP - 110}" width="90" height="80"/>
+    <rect x="300" y="${OFFICE_TOP - 80}" width="120" height="50"/><rect x="600" y="${OFFICE_TOP - 90}" width="110" height="60"/></g>
+    ${night ? [[30, 140], [130, 200], [210, 150], [770, 180], [850, 140], [940, 200]].map(([x, y]) => `<rect x="${x}" y="${OFFICE_TOP - 300 + y}" width="10" height="12" fill="#ffd66b" opacity="0.8"/>`).join('') : ''}`;
+  const birds = wx === 'sunny' && !night ? `<g class="of-birds" fill="none" stroke="#5b6475" stroke-width="2.4" stroke-linecap="round"><path d="M560 150 q8 -8 16 0 q8 -8 16 0"/><path d="M610 128 q6 -6 12 0 q6 -6 12 0"/></g>` : '';
   const win = (x, y, w = 110, h = 90) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="10" fill="${night ? '#2a3366' : '#cfe8fa'}" stroke="#ffffff" stroke-width="7"/>
     <path d="M${x + w / 2} ${y} v${h} M${x} ${y + h / 2} h${w}" stroke="#ffffff" stroke-width="5"/>${night ? `<circle cx="${x + 22}" cy="${y + 20}" r="2.4" fill="#fff6d6"/><circle cx="${x + 80}" cy="${y + 64}" r="2" fill="#fff6d6"/>` : `<path d="M${x + 14} ${y + h - 20} l26 -42" stroke="#ffffff" stroke-width="5" opacity="0.6"/>`}`;
   // 側面的桌子：桌面、桌腳
@@ -945,9 +1043,10 @@ function officeBgSvg(d) {
   <svg class="of-bg" viewBox="0 0 1000 ${H}" aria-hidden="true">
     <defs><linearGradient id="ofSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sky[0]}"/><stop offset="1" stop-color="${sky[1]}"/></linearGradient></defs>
     <rect width="1000" height="${H}" fill="url(#ofSky)"/>
-    ${sun}${clouds}
+    ${sun}${skyline}${clouds}${birds}
     <!-- 屋頂、招牌 -->
     <rect x="20" y="${TOP - 34}" width="960" height="40" rx="10" fill="#b98a5c"/>
+    ${wx === 'snow' ? `<path d="M16 ${TOP - 30} q40 -16 80 -4 q60 -14 120 -2 q80 -12 160 0 q90 -14 180 -2 q90 -12 180 0 q80 -12 152 -2 q20 0 32 4 v10 h-968 Z" fill="#ffffff"/>` : ''}
     <rect x="250" y="${TOP - 92}" width="500" height="58" rx="14" fill="#ffffff" stroke="#f3a0b8" stroke-width="5"/>
     <text x="500" y="${TOP - 52}" font-size="32" font-weight="800" text-anchor="middle" fill="#c2557f">精靈 &amp; 小狐狸 共同帳本大樓</text>
     <!-- 外牆與四個樓層 -->
@@ -1058,9 +1157,36 @@ function officeBgSvg(d) {
     ${officeUpgradeSvg()}
     ${officeDecorSvg()}
     ${officePartySvg()}
-    <!-- 地面 -->
-    <rect x="0" y="${TOP + N * FH}" width="1000" height="20" fill="#b9a48d"/><rect x="0" y="${TOP + N * FH + 20}" width="1000" height="${H - TOP - N * FH - 20}" fill="${night ? '#5f8a5c' : '#a8d8a0'}"/>
-    <rect x="56" y="${TOP + N * FH}" width="120" height="10" fill="#d9c7b0"/><rect x="40" y="${TOP + N * FH + 4}" width="152" height="6" rx="3" fill="#efe3d3"/>
+    <!-- 戶外：人行道、馬路、草地、樹、路燈、長椅、花 -->
+    ${(() => {
+      const g0 = TOP + N * FH;
+      const snowy = wx === 'snow', wet = wx === 'rain' || wx === 'typhoon';
+      const tree = (x, k) => `<g class="of-tree${wx === 'typhoon' ? ' storm' : ''}" style="transform-origin:${x}px ${H}px">
+        <rect x="${x - 9 * k}" y="${H - 110 * k}" width="${18 * k}" height="${110 * k}" rx="6" fill="#a9754f"/>
+        <circle cx="${x}" cy="${H - 130 * k}" r="${52 * k}" fill="${snowy ? '#e9f2f6' : (night ? '#3f6b4a' : '#7cc49a')}"/>
+        <circle cx="${x - 36 * k}" cy="${H - 100 * k}" r="${36 * k}" fill="${snowy ? '#f4f8fb' : (night ? '#467855' : '#8fd3b0')}"/>
+        <circle cx="${x + 38 * k}" cy="${H - 104 * k}" r="${34 * k}" fill="${snowy ? '#f4f8fb' : (night ? '#467855' : '#8fd3b0')}"/>
+        ${snowy ? '' : `<circle cx="${x - 14 * k}" cy="${H - 150 * k}" r="${10 * k}" fill="#ffffff" opacity="0.25"/>`}</g>`;
+      return `
+      <rect x="0" y="${g0}" width="1000" height="40" fill="${snowy ? '#f1f4f7' : '#d9c7b0'}"/>
+      ${[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(i => `<path d="M${i * 100} ${g0} v40" stroke="${snowy ? '#e1e6eb' : '#c9b49b'}" stroke-width="2"/>`).join('')}
+      <rect x="56" y="${g0}" width="120" height="10" fill="#efe3d3"/>
+      ${wet ? `<ellipse cx="300" cy="${g0 + 26}" rx="54" ry="7" fill="#9fb8d0" opacity="0.7"/><ellipse cx="640" cy="${g0 + 22}" rx="40" ry="6" fill="#9fb8d0" opacity="0.7"/>` : ''}
+      <rect x="0" y="${g0 + 40}" width="1000" height="8" fill="#9aa3ad"/>
+      <rect x="0" y="${g0 + 48}" width="1000" height="84" fill="${snowy ? '#cfd6dd' : (night ? '#3e434d' : (wet ? '#5f6670' : '#7b828c'))}"/>
+      <path d="M0 ${g0 + 90} H1000" stroke="${snowy ? '#ffffff' : '#ffd66b'}" stroke-width="5" stroke-dasharray="40 30"/>
+      <rect x="0" y="${g0 + 132}" width="1000" height="8" fill="#9aa3ad"/>
+      <rect x="0" y="${g0 + 140}" width="1000" height="${H - g0 - 140}" fill="${snowy ? '#f4f8fb' : (night ? '#5f8a5c' : '#a8d8a0')}"/>
+      ${tree(90, 0.95)}${tree(930, 1)}
+      <g><rect x="700" y="${H - 160}" width="8" height="160" fill="#5b6475"/><path d="M704 ${H - 160} q0 -16 30 -16" stroke="#5b6475" stroke-width="6" fill="none"/>
+        <rect x="726" y="${H - 180}" width="24" height="10" rx="4" fill="#5b6475"/>
+        <circle cx="738" cy="${H - 164}" r="${night ? 14 : 7}" fill="${night || wx === 'typhoon' ? '#ffe08a' : '#fff6d6'}" opacity="${night ? 0.95 : 0.7}"/></g>
+      <g><rect x="420" y="${H - 48}" width="130" height="10" rx="4" fill="#c99a6a"/><rect x="420" y="${H - 70}" width="130" height="8" rx="4" fill="#c99a6a"/>
+        <rect x="430" y="${H - 38}" width="8" height="30" fill="#8a6a4f"/><rect x="532" y="${H - 38}" width="8" height="30" fill="#8a6a4f"/>${snowy ? `<rect x="420" y="${H - 54}" width="130" height="7" rx="3" fill="#ffffff"/>` : ''}</g>
+      ${snowy
+        ? `<g transform="translate(300 ${H - 20})"><circle cx="0" cy="-20" r="22" fill="#ffffff" stroke="#dfe7ee" stroke-width="2"/><circle cx="0" cy="-56" r="15" fill="#ffffff" stroke="#dfe7ee" stroke-width="2"/><circle cx="-5" cy="-59" r="2" fill="#3b2f2f"/><circle cx="5" cy="-59" r="2" fill="#3b2f2f"/><path d="M0 -54 l10 3 -10 2 Z" fill="#f4a261"/><path d="M-12 -44 h24" stroke="#ef5f7a" stroke-width="5"/></g>`
+        : [220, 260, 600, 640, 820].map((x, i) => `<path d="M${x} ${H - 12} v-18" stroke="#5f9e7a" stroke-width="3"/><circle cx="${x}" cy="${H - 34}" r="7" fill="${['#f7a8c0', '#ffd66b', '#c9a0e6', '#ef7d7d', '#9fd0f0'][i]}"/><circle cx="${x}" cy="${H - 34}" r="2.6" fill="#fff6c9"/>`).join('')}`;
+    })()}
   </svg>`;
 }
 
@@ -1112,13 +1238,13 @@ function officeDetailHtml(key, d) {
 // ── 員工、座位與走動路線 ──────────────────────────────────────
 // 每一區有一條淨空的直走道（col），員工先橫向走到走道，再經中間走廊到另一區，不會穿過家具
 // 四層樓（側面）：每層樓高 330；地板線（腳站的高度）
-const OFFICE_TOP = 150, OFFICE_FH = 330, OFFICE_H = 1920, OFFICE_HS = OFFICE_H / 100;
+const OFFICE_TOP = 280, OFFICE_FH = 330, OFFICE_H = 2160, OFFICE_HS = OFFICE_H / 100;
 // C＝5F 金庫、D＝4F 休息區、A＝3F 記帳區、B＝2F 倉庫、E＝1F 會議室（大門在 1F）
-const OFFICE_FLOOR = { C: 450, D: 780, A: 1110, B: 1440, E: 1770 };
+const OFFICE_FLOOR = { C: OFFICE_TOP + 300, D: OFFICE_TOP + 630, A: OFFICE_TOP + 960, B: OFFICE_TOP + 1290, E: OFFICE_TOP + 1620 };
 const OFFICE_FLOOR_NAME = { C: '5F', D: '4F', A: '3F', B: '2F', E: '1F' };
 const OFFICE_LIFT_X = 898, OFFICE_LIFT_DOOR = 860;              // 電梯廂中心、電梯門口
 // 電梯：一次載一個人，其他人在門口排隊
-const officeLift = { y: 1770, goal: 1770, phase: 'idle', rider: null, queue: [], until: 0 };
+const officeLift = { y: OFFICE_FLOOR.E, goal: OFFICE_FLOOR.E, phase: 'idle', rider: null, queue: [], until: 0 };
 const OFFICE_SPOTS = {
   byDog:   { x: 410, y: OFFICE_FLOOR.D, zone: 'D', go: '蹦蹦跳跳去找黑柴', at: '跑去逗黑柴玩 🐶' },  // 黑柴的窩旁邊
   byChart: { x: 440, y: OFFICE_FLOOR.A, zone: 'A' },    // 小析座位旁
@@ -1640,7 +1766,8 @@ function officeSkits(d) {
 // open：開場白（可以是函式，拿到當下的情境）；reply：每個人的回答；end：開場的人最後回一句
 function officeChatTopics() {
   const now = new Date(), m = now.getMonth() + 1, wd = now.getDay();
-  const weather = m === 12 || m <= 2 ? '最近好冷喔 🥶' : (m >= 6 && m <= 9 ? '最近好熱喔 🥵' : '最近天氣好舒服 🌤️');
+  const wxNow = officeWeather();
+  const weather = { sunny: '今天天氣好好喔 ☀️', cloudy: '今天陰陰的欸 ☁️', rain: '外面下雨了欸 🌧️', snow: '外面下雪了！！❄️', typhoon: '颱風來了…外面好可怕 🌀' }[wxNow];
   const topics = [
     { open: ['中午要吃什麼？🍱', '肚子好餓…等等吃什麼？🤤'], reply: {
         book: ['我帶了便當，每天同一款，很安心 🍱', '吃什麼都好，記得留收據給我 ✍️'],
@@ -1669,15 +1796,8 @@ function officeChatTopics() {
         fox: ['追劇追到三點 🙈', '睡超好！還夢到吃大餐 🤤'],
         dog: ['汪…（打哈欠）😪', '（翻肚子繼續睡）💤'] },
       end: ['好好休息喔', '哈哈太好笑了', '我也是…😪'] },
-    { open: [weather, `${m}月了欸，時間過好快`], reply: {
-        book: ['天氣再怎樣，帳都要記 ✍️', '這個月的帳我已經記了一半了！'],
-        chart: ['我把氣溫跟支出做了相關分析 📊', '天氣變化會影響飲料支出喔 📈'],
-        stock: ['換季了，要不要先補點日用品…我好擔心 😣', '換季了，倉庫要重新整理 📦'],
-        cash: ['冷氣電費…我不敢想 😱', '天氣怎樣都不要亂花錢 💰'],
-        elf: ['我已經準備好換季衣物清單了 📋', '季節預算我有先抓好 👍'],
-        fox: ['這種天氣最適合出去玩了！😆', '這種天氣最適合吃好料了 😋'],
-        dog: ['汪！（想出去玩）', '汪汪～（在地上打滾）'] },
-      end: ['真的！', '說得好有道理', '哈哈對啊～'] },
+    { open: [weather, weather], reply: OFFICE_WX_LINES[wxNow], end: ['真的！', '說得好有道理', '哈哈對啊～'] },
+    { open: [weather], reply: OFFICE_WX_LINES[wxNow], end: ['對啊～', '嗯嗯！', '哈哈你好有趣'] },
     { open: ['最近有在追什麼劇嗎？📺', '推薦我好看的劇！'], reply: {
         book: ['我在看記帳軟體的教學影片 🎬', '…紀錄片，關於會計的 ✍️'],
         chart: ['我在看數據視覺化的影片，超好看 📊🥹', '劇的評分我都做成圖表了 📈'],
@@ -2076,6 +2196,15 @@ const OFFICE_DETAIL_KEY = { book: 'desk', cash: 'vault', stock: 'shelf', chart: 
 // ── 畫面 ──────────────────────────────────────────────────────
 function officePos(a) { return `left:${(a.x / 10).toFixed(2)}%;top:${(a.y / OFFICE_HS).toFixed(2)}%;z-index:${Math.round(a.y)}`; }
 
+// 路上的小車（側面）
+function officeCarSvg(color) {
+  const night = officePhase === 'night';
+  return `<svg viewBox="0 0 120 50" aria-hidden="true"><rect x="6" y="18" width="108" height="22" rx="9" fill="${color}"/><path d="M28 18 l14 -14 h34 l16 14 Z" fill="${color}"/>
+    <path d="M36 17 l9 -9 h12 v9 Z M62 17 v-9 h12 l10 9 Z" fill="#dff1fb"/><circle cx="32" cy="40" r="9" fill="#3e4a5a"/><circle cx="90" cy="40" r="9" fill="#3e4a5a"/>
+    <circle cx="32" cy="40" r="3.4" fill="#c5d0db"/><circle cx="90" cy="40" r="3.4" fill="#c5d0db"/><rect x="108" y="23" width="6" height="6" rx="2" fill="#ffd66b"/>
+    ${night ? '<path d="M114 26 l40 -10 v20 Z" fill="#ffe08a" opacity="0.45"/>' : ''}</svg>`;
+}
+
 function officeStatusText(d) {
   const all = Object.keys(officeActors).filter(k => k !== 'dog').map(k => officeActors[k]);
   const seat = all.filter(a => a.state === 'seat').length;
@@ -2086,6 +2215,7 @@ function officeStatusText(d) {
   const chip = (icon, text, title, cls = '') => `<span class="of-chip${cls ? ' ' + cls : ''}" title="${title}">${icon}<b>${text}</b></span>`;
   return [
     chip('', OFFICE_PHASE_LABEL[officePhase], '現在的時段'),
+    `<button type="button" class="of-chip of-chip-wx" data-office-weather title="點一下換天氣">${OFFICE_WEATHER[officeWeather()].icon}<b>${OFFICE_WEATHER[officeWeather()].name}</b></button>`,
     meeting ? chip('📋', '月會中', '大家在白板前開月會', 'hot') : '',
     job ? chip('🏃', job, '正在跑腿（記帳、結算、收信、丟垃圾）', 'hot') : '',
     chip('🪑', seat, '在座位上'),
@@ -2124,7 +2254,15 @@ function drawOffice() {
   const FLR = OFFICE_FLOOR;
   const glows = [[160, FLR.A - 90], [520, FLR.A - 100], [400, FLR.B - 130], [360, FLR.C - 90], [600, FLR.D - 80], [100, FLR.D - 80], [470, FLR.E - 200]]
     .map(([x, y]) => `<span class="of-glow" style="left:${x / 10}%;top:${(y / OFFICE_HS).toFixed(2)}%"></span>`).join('');
-  scene.innerHTML = `${officeBgSvg(d)}<div class="of-shade"></div>${glows}<div class="of-lift" id="of-lift" style="top:${((officeLift.y - 166) / OFFICE_HS).toFixed(2)}%"><span></span></div>
+  const wx = officeWeather();
+  const groundTop = ((OFFICE_TOP + 5 * OFFICE_FH) / OFFICE_HS).toFixed(2);
+  const skyH = ((OFFICE_TOP - 96) / OFFICE_HS).toFixed(2);   // 不蓋到招牌
+  const fx = wx === 'rain' || wx === 'snow' || wx === 'typhoon'
+    ? `<div class="of-wx ${wx}" style="top:0;height:${skyH}%"></div><div class="of-wx ${wx}" style="top:${groundTop}%;bottom:0"></div>` : '';
+  const flash = wx === 'typhoon' ? '<div class="of-flash"></div>' : '';
+  const cars = wx === 'typhoon' ? '' : `<div class="of-car c1" style="top:${((OFFICE_TOP + 5 * OFFICE_FH + 52) / OFFICE_HS).toFixed(2)}%">${officeCarSvg('#ef7d7d')}</div><div class="of-car c2" style="top:${((OFFICE_TOP + 5 * OFFICE_FH + 84) / OFFICE_HS).toFixed(2)}%">${officeCarSvg('#7fb6f0')}</div>`;
+  scene.dataset.wx = wx;
+  scene.innerHTML = `${officeBgSvg(d)}${fx}${flash}${cars}<div class="of-shade"></div>${glows}<div class="of-lift" id="of-lift" style="top:${((officeLift.y - 166) / OFFICE_HS).toFixed(2)}%"><span></span></div>
     <button type="button" class="of-pigbtn mood-${d.mood}${officeSelected === 'piggy' ? ' selected' : ''}" data-office-id="piggy" aria-label="小豬（存錢筒）" style="top:${((OFFICE_FLOOR.C - 171) / OFFICE_HS).toFixed(2)}%">
       <span class="of-name">小豬</span>${officePiggySvg(d)}
     </button>
@@ -2409,7 +2547,11 @@ function officeTick(ts) {
   if (d && ts >= officeSayAt && ts >= officeQuietUntil) {
     officeSayAt = ts + 4200;
     const seated = OFFICE_STAFF.filter(s => officeActors[s.id].state === 'seat');
-    if (seated.length) { const s = seated[Math.floor(Math.random() * seated.length)]; officeSay(s.id, officeActivity(s.id, d)); }
+    if (seated.length) {
+      const s = seated[Math.floor(Math.random() * seated.length)];
+      const wx = officePhase !== 'night' && Math.random() < 0.25 ? officeWxLine(s.id) : null;
+      officeSay(s.id, wx || officeActivity(s.id, d));
+    }
   }
   // 精靈和小狐狸都坐在沙發上時，偶爾冒出一顆小愛心
   if (ts >= officeAmbientAt) {
@@ -2540,6 +2682,16 @@ document.addEventListener('click', e => {
     const name = go.dataset.officeGo;
     const tabBtn = [...document.querySelectorAll('.tab')].find(t => (t.getAttribute('onclick') || '').includes(`'${name}'`));
     if (tabBtn) switchTab(name, tabBtn);
+    return;
+  }
+  if (e.target.closest('[data-office-weather]')) {
+    // 換下一種天氣，大家看看窗外講一句
+    const cur = officeWeather();
+    const next = OFFICE_WX_ORDER[(OFFICE_WX_ORDER.indexOf(cur) + 1) % OFFICE_WX_ORDER.length];
+    officeSetWeather(next);
+    drawOffice();
+    const who = ['fox', 'elf', 'stock', 'cash', 'chart', 'book', 'dog'].filter(id => officeActors[id] && officeActors[id].state !== 'walk');
+    who.sort(() => Math.random() - 0.5).slice(0, 2).forEach((id, i) => setTimeout(() => { const l = officeWxLine(id); if (l) officeSay(id, l); }, 400 + i * 1800));
     return;
   }
   if (e.target.closest('#office-level')) {

@@ -13,7 +13,7 @@
 
 .office-scene {
   position: relative; width: 100%; max-width: 640px; margin: 0 auto;
-  aspect-ratio: 1000 / 1920; container-type: inline-size;
+  aspect-ratio: 1000 / 2160; container-type: inline-size;
   border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden;
   background: #f6ead8; user-select: none; -webkit-user-select: none;
 }
@@ -276,7 +276,41 @@
 @media (prefers-reduced-motion: reduce) { .office-scene.brewing .of-coffee .of-drip, .office-scene.brewing .of-coffee .of-btn, .office-scene.brewing .of-coffee-lcd { animation: none; } }
 
 /* 電梯廂：跟著電梯上下，到站時亮燈 */
-.of-lift { position: absolute; left: 84.2%; width: 11.2%; height: 8.65%; box-sizing: border-box; pointer-events: none;
+.of-lift { position: absolute; left: 84.2%; width: 11.2%; height: 7.69%; box-sizing: border-box; pointer-events: none;
   background: linear-gradient(#fff6e8, #ffe9c4); border: 0.5cqw solid #e0a82e; border-radius: 1cqw; box-shadow: 0 0.6cqw 1.4cqw rgba(90,70,50,0.25); }
 .of-lift span { position: absolute; left: 0; right: 0; top: 0; height: 2.2cqw; line-height: 2.2cqw; background: #e0a82e; color: #fff; font-size: 1.6cqw; font-weight: 800; text-align: center; }
 .of-lift.open { box-shadow: 0 0 2.4cqw rgba(255,214,107,0.9); }
+
+/* 戶外天氣：雨、雪、颱風；雲飄動、鳥、樹搖、閃電；路上的車 */
+.of-wx { position: absolute; left: 0; right: 0; z-index: 3; pointer-events: none; overflow: hidden; }
+.of-wx.rain { background-image: repeating-linear-gradient(100deg, rgba(160,190,225,0) 0 9px, rgba(160,190,225,0.75) 9px 10.5px, rgba(160,190,225,0) 10.5px 22px);
+  background-size: 44px 60px; animation: of-rain 0.45s linear infinite; }
+.of-wx.typhoon { background-image: repeating-linear-gradient(115deg, rgba(190,205,225,0) 0 6px, rgba(190,205,225,0.85) 6px 8px, rgba(190,205,225,0) 8px 15px);
+  background-size: 30px 40px; animation: of-rain-hard 0.28s linear infinite; }
+.of-wx.snow { background-image: radial-gradient(circle at 20% 30%, #fff 0 2.6px, transparent 3.2px), radial-gradient(circle at 70% 60%, #fff 0 2px, transparent 2.6px), radial-gradient(circle at 45% 85%, #fff 0 3px, transparent 3.6px);
+  background-size: 70px 70px, 50px 50px, 90px 90px; animation: of-snow 6s linear infinite; }
+@keyframes of-rain { from { background-position: 0 0; } to { background-position: -10px 60px; } }
+@keyframes of-rain-hard { from { background-position: 0 0; } to { background-position: -22px 40px; } }
+@keyframes of-snow { from { background-position: 0 0, 0 0, 0 0; } to { background-position: 30px 140px, -20px 100px, 15px 180px; } }
+.of-clouds { animation: of-cloud 16s ease-in-out infinite alternate; }
+.of-clouds.fast { animation-duration: 3s; }
+@keyframes of-cloud { from { transform: translateX(-14px); } to { transform: translateX(14px); } }
+.of-birds { animation: of-bird 9s linear infinite; }
+@keyframes of-bird { 0% { transform: translate(-420px, 20px); opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { transform: translate(420px, -10px); opacity: 0; } }
+.of-tree { animation: of-sway 4s ease-in-out infinite; }
+.of-tree.storm { animation-duration: 0.8s; }
+@keyframes of-sway { 0%, 100% { transform: rotate(-1deg); } 50% { transform: rotate(1.5deg); } }
+.of-tree.storm { animation-name: of-sway-storm; }
+@keyframes of-sway-storm { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(6deg); } }
+.of-flash { position: absolute; inset: 0; z-index: 2950; pointer-events: none; background: #ffffff; opacity: 0; animation: of-flash 7s linear infinite; }
+@keyframes of-flash { 0%, 88%, 92%, 100% { opacity: 0; } 89% { opacity: 0.55; } 91% { opacity: 0.25; } }
+.of-car { position: absolute; left: 0; width: 12%; z-index: 3; pointer-events: none; }
+.of-car.c1 { animation: of-drive-r 11s linear infinite; }
+.of-car.c2 { animation: of-drive-l 15s linear infinite; animation-delay: -6s; }
+.of-car.c2 svg { transform: scaleX(-1); }
+@keyframes of-drive-r { from { transform: translateX(-120%); } to { transform: translateX(860%); } }
+@keyframes of-drive-l { from { transform: translateX(860%); } to { transform: translateX(-120%); } }
+.office-scene[data-wx="rain"] .of-car.c1, .office-scene[data-wx="snow"] .of-car.c1 { animation-duration: 16s; }
+.of-chip-wx { cursor: pointer; font: inherit; color: inherit; }
+.of-chip-wx:hover { border-color: #9fd0f0; }
+@media (prefers-reduced-motion: reduce) { .of-wx, .of-clouds, .of-birds, .of-tree, .of-flash, .of-car { animation: none; } .of-car { display: none; } }

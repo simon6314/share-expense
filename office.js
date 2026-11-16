@@ -454,7 +454,7 @@ function officeMeetingLines(d) {
   lines.push({ who: 'chart', text: p.top ? `花最多的是${p.top.name}，${fmt(p.top.value)}！` : '上個月沒有支出…我的圖表好寂寞 😢' });
   lines.push({ who: 'book', text: `上個月 ${p.count} 筆，每一筆都對齊了 ✍️😤` });
   lines.push({ who: 'cash', text: `精靈 ${fmt(p.owners['精靈'])}，小狐狸 ${fmt(p.owners['小狐狸'])}……錢錢們辛苦了 🥲` });
-  lines.push({ who: 'stock', text: d.alerts.length ? `倉庫有 ${d.alerts.length} 項要注意！散會後我馬上去 🏃💨` : '倉庫一切正常！安心感 MAX ✨' });
+  lines.push({ who: 'stock', text: d.alerts.length ? `倉庫有 ${officeStockSummary(d)}！散會後我馬上去處理 🏃💨` : '倉庫一切正常！安心感 MAX ✨' });
   lines.push({ who: 'elf', text: up ? '我準備了三個省錢方案，會後發給大家 📋' : '照計畫走，表現很好 👍 下個月的預算我也排好了 📋' });
   lines.push({ who: 'fox', text: up ? '沒關係啦～一起加油！散會去吃好料 🍜' : '好棒好棒！散會～去慶祝吧 🎉', burst: true });
   lines.push({ who: 'dog', text: '汪！（以為要吃飯）' });
@@ -526,15 +526,22 @@ function officeData() {
   // 貨架：要補貨或快到期的庫存
   const items = Array.isArray(inventory) ? inventory : [];
   const alerts = [];
+  // 食品、藥品：看期限（快過期要盡快吃完／用完，過期要丟）；消耗品：看數量（用完、快用完才要補貨）
   items.forEach(i => {
     const st = invStatus(i);
     const ex = expiryLevel(i);
-    if (ex === 'expired') alerts.push({ name: i.name, level: 'red', text: '已過期' });
-    else if (ex === 'red') alerts.push({ name: i.name, level: 'red', text: expiryText(i) });
-    else if (st === 'empty') alerts.push({ name: i.name, level: 'red', text: '用完了' });
-    else if (st === 'low') alerts.push({ name: i.name, level: 'warn', text: '快用完' });
-    else if (ex === 'warn') alerts.push({ name: i.name, level: 'warn', text: expiryText(i) });
+    const cat = i.cat || '消耗品';
+    const verb = cat === '藥品' ? '用完' : '吃完';
+    if (ex === 'expired') alerts.push({ name: i.name, level: 'red', kind: 'toss', cat, text: '已過期', tag: '已過期・要丟掉', say: `${i.name}已經過期了，要丟掉` });
+    else if (ex === 'red' || ex === 'warn') {
+      const n = daysUntil(i.expiry);
+      const when = n === 0 ? '今天到期' : `再 ${n} 天到期`;
+      alerts.push({ name: i.name, level: ex, kind: 'use', cat, verb, text: when, tag: `${when}・盡快${verb}`, say: `${i.name}${when}，要盡快${verb}` });
+    } else if (cat === '消耗品' && st === 'empty') alerts.push({ name: i.name, level: 'red', kind: 'buy', cat, text: '用完了', tag: '用完了・要補貨', say: `${i.name}用完了，要補貨` });
+    else if (cat === '消耗品' && st === 'low') alerts.push({ name: i.name, level: 'warn', kind: 'buy', cat, text: '快用完', tag: '快用完・要補貨', say: `${i.name}快用完了，要補貨` });
   });
+  const buyCount = alerts.filter(a => a.kind === 'buy').length;
+  const useCount = alerts.length - buyCount;
   alerts.sort((a, b) => (a.level === b.level ? 0 : (a.level === 'red' ? -1 : 1)));
 
   // 存錢筒水位：餘額占「期初＋已入帳收入」的比例（和餘額的算法一致，未到日期的匯款不算）
@@ -545,7 +552,7 @@ function officeData() {
 
   const biggest = realRecs.filter(r => r.expense >= OFFICE_BIG && !isPrepaid(r) && r.owner !== '').sort((a, b) => b.expense - a.expense)[0] || null;
 
-  return { starting, income, arrived, expense, balance, pool, ratio, mood, entries, sorted, todayCount, love, settled, back, cats, items, alerts, biggest };
+  return { starting, income, arrived, expense, balance, pool, ratio, mood, entries, sorted, todayCount, love, settled, back, cats, items, alerts, buyCount, useCount, biggest };
 }
 
 // ── 角色與物件的 SVG ──────────────────────────────────────────
@@ -1217,7 +1224,7 @@ function officeDetailHtml(key, d) {
       <p class="of-note">${tip}（金幣堆的高度＝目前餘額 ÷（期初＋已入帳收入））</p>`;
   }
   if (key === 'shelf') {
-    const list = d.alerts.slice(0, 8).map(a => row(esc(a.name), a.text, a.level === 'red' ? 'of-exp' : 'of-warn')).join('');
+    const list = d.alerts.slice(0, 8).map(a => row(esc(a.name), a.tag, a.level === 'red' ? 'of-exp' : 'of-warn')).join('');
     return `<h4>📦 貨架 <small>阿貨負責</small></h4>
       ${row('庫存品項', d.items.length + ' 項')}${row('需要注意', d.alerts.length + ' 項', d.alerts.length ? 'of-exp' : 'of-inc')}
       ${list || '<p class="of-note">沒有要補貨或快到期的東西。</p>'}
@@ -1422,9 +1429,9 @@ function officeActivity(id, d) {
       if (officePhase === 'evening') return '下班前喝杯茶，今天辛苦了 🍵';
     }
     if (a.spot === 'shelf') {
-      if (id === 'elf') return al ? `檢查庫存：${al.name}${al.text}，加進採買清單 📋` : '檢查庫存，一切照計畫 📋';
+      if (id === 'elf') return al ? (al.kind === 'buy' ? `檢查庫存：${al.name}${al.text}，加進採買清單 📋` : al.kind === 'use' ? `檢查庫存：${al.name}${al.text}，排進這週先${al.verb} 📋` : `檢查庫存：${al.name}過期了，處理掉 🗑️`) : '檢查庫存，一切照計畫 📋';
       if (id === 'fox') return '在貨架翻零食 🍪😋';
-      return al ? `例行盤點：${al.name}${al.text}…好慌 😣` : '例行盤點…數一次…再數一次 ✨';
+      return al ? `例行盤點：${al.say}…好慌 😣` : '例行盤點…數一次…再數一次 ✨';
     }
     if (a.spot === 'piggy') {
       if (id === 'cash') return '摸摸金幣…好幸福 💰🥹';
@@ -1452,7 +1459,7 @@ function officeActivity(id, d) {
     if (d.pace && d.pace.fast) return `曲線往上衝了（比上月同期 +${d.pace.pct}%）…我不敢看 😱`;
     return d.cats.length ? `${d.cats[0].name}占最多…這張圖表好完美 📊` : '沒有資料可以畫…好空虛 😢';
   }
-  if (id === 'stock') return d.alerts.length ? `${d.alerts[0].name}${d.alerts[0].text}！怎麼辦 😣` : (d.items.length ? '貨架滿滿～安心感 MAX ✨' : '倉庫空空的…好沒安全感 😰');
+  if (id === 'stock') return d.alerts.length ? `${d.alerts[0].say}！怎麼辦 😣` : (d.items.length ? '貨架滿滿～安心感 MAX ✨' : '倉庫空空的…好沒安全感 😰');
   if (id === 'cash') {
     if (d.settled) return '月底結算完成，錢錢都歸位了 💰';
     if (pending.length) return `等 ${pending[0].date} 的每月的愛…好想它 🥺`;
@@ -1563,11 +1570,17 @@ function officeSkits(d) {
     const name = m === 'elf' ? '精靈' : '小狐狸', spot = m === 'elf' ? 'giveElf' : 'giveFox';
     const o = d.owners[name], love = d.love.find(p => p.name === name);
 
-    add('stock-' + m, ['stock', m], () => ({ stock: [talk(spot, `慌張地跑去找${name}`, `跟${name}講補貨的事`, alert ? [
-      { who: 'stock', text: `${name}！${alert.name}${alert.text}！怎麼辦怎麼辦 😱` },
-      { who: m, text: m === 'elf'
-        ? (d.alerts.length > 1 ? `別慌，我列清單：還有 ${d.alerts.length - 1} 項，週末一次買齊 📋` : '別慌，我加進購物清單了，還準備了備案 📋')
-        : pick(['好啦好啦～我順路去買，順便買點心 😋', '交給我！我最愛逛賣場了 🛒✨']) },
+    add('stock-' + m, ['stock', m], () => ({ stock: [talk(spot, `慌張地跑去找${name}`, `跟${name}講${alert && alert.kind !== 'buy' ? '快過期的東西' : '補貨的事'}`, alert ? [
+      { who: 'stock', text: `${name}！${alert.say}！怎麼辦怎麼辦 😱` },
+      { who: m, text: alert.kind === 'buy'
+        ? (m === 'elf'
+          ? (d.buyCount > 1 ? `別慌，我列清單：要補的有 ${d.buyCount} 項，週末一次買齊 📋` : '別慌，我加進購物清單了，還準備了備案 📋')
+          : pick(['好啦好啦～我順路去買，順便買點心 😋', '交給我！我最愛逛賣場了 🛒✨']))
+        : alert.kind === 'use'
+          ? (m === 'elf'
+            ? (alert.cat === '藥品' ? '別慌，我記下來，先用這一盒 💊📋' : '別慌，我排進這週的菜單，先把它吃掉 🍳📋')
+            : (alert.cat === '藥品' ? '好～我會記得先用它 💊' : pick(['交給我！今天就把它吃光光 😋', '我負責吃！這是我的專長 🍱✨'])))
+          : (m === 'elf' ? '我來處理掉，下次買的量我會算好 📋' : '啊…下次要記得早點吃 🙈') },
       { who: 'stock', text: '嗚嗚謝謝你 🥹' }] : [
       { who: 'stock', text: d.items.length ? '貨架滿滿的～安心感 MAX ✨' : '倉庫空空的…好沒安全感 😰' },
       { who: m, text: m === 'elf' ? (d.items.length ? '很好，我再建一份備品清單以防萬一 📋' : '我來規劃要登記哪些，先列個表 📋') : '哈哈你也太容易緊張了啦 😆' }])] }));
@@ -1587,8 +1600,12 @@ function officeSkits(d) {
 
     add(m + '-stock', [m, 'stock'], () => ({ [m]: [talk('byStock', '去問阿貨家裡缺什麼', '問阿貨家裡缺什麼', [
       { who: m, text: m === 'elf' ? '阿貨，給我完整的庫存清單 📋' : '阿貨～家裡缺什麼？我要出門逛逛 🛍️' },
-      { who: 'stock', text: d.alerts.length ? `${d.alerts.slice(0, 2).map(a => a.name).join('、')}要補！${d.alerts.length > 2 ? `總共 ${d.alerts.length} 項 😱` : '拜託快點 😣'}` : '目前都不缺！安心 ✨' },
-      { who: m, text: d.alerts.length ? (m === 'elf' ? '收到，排進這週的採買計畫 📅' : '好～順便帶杯飲料給你 🧋') : (m === 'elf' ? '很好，維持這樣 👍' : '那我去逛逛就好～😆') }])] }));
+      { who: 'stock', text: d.alerts.length ? [
+        d.buyCount ? `${d.alerts.filter(a => a.kind === 'buy').slice(0, 2).map(a => a.name).join('、')}要補貨` : '',
+        d.useCount ? `${d.alerts.filter(a => a.kind !== 'buy').slice(0, 2).map(a => a.name).join('、')}快過期要盡快吃完` : ''].filter(Boolean).join('；') + '！😣' : '目前都不缺！安心 ✨' },
+      { who: m, text: d.alerts.length
+        ? (m === 'elf' ? (d.buyCount ? '收到，排進這週的採買計畫 📅' : '收到，這週菜單先用快過期的 📅') : (d.buyCount ? '好～順便帶杯飲料給你 🧋' : '快過期的交給我吃 😋'))
+        : (m === 'elf' ? '很好，維持這樣 👍' : '那我去逛逛就好～😆') }])] }));
   });
 
   // 黑柴：牠去找人玩，或大家到窩邊摸牠
@@ -1619,7 +1636,7 @@ function officeSkits(d) {
   // 一起喝茶：兩位員工各自走到茶水間，都到了才開始聊
   const staffLine = id => id === 'book' ? (d.todayCount ? `今天記了 ${d.todayCount} 筆，手好痠…但很爽 ✍️` : '今天都沒新帳…好不習慣 😶')
     : id === 'chart' ? (top ? `${top.name}還是最多…我晚上都夢到它 📈` : '沒資料可以畫…我好空虛 😢')
-    : id === 'stock' ? (d.alerts.length ? `還有 ${d.alerts.length} 項要補…我茶都喝不下 😣` : '貨架滿滿～這杯茶好好喝 ✨')
+    : id === 'stock' ? (d.alerts.length ? `還有 ${officeStockSummary(d)}…我茶都喝不下 😣` : '貨架滿滿～這杯茶好好喝 ✨')
     : (d.mood === 'happy' ? `小豬 ${pct}%，錢錢都在，好幸福 💰` : `小豬只剩 ${pct}%…茶好苦 🥲`);
   [pick([['book', 'cash'], ['chart', 'stock'], ['book', 'stock'], ['chart', 'cash']])].forEach(([a, b]) => {
     add('tea-' + a + '-' + b, [a, b], () => ({
@@ -1655,8 +1672,13 @@ function officeSkits(d) {
       { who: 'elf', text: '記了。順便幫你把上週漏的也補了 📋' },
       { who: 'fox', text: '你是天使嗎 😭💕', heart: true }]);
     if (alert) chats.push([
+      ...(alert.kind === 'buy' ? [
       { who: 'elf', text: `${alert.name}${alert.text}，週六上午十點去買，路線我查好了 🗺️` },
-      { who: 'fox', text: '好耶～順便去吃早午餐！🥞', heart: true }]);
+      { who: 'fox', text: '好耶～順便去吃早午餐！🥞', heart: true }] : alert.kind === 'use' ? [
+      { who: 'elf', text: alert.cat === '藥品' ? `${alert.name}${alert.text}，要記得先用它 💊` : `${alert.name}${alert.text}，今晚我把它煮掉 🍳` },
+      { who: 'fox', text: alert.cat === '藥品' ? '好～我會提醒你 💕' : '好耶～我負責吃光光！😋', heart: true }] : [
+      { who: 'elf', text: `${alert.name}過期了…下次我會算好份量 📋` },
+      { who: 'fox', text: '不怪你啦，是我忘記吃 🙈', heart: true }])]);
     // 晚上：沙發上的悄悄話
     const nightChats = [[
       { who: 'elf', text: '（夢話）預算…還有第三個版本…💤' },
@@ -2153,10 +2175,14 @@ function officeJobFx(job) {
   }
 }
 
+// 阿貨的倉庫摘要：「2 項要補貨、1 項快過期」
+function officeStockSummary(d) {
+  return [d.buyCount ? `${d.buyCount} 項要補貨` : '', d.useCount ? `${d.useCount} 項快過期` : ''].filter(Boolean).join('、');
+}
 function officeMetric(id, d) {
   if (id === 'book') return ['今日記帳', d.todayCount];
   if (id === 'chart') return ['支出分類', d.cats.length];
-  if (id === 'stock') return ['待補貨', d.alerts.length];
+  if (id === 'stock') return ['待處理', d.alerts.length];
   if (id === 'cash') return ['已入帳', d.love.filter(p => p.has && p.arrived).length + '/2'];
   if (id === 'piggy') return ['金幣', Math.round(d.ratio * 100) + '%'];
   if (id === 'dog') return ['被摸', officeDogPets + ' 次'];
@@ -2221,7 +2247,7 @@ function officeStatusText(d) {
     chip('🪑', seat, '在座位上'),
     chip('🚶', walk, '走動中'),
     chip('☕', rest, '巡視或休息'),
-    chip('📦', d.alerts.length, '待補貨', d.alerts.length ? 'warn' : ''),
+    chip('📦', d.alerts.length, d.alerts.length ? officeStockSummary(d) : '待補貨／快過期', d.alerts.length ? 'warn' : ''),
     chip('🐷', Math.round(d.ratio * 100) + '%', '存錢筒的金幣', d.mood !== 'happy' ? 'warn' : ''),
     d.pace && d.pace.fast ? chip('⚠️', `花比較快 +${d.pace.pct}%`, '本月支出比上個月同期多', 'warn') : '',
   ].join('');

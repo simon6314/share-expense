@@ -464,7 +464,7 @@ function officeMeetingLines(d) {
 // 角色個性（點角色時顯示）
 const OFFICE_PERSONA = {
   book: '認真到有點神經質，帳一定要一筆一筆對齊才舒服',
-  chart: '數據狂，看到漂亮的曲線就會感動到想哭',
+  chart: '數據狂，看到漂亮的圖表就會感動到想哭',
   stock: '愛操心，庫存一少就開始慌',
   cash: '守財奴，花錢比自己被打還痛，最愛每月的愛',
   piggy: '戲精，金幣多就得意，少了就裝可憐',
@@ -1406,7 +1406,7 @@ function officeActivity(id, d) {
   }
   const asleep = officePhase === 'night' && (!a || (a.state === 'seat' && !a.awake));
   if (officePhase === 'night' && a && a.awake && a.state === 'seat') return '被叫醒了，處理完再睡 😪';
-  if (asleep) return { book: '（夢話）這筆…對齊了…💤', chart: '（夢話）曲線…好美…💤', stock: '（夢話）衛生紙…還有嗎…💤', cash: '（夢話）錢錢…不要走…💤', elf: '（夢話）第三個預算版本…💤', fox: '（夢話）好吃…再一口…💤', dog: '睡在窩裡打呼 💤' }[id] || '睡著了 💤';
+  if (asleep) return { book: '（夢話）這筆…對齊了…💤', chart: '（夢話）圖表…又更新了…💤', stock: '（夢話）衛生紙…還有嗎…💤', cash: '（夢話）錢錢…不要走…💤', elf: '（夢話）第三個預算版本…💤', fox: '（夢話）好吃…再一口…💤', dog: '睡在窩裡打呼 💤' }[id] || '睡著了 💤';
   if (id === 'dog') {
     if (a && a.state === 'walk') return a.back ? '跑回窩裡' : '在辦公室巡邏';
     if (a && a.state === 'visit') return a.spot === 'piggy' ? '聞聞小豬（有零食味嗎？）' : (a.spot === 'shelf' ? '聞聞貨架上的箱子 👃' : (a.spot === 'board' ? '歪頭看白板 ❓' : (a.spot === 'giveElf' ? '黏在精靈腳邊 🐾' : (a.spot === 'giveFox' ? '跟著小狐狸跑來跑去 🐾' : '在茶水間討零食 🥺'))));
@@ -1450,7 +1450,7 @@ function officeActivity(id, d) {
   }
   if (id === 'chart') {
     if (d.pace && d.pace.fast) return `曲線往上衝了（比上月同期 +${d.pace.pct}%）…我不敢看 😱`;
-    return d.cats.length ? `${d.cats[0].name}占最多…曲線好美 📈` : '沒有資料可以畫…好空虛 😢';
+    return d.cats.length ? `${d.cats[0].name}占最多…這張圖表好完美 📊` : '沒有資料可以畫…好空虛 😢';
   }
   if (id === 'stock') return d.alerts.length ? `${d.alerts[0].name}${d.alerts[0].text}！怎麼辦 😣` : (d.items.length ? '貨架滿滿～安心感 MAX ✨' : '倉庫空空的…好沒安全感 😰');
   if (id === 'cash') {
@@ -1546,7 +1546,7 @@ function officeSkits(d) {
 
   add('book-chart', ['book', 'chart'], () => ({ book: [talk('byChart', '抱著帳本衝去找小析', '跟小析更新圖表', [
     { who: 'book', text: d.todayCount ? `今天 ${d.todayCount} 筆，全部對齊了！快更新圖表 ✍️✨` : `這個月 ${d.entries.length} 筆，我核對三次了，拜託看一下 🙏` },
-    { who: 'chart', text: top ? `來了來了！${top.name} ${fmt(top.value)}…這曲線好美 📈🥹` : '沒有支出…我的圖表好寂寞 😢' },
+    { who: 'chart', text: top ? `來了來了！${top.name} ${fmt(top.value)}…數據太漂亮了 📊🥹` : '沒有支出…我的圖表好寂寞 😢' },
     { who: 'book', text: pick(['你冷靜一點啦 😅', '…你是不是又熬夜看數字了', '好啦好啦，你開心就好']) }])] }));
 
   add('chart-book', ['chart', 'book'], () => ({ chart: [talk('desk', '興奮地跑去找小帳', '跟小帳核對數字', [
@@ -1836,7 +1836,7 @@ function officeChatTopics() {
       end: ['一起加油 💪', '好健康！', '我明天…一定開始 😅'] },
     { open: ['你今天看起來精神很好欸！✨', '你今天好像心情很好？'], reply: {
         book: ['因為今天的帳全部對齊了 😤✨', '剛核對完，好有成就感 ✍️'],
-        chart: ['今天的曲線很漂亮，心情很好 📈🥹', '數據說我今天很開心 📊'],
+        chart: ['今天的數據很漂亮，心情很好 📊🥹', '數據說我今天很開心 📊'],
         stock: ['貨架滿滿的，好有安全感 ✨', '真的嗎？我還以為我很慌 😅'],
         cash: ['今天沒有人來領錢 💰😌', '小豬很圓，我就很開心 🐷'],
         elf: ['照計畫完成了今天的待辦 ✅', '……謝謝，我只是睡得比較飽 😳'],
@@ -1995,7 +1995,7 @@ function officeReact(id) {
   const sleepy = officePhase === 'night' && a.state === 'seat';
   const lines = {
     book: ['不要戳我！我在對帳啦 😣', '嗨…這筆…等我一下 ✍️', '今天記帳了嗎？沒記我會睡不著 😰'],
-    chart: ['要看圖表嗎！要嗎要嗎！📊✨', '數字是世界上最美的東西 🥹', '嘿嘿～被你發現我在偷看曲線 📈'],
+    chart: ['要看圖表嗎！要嗎要嗎！📊✨', '數字是世界上最美的東西 🥹', '嘿嘿～被你發現我在偷看圖表 📊'],
     stock: ['哇！嚇我一跳 😱', '衛生紙…還夠嗎？還夠吧？😣', '倉庫交給我！應該…吧 😅'],
     cash: ['錢錢都在！不准碰 😤', '你…不是要來領錢的吧？👀', '每月的愛什麼時候來…🥺'],
     elf: ['嗯？我在排預算 📋', '等一下，這張表還差一欄', '……戳我幹嘛 😳'],

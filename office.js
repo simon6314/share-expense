@@ -1459,7 +1459,18 @@ function officeActivity(id, d) {
     if (d.pace && d.pace.fast) return `曲線往上衝了（比上月同期 +${d.pace.pct}%）…我不敢看 😱`;
     return d.cats.length ? `${d.cats[0].name}占最多…這張圖表好完美 📊` : '沒有資料可以畫…好空虛 😢';
   }
-  if (id === 'stock') return d.alerts.length ? `${d.alerts[0].say}！怎麼辦 😣` : (d.items.length ? '貨架滿滿～安心感 MAX ✨' : '倉庫空空的…好沒安全感 😰');
+  if (id === 'stock') {
+    // 阿貨：緊張、愛清點，話多一點、內容輪著講
+    const pk = arr => arr[Math.floor(Math.random() * arr.length)];
+    const buys = d.alerts.filter(x => x.kind === 'buy'), uses = d.alerts.filter(x => x.kind !== 'buy');
+    const pool = [];
+    if (buys.length) pool.push(`${pk(buys).say}！怎麼辦 😣`, `購物清單：${buys.slice(0, 3).map(x => x.name).join('、')}…寫在便利貼了 📝`, `要補貨的有 ${buys.length} 項…我每天都在數 😰`);
+    if (uses.length) { const u = pk(uses); pool.push(`${u.say}！要提醒大家 📢`, u.kind === 'toss' ? `${u.name}過期了…都怪我沒早點提醒 😭` : `${u.name}${u.text}…放到最前面，大家快${u.verb || '吃完'}！`); }
+    if (d.items.length) pool.push(`庫存 ${d.items.length} 項，剛剛又數了一遍 ✅`, d.alerts.length ? '其他的都還夠…呼 😮‍💨' : '貨架滿滿～安心感 MAX ✨');
+    else pool.push('倉庫空空的…好沒安全感 😰', '庫存還沒登記…我要不要先列個清單 📋');
+    pool.push('把箱子排整齊…大的放下面，小的放上面 📦', '貼標籤中：這是食品、這是藥品、這是消耗品 🏷️', '再確認一次期限…眼睛好痠 👀', '聽到有人說「沒了」我就會心跳加速 😱', '數一數…一、二、三…好，再數一次 🔢');
+    return pk(pool);
+  }
   if (id === 'cash') {
     if (d.settled) return '月底結算完成，錢錢都歸位了 💰';
     if (pending.length) return `等 ${pending[0].date} 的每月的愛…好想它 🥺`;
@@ -1565,6 +1576,27 @@ function officeSkits(d) {
     { who: 'cash', text: `餘額 ${fmt(d.balance)}…我數了五次，你那邊呢？💰` },
     { who: 'book', text: `本月支出 ${fmt(d.expense)}，對得上！呼…放心了 😮‍💨` },
     { who: 'cash', text: d.expense > d.balance ? '花掉的比剩下的多…我的心好痛 🩸' : '錢錢都還在，好乖好乖 💰💕' }])] }));
+
+  const buys = d.alerts.filter(x => x.kind === 'buy'), uses = d.alerts.filter(x => x.kind !== 'buy');
+  add('stock-book', ['stock', 'book'], () => ({ stock: [talk('desk', '抱著箱子去找小帳', '跟小帳對日用品', buys.length ? [
+    { who: 'stock', text: `小帳，我等等要去買${buys.slice(0, 2).map(x => x.name).join('、')}，先跟你報備 📝` },
+    { who: 'book', text: '好，發票記得給我，我馬上記 ✍️' },
+    { who: 'stock', text: '收到！我會把發票夾在箱子上 📦' }] : [
+    { who: 'stock', text: '小帳，最近買的日用品都記了嗎？我想對一下庫存 📦' },
+    { who: 'book', text: latest ? `都記了！最新一筆是「${latest.item}」✍️` : '這個月還沒有買東西喔 ✍️' },
+    { who: 'stock', text: '太好了…帳本跟貨架對得上，好安心 🥹' }])] }));
+  add('stock-chart', ['stock', 'chart'], () => ({ stock: [talk('byChart', '跑去找小析', '請小析畫庫存圖', [
+    { who: 'stock', text: '小析，可以幫我畫一張庫存圖嗎？📦🙏' },
+    { who: 'chart', text: d.items.length ? `來了！庫存 ${d.items.length} 項，要補貨 ${buys.length} 項、快過期 ${uses.length} 項 📊✨` : '倉庫還沒有資料…我也好空虛 😢' },
+    { who: 'stock', text: d.alerts.length ? '有圖表就不會漏掉了 🥹' : '全部都綠色的耶！好安心 ✨' }])] }));
+  if (buys.length) add('stock-cash', ['stock', 'cash'], () => ({ stock: [talk('byCash', '小心翼翼地去找阿庫', '跟阿庫申請採買', [
+    { who: 'stock', text: `阿庫…${buys[0].name}${buys[0].text}，可以申請一點錢去買嗎？🥺` },
+    { who: 'cash', text: pick(['嗚…錢錢要出門了…好啦，買需要的就好 😭', '只能買清單上的喔！不准亂買 💰😤']) },
+    { who: 'stock', text: '保證只買清單上的！🫡' }])] }));
+  if (uses.length && uses[0].kind === 'use') add('stock-fox-eat', ['stock', 'fox'], () => ({ stock: [talk('giveFox', '捧著快過期的東西跑去找小狐狸', `請小狐狸幫忙${uses[0].verb}`, [
+    { who: 'stock', text: `小狐狸！${uses[0].name}${uses[0].text}，可以幫忙${uses[0].verb}嗎？🥺` },
+    { who: 'fox', text: uses[0].cat === '藥品' ? '好～我會記得先用這個 💊' : '這種任務最適合我了！😋✨' },
+    { who: 'stock', text: '你是倉庫的救星 🥹' }])] }));
 
   ['elf', 'fox'].forEach(m => {
     const name = m === 'elf' ? '精靈' : '小狐狸', spot = m === 'elf' ? 'giveElf' : 'giveFox';
@@ -2574,7 +2606,8 @@ function officeTick(ts) {
     officeSayAt = ts + 4200;
     const seated = OFFICE_STAFF.filter(s => officeActors[s.id].state === 'seat');
     if (seated.length) {
-      const s = seated[Math.floor(Math.random() * seated.length)];
+      const weighted = seated.flatMap(x => (x.id === 'stock' ? [x, x] : [x]));
+      const s = weighted[Math.floor(Math.random() * weighted.length)];
       const wx = officePhase !== 'night' && Math.random() < 0.25 ? officeWxLine(s.id) : null;
       officeSay(s.id, wx || officeActivity(s.id, d));
     }

@@ -1404,7 +1404,9 @@ function officeGoStep(a, s, ts, d) {
 }
 
 // 每位員工、每種狀態正在做的事（文字來自真實資料）
-function officeActivity(id, d) {
+// 阿貨座位上的台詞：只有在冒對話框時才換一句，下方卡片顯示同一句（不然卡片每次更新都換，跟對話框對不上）
+let officeStockLine = '';
+function officeActivity(id, d, fresh) {
   const a = officeActors[id];
   if (a && a.lift) return a.lift === 'wait' ? '等電梯中… 🛗' : `搭電梯到 ${OFFICE_FLOOR_NAME[a.path[0] && a.path[0].zone] || ''} 🛗`;
   if (a && a.job && a.state !== 'seat') {
@@ -1461,6 +1463,7 @@ function officeActivity(id, d) {
   }
   if (id === 'stock') {
     // 阿貨：緊張、愛清點，話多一點、內容輪著講
+    if (!fresh && officeStockLine) return officeStockLine;
     const pk = arr => arr[Math.floor(Math.random() * arr.length)];
     const buys = d.alerts.filter(x => x.kind === 'buy'), uses = d.alerts.filter(x => x.kind !== 'buy');
     const pool = [];
@@ -1469,7 +1472,8 @@ function officeActivity(id, d) {
     if (d.items.length) pool.push(`庫存 ${d.items.length} 項，剛剛又數了一遍 ✅`, d.alerts.length ? '其他的都還夠…呼 😮‍💨' : '貨架滿滿～安心感 MAX ✨');
     else pool.push('倉庫空空的…好沒安全感 😰', '庫存還沒登記…我要不要先列個清單 📋');
     pool.push('把箱子排整齊…大的放下面，小的放上面 📦', '貼標籤中：這是食品、這是藥品、這是消耗品 🏷️', '再確認一次期限…眼睛好痠 👀', '聽到有人說「沒了」我就會心跳加速 😱', '數一數…一、二、三…好，再數一次 🔢');
-    return pk(pool);
+    officeStockLine = pk(pool);
+    return officeStockLine;
   }
   if (id === 'cash') {
     if (d.settled) return '月底結算完成，錢錢都歸位了 💰';
@@ -2292,6 +2296,7 @@ function drawOffice() {
   try { d = officeData(); d.owners = officeOwners(d); }
   catch (e) { scene.innerHTML = '<div class="empty-state">⚠️ 辦公室載入失敗</div>'; return; }
   d.pace = officePace(d);
+  if (officeData_ && (officeData_.alerts.length !== d.alerts.length || officeData_.items.length !== d.items.length)) officeStockLine = "";   // 庫存變了，阿貨換句新的
   officeData_ = d;
   officeInfo_ = officeLevelInfo();
   officePhase = officePhaseNow();
@@ -2537,7 +2542,7 @@ function officeTick(ts) {
         const stNow = a.job && a.state === 'visit' ? a.job.steps[a.job.i] : null;
         if (stNow && stNow.waitFor) { a.waiting = true; a.until = ts + 14000; }   // 等同伴到了再開始聊
         else {
-          if (d && a.state === 'visit' && !(stNow && (stNow.fx === 'talk' || stNow.fx === 'meet')) && (stNow || ts >= officeQuietUntil)) officeSay(s.id, officeActivity(s.id, d));
+          if (d && a.state === 'visit' && !(stNow && (stNow.fx === 'talk' || stNow.fx === 'meet')) && (stNow || ts >= officeQuietUntil)) officeSay(s.id, officeActivity(s.id, d, true));
           if (stNow) officeJobFx(a.job);
         }
       }
@@ -2609,7 +2614,7 @@ function officeTick(ts) {
       const weighted = seated.flatMap(x => (x.id === 'stock' ? [x, x] : [x]));
       const s = weighted[Math.floor(Math.random() * weighted.length)];
       const wx = officePhase !== 'night' && Math.random() < 0.25 ? officeWxLine(s.id) : null;
-      officeSay(s.id, wx || officeActivity(s.id, d));
+      officeSay(s.id, wx || officeActivity(s.id, d, true));
     }
   }
   // 精靈和小狐狸都坐在沙發上時，偶爾冒出一顆小愛心

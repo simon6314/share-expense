@@ -717,7 +717,38 @@ function officeSeasonOutfit(id) {
   if (summer && id !== 'dog') return `<g class="of-fan"><path d="M60 70 L70 54 Q78 58 74 68 Z" fill="#9fd8cb" stroke="#fff" stroke-width="1.4"/><path d="M60 70 L66 79" stroke="#c9a27c" stroke-width="2.4" stroke-linecap="round"/></g>`;
   return '';
 }
+// Gemini 畫的角色圖（assets/staff/<id>.webp，已去背）：寬高比、在 80×90 畫框裡的高度
+const OFFICE_IMG_V = '20261117a';
+const OFFICE_IMG = {
+  book: [148 / 320, 90], chart: [145 / 320, 90], stock: [144 / 320, 90], cash: [140 / 320, 90],
+  elf: [268 / 320, 72], fox: [334 / 320, 70], dog: [269 / 320, 72],
+};
+// 圖片角色的裝扮：原本畫在線條圖上的徽章、皇冠、圍巾、扇子，改成掛在旁邊的小圖示
+function officeIconOutfit(id) {
+  const icons = [];
+  const info = officeInfo_;
+  const k = officeRankOf(id, info);
+  const t = (x, y, e, size = 13) => `<text x="${x}" y="${y}" font-size="${size}" text-anchor="middle">${e}</text>`;
+  if (k && k.lv > 0) {
+    if (id === 'dog') icons.push(t(40, 14, k.lv >= 4 ? '👑' : k.lv >= 2 ? '👑' : '🔔', k.lv >= 4 ? 15 : 12));
+    else icons.push(t(64, 62, ['', '🥉', '🥈', '🥇', '🌟'][Math.min(k.lv, 4)], 12));
+    if (k.lv === k.max && id !== 'dog') icons.push(t(66, 26, { book: '✨', chart: '🔮', stock: '🏅', cash: '💰', elf: '🎀', fox: '🕶️' }[id] || '✨', 13));
+    if (id === 'dog' && k.lv >= 3) icons.push(t(64, 60, '🦸', 12));
+  }
+  if (info && info.party) icons.push(t(16, 18, '🥳', 13));
+  const m = new Date().getMonth() + 1;
+  if (m === 12 || m <= 2) icons.push(t(16, 62, '🧣', 12));
+  else if (m >= 6 && m <= 8 && id !== 'dog') icons.push(`<g class="of-fan">${t(66, 74, '🪭', 12)}</g>`);
+  return icons.join('');
+}
 function officeActorSvg(id) {
+  const img = OFFICE_IMG[id];
+  if (img) {
+    // 原圖面向左；翻成面向右（face = 1），往左走時外層 scaleX(-1) 會再翻回來
+    const h = img[1], w = h * img[0], x = 40 - w / 2, y = 86 - h;
+    return `<svg viewBox="0 0 80 90" aria-hidden="true"><ellipse cx="40" cy="86" rx="${Math.min(22, w / 2 + 2).toFixed(1)}" ry="3.6" fill="rgba(90,70,50,0.18)"/>
+      <g transform="translate(80 0) scale(-1 1)"><image href="assets/staff/${id}.webp?v=${OFFICE_IMG_V}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h}" preserveAspectRatio="xMidYMax meet"/></g>${officeIconOutfit(id)}</svg>`;
+  }
   const inner = (id === 'elf' || id === 'fox' || id === 'dog') ? officeCharSvg(id) : officeStaffSvg(id);
   return `<svg viewBox="0 0 80 90" aria-hidden="true"><ellipse cx="40" cy="86" rx="20" ry="4" fill="rgba(90,70,50,0.18)"/>${inner}${officeOutfit(id)}</svg>`;
 }

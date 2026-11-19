@@ -1250,8 +1250,10 @@ const OFFICE_TOP = 280, OFFICE_FH = 330, OFFICE_H = 2160, OFFICE_HS = OFFICE_H /
 const OFFICE_FLOOR = { C: OFFICE_TOP + 300, D: OFFICE_TOP + 630, A: OFFICE_TOP + 960, B: OFFICE_TOP + 1290, E: OFFICE_TOP + 1620 };
 const OFFICE_FLOOR_NAME = { C: '5F', D: '4F', A: '3F', B: '2F', E: '1F' };
 const OFFICE_LIFT_X = 898, OFFICE_LIFT_DOOR = 860;              // 電梯廂中心、電梯門口
-// 電梯：一次載一個人，其他人在門口排隊
-const officeLift = { y: OFFICE_FLOOR.E, goal: OFFICE_FLOOR.E, phase: 'idle', rider: null, queue: [], until: 0 };
+// 電梯：可以多人同時搭乘（最多 5 人），沿途在「有人要下」或「有人在等」的樓層停靠
+const OFFICE_LIFT_CAP = 5;
+const OFFICE_LIFT_SLOT = [0, -26, 26, -13, 13];          // 車廂內每個人的站位（x 偏移）
+const officeLift = { y: OFFICE_FLOOR.E, goal: OFFICE_FLOOR.E, dir: 0, phase: 'idle', riders: [], queue: [], until: 0, stopZone: null };
 const OFFICE_SPOTS = {
   byDog:   { x: 410, y: OFFICE_FLOOR.D, zone: 'D', go: '蹦蹦跳跳去找黑柴', at: '跑去逗黑柴玩 🐶' },  // 黑柴的窩旁邊
   byChart: { x: 440, y: OFFICE_FLOOR.A, zone: 'A' },    // 小析座位旁
@@ -1336,56 +1338,69 @@ function officeHoldFor(st, ts, ms) {
   if (t && !t.job && t.state !== 'walk') t.until = Math.max(t.until, ts + ms);
 }
 
-// 電梯：去接排隊的第一個人；同一層、要去同一樓的人一起上（最多四人），載到目的樓層再開門
+// 下一站：有人要下車、或有人在等的樓層；優先順著目前的方向，沒有才換方向
+function officeLiftNext(L) {
+  const zones = new Set();
+  L.riders.forEach(id => { const a = officeActors[id]; if (a && a.path[0] && a.path[0].lift) zones.add(a.path[0].zone); });
+  L.queue.forEach(id => { const a = officeActors[id]; if (a && a.lift === 'wait') zones.add(officeZoneAt(a.x, a.y)); });
+  if (!zones.size) return null;
+  const list = [...zones].map(z => ({ z, dy: OFFICE_FLOOR[z] - L.y }));
+  const ahead = L.dir ? list.filter(c => c.dy === 0 || Math.sign(c.dy) === L.dir) : [];
+  const pool = (ahead.length ? ahead : list).slice().sort((p, q) => Math.abs(p.dy) - Math.abs(q.dy));
+  return pool[0].z;
+}
+
+// 電梯：移動、開門，這一層的人下車、等的人上車（車廂有位子才上），然後再決定下一站
 function officeLiftTick(ts, dt) {
   const L = officeLift;
   const SPEED = 680;
-  if (!L.riders) L.riders = [];
-  if (L.phase === 'idle' && L.queue.length) {
-    const id = L.queue[0], a = officeActors[id];
-    if (!a || !a.path.length || !a.path[0].lift) { L.queue.shift(); return; }
-    L.rider = id; L.phase = 'fetch'; L.goal = OFFICE_FLOOR[officeZoneAt(a.x, a.y)];
+  // 排隊的人站在門口，同一層依排隊順序往後排
+  L.queue = L.queue.filter(id => officeActors[id] && officeActors[id].lift === 'wait');
+  const byFloor = {};
+  L.queue.forEach(id => { const a = officeActors[id], k = officeZoneAt(a.x, a.y); (byFloor[k] = byFloor[k] || []).push(a); });
+  Object.values(byFloor).forEach(list => list.forEach((a, i) => { a.x = OFFICE_LIFT_DOOR - i * 46; }));
+
+  if (L.phase === 'idle' && ts >= L.until) {
+    const z = officeLiftNext(L);
+    if (z) { L.goal = OFFICE_FLOOR[z]; L.phase = 'move'; L.dir = Math.sign(L.goal - L.y); }
+    else L.dir = 0;
   }
-  if (L.phase === 'fetch' || L.phase === 'ride') {
+  if (L.phase === 'move') {
     const dy = L.goal - L.y, step = SPEED * dt;
     L.y = Math.abs(dy) <= step ? L.goal : L.y + Math.sign(dy) * step;
-    if (L.phase === 'ride') L.riders.forEach(id => { officeActors[id].y = L.y; });
-    if (L.y === L.goal) {
-      if (L.phase === 'fetch') { L.phase = 'board'; L.until = ts + 320; }
-      else { L.phase = 'exit'; L.until = ts + 280; }
-    }
-  } else if (L.phase === 'board' && ts >= L.until) {
-    const first = officeActors[L.rider];
-    if (!first || !first.path.length || !first.path[0].lift) { L.phase = 'idle'; L.rider = null; L.queue.shift(); return; }
-    const target = first.path[0].y, here = L.y;
-    // 同一層、要去同一樓的人一起上
-    L.riders = L.queue.filter(id => {
-      const o = officeActors[id];
-      return o && o.lift === 'wait' && Math.abs(o.y - here) < 40 && o.path[0] && o.path[0].lift && o.path[0].y === target;
-    }).slice(0, 4);
-    if (!L.riders.includes(L.rider)) L.riders.unshift(L.rider);
-    L.riders.forEach((id, i) => { const o = officeActors[id]; o.lift = 'ride'; o.x = OFFICE_LIFT_X + [0, -26, 26, -13][i]; o.face = 1; });
-    L.queue = L.queue.filter(id => !L.riders.includes(id));
-    L.phase = 'ride'; L.goal = target;
-    if (officeVisible()) officeRefreshTexts();
-    // 其他排隊的人往前站
-    L.queue.forEach((id, i) => { const o = officeActors[id]; if (o && o.lift === 'wait' && Math.abs(o.y - here) < 40) o.x = OFFICE_LIFT_DOOR - i * 46; });
-  } else if (L.phase === 'exit' && ts >= L.until) {
-    L.riders.forEach(id => {
+    L.riders.forEach(id => { const a = officeActors[id]; if (a) a.y = L.y; });
+    if (L.y === L.goal) { L.phase = 'open'; L.stopZone = officeZoneAt(0, L.y); L.until = ts + 360; }
+  } else if (L.phase === 'open' && ts >= L.until) {
+    const z = L.stopZone;
+    // 先下車：目的地是這一層的人
+    L.riders = L.riders.filter(id => {
       const a = officeActors[id];
-      if (a) { a.path.shift(); a.lift = null; a.y = L.y; a.zone = officeZoneAt(a.x, a.y); }
+      if (!a || !a.path[0] || !a.path[0].lift) { if (a) a.lift = null; return false; }
+      if (a.path[0].zone !== z) return true;
+      a.path.shift(); a.lift = null; a.y = L.y; a.zone = z;
+      return false;
     });
-    L.riders = []; L.rider = null; L.phase = 'idle';
+    // 再上車：在這一層等的人，依排隊順序，車廂還有位子就上
+    L.queue = L.queue.filter(id => {
+      const a = officeActors[id];
+      if (!a || a.lift !== 'wait') return false;
+      if (officeZoneAt(a.x, a.y) !== z || L.riders.length >= OFFICE_LIFT_CAP) return true;
+      a.lift = 'ride'; a.face = 1; L.riders.push(id);
+      return false;
+    });
+    L.riders.forEach((id, i) => { const a = officeActors[id]; a.x = OFFICE_LIFT_X + OFFICE_LIFT_SLOT[i]; a.y = L.y; });
+    L.phase = 'idle'; L.until = ts + 220;   // 關門一下再走
     if (officeVisible()) officeRefreshTexts();
   }
+
   const car = document.getElementById('of-lift');
   if (car) {
     car.style.top = ((L.y - 166) / OFFICE_HS).toFixed(2) + '%';
     car.style.zIndex = Math.round(L.y) - 3;
     const txt = car.querySelector('span');
-    const arrow = L.phase === 'idle' ? '' : (L.goal < L.y ? '▲ ' : (L.goal > L.y ? '▼ ' : ''));
-    if (txt) txt.textContent = arrow + OFFICE_FLOOR_NAME[officeZoneAt(0, L.phase === 'idle' ? L.y : L.goal)];
-    car.classList.toggle('open', L.phase === 'board' || L.phase === 'exit');
+    const arrow = L.phase === 'move' ? (L.goal < L.y ? '▲ ' : '▼ ') : '';
+    if (txt) txt.textContent = arrow + OFFICE_FLOOR_NAME[officeZoneAt(0, L.phase === 'move' ? L.goal : L.y)];
+    car.classList.toggle('open', L.phase === 'open');
   }
 }
 

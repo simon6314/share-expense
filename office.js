@@ -52,6 +52,7 @@ let officeSkitLast = '';            // 上一次的互動，避免連續重複
 let officeSkitSeq = 0;
 let officeAmbientAt = 0;            // 精靈和小狐狸坐在一起時，偶爾冒出小愛心
 let officeQuietUntil = 0;           // 互動或跑腿結束後 1.5 秒內，其他人不冒出平常的對話框
+let officeSkyStamp = -1;
 let officePhase = 'day';            // 依實際時間：morning / day / evening / night
 let officePhaseCheckAt = 0;
 let officePrev = null;              // 上個月的摘要（月會、花太快警報用），只在看本月時載入
@@ -1008,6 +1009,7 @@ function officeBgSvg(d) {
   let sky = { morning: ['#ffd9b8', '#fff4e4'], day: ['#bfe3ff', '#fff3e0'], evening: ['#ffa98a', '#ffe0b8'], night: ['#1b2150', '#3b3f72'] }[officePhase] || ['#bfe3ff', '#fff3e0'];
   if (grey && !night) sky = wx === 'typhoon' ? ['#6f7a8c', '#9aa4b2'] : (wx === 'rain' ? ['#9aa7b8', '#cdd4dd'] : ['#c3ccd8', '#e8ebef']);
   if (wx === 'snow' && !night) sky = ['#d6e2ee', '#f4f7fa'];
+  if (officePhase === 'evening' && !grey && wx !== 'snow') sky = officeSkyAt(new Date());   // 傍晚天色慢慢變暗
   const sunOk = wx === 'sunny' || (wx === 'cloudy' && !night) || (wx === 'snow' && night);
   const sun = !sunOk ? '' : night
     ? '<circle cx="120" cy="66" r="34" fill="#fff6d6"/><circle cx="134" cy="56" r="30" fill="#1b2150"/>' + [[300, 40], [420, 80], [700, 30], [820, 70], [560, 60]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.6" fill="#fff6d6"/>`).join('')
@@ -2488,6 +2490,18 @@ function officeSay(id, text) {
 
 // ── 動畫迴圈：依時間移動員工 ──────────────────────────────────
 const OFFICE_SPEED = 150;   // 每秒走多少單位（場景寬 1000）
+// 傍晚天色：17 點開始由白天慢慢變成傍晚，22 點接近夜色（23 點才是夜）
+function officeLerp(c1, c2, t) {
+  const a = [1, 3, 5].map(i => parseInt(c1.substr(i, 2), 16)), b = [1, 3, 5].map(i => parseInt(c2.substr(i, 2), 16));
+  return '#' + a.map((v, i) => Math.round(v + (b[i] - v) * t).toString(16).padStart(2, '0')).join('');
+}
+function officeSkyAt(now) {
+  const h = now.getHours() + now.getMinutes() / 60;
+  const k = Math.min(1, Math.max(0, (h - 17) / 5));   // 17 點為 0，22 點為 1
+  const day = ['#bfe3ff', '#fff3e0'], dusk = ['#ffa98a', '#ffe0b8'], night = ['#1b2150', '#3b3f72'];
+  const toDusk = Math.min(1, k * 2), toNight = Math.max(0, (k - 0.5) * 2) * 0.85;
+  return [0, 1].map(i => officeLerp(officeLerp(day[i], dusk[i], toDusk), night[i], toNight));
+}
 function officeTick(ts) {
   officeRaf = null;
   if (!officeVisible() || officePaused) return;
@@ -2498,7 +2512,12 @@ function officeTick(ts) {
   // 每 30 秒確認一次時段，換時段就重畫（燈光、睡覺）
   if (ts >= officePhaseCheckAt) {
     officePhaseCheckAt = ts + 30000;
-    if (officePhaseNow() !== officePhase) { drawOffice(); officeRaf = requestAnimationFrame(officeTick); return; }
+    const nowPh = officePhaseNow();
+    // 換時段就重畫；傍晚期間每 10 分鐘重畫一次天色
+    if (nowPh !== officePhase || (nowPh === 'evening' && Math.floor(Date.now() / 600000) !== officeSkyStamp)) {
+      officeSkyStamp = Math.floor(Date.now() / 600000);
+      drawOffice(); officeRaf = requestAnimationFrame(officeTick); return;
+    }
   }
   const night = officePhase === 'night';
   officeMeetingTick(ts, d);

@@ -160,7 +160,7 @@ function officeWxLine(id) {
 // 白天和晚上：依實際時間
 function officePhaseNow() {
   const h = new Date().getHours();
-  return h >= 23 || h < 6 ? 'night' : (h < 9 ? 'morning' : (h < 18 ? 'day' : 'evening'));
+  return h >= 23 || h < 6 ? 'night' : (h < 9 ? 'morning' : (h < 17 ? 'day' : 'evening'));
 }
 const OFFICE_PHASE_LABEL = { morning: '🌅 早上', day: '☀️ 白天', evening: '🌆 傍晚', night: '🌙 晚上' };
 
